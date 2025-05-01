@@ -20,7 +20,7 @@ phoom:
             amp: 0.5
 thump:
   freq: 80
-  duration: 1.55
+  duration: 0.6
   attack: 0.01
   release: 1
   waves:
@@ -43,19 +43,17 @@ thump:
             amp: 0.5
 lead:
   freq: 80
-  duration: 1.55
+  duration: 2
   attack: 0.01
   release: 1
   waves:
     - freq: 1
       group:
-        amp: 0.1
-        duration: 0.5
+        amp: 1
+        duration: 0.0015
         attack: 0.001
-        release: 1.0
+        release: 0.3
         waves:
-          - freq: 2
-            amp: 0.5
           - freq: 5
             amp: 0.5
           - freq: 7.2
@@ -89,16 +87,17 @@ beep:
       amp: 0.2
 
 part-a:
+  interval: 0.1
   sequence:
-    - thump f80, tick
+    - [lead f80, tick]
     -
     - tick
     -
-    - phoom, tick
+    - [phoom, tick]
     -
     - tick
     - beep f13000
-    - thump f120
+    - lead f120
     - tick f18000
     - tick
     - phoom f15000
@@ -118,16 +117,17 @@ part-a:
     -
 
 part-b:
+  interval: 0.1
   sequence:
-    - thump f69, tick
+    - [lead f69, tick]
     -
     - tick
     -
-    - thump f185, tick
+    - [lead f185, tick]
     -
     - tick
     -
-    - thump f105, tick
+    - [lead f105, tick]
     - tick f18000
     - tick
     - phoom f15000
@@ -147,16 +147,17 @@ part-b:
     -
 
 part-c:
+  interval: 0.1
   sequence:
-    - thump f60, tick
+    - [lead f60, tick]
     -
     - tick
     -
-    - phoom f187, tick
+    - [phoom f187, tick]
     - beep f12000
     - tick
     -
-    - thump f90, tick
+    - [lead f90, tick]
     - tick f18000
     - tick
     - phoom f15000
@@ -176,17 +177,18 @@ part-c:
     -
 
 part-d:
+  interval: 0.1
   sequence:
-    - thump f70, tick
+    - [lead f70, tick]
     -
     - tick
     -
-    - phoom, tick
+    - [phoom, tick]
     -
     - tick
     -
-    - thump f105, tick
-    - tick f18000, beep f11000
+    - [lead f105, tick]
+    - [tick f18000, beep f11000]
     - tick
     - phoom f15000
     - tick f10000
@@ -213,16 +215,17 @@ part-d:
     -
 
 part-e:
+  interval: 0.1
   sequence:
-    - thump f120, tick
+    - [lead f120, tick]
     -
     - tick
     -
-    - phoom, tick
+    - [phoom, tick]
     -
     - tick
     -
-    - thump f97.5, tick
+    - [lead f97.5, tick]
     - tick f18000
     - tick
     - phoom f15000
@@ -242,16 +245,17 @@ part-e:
     -
 
 part-f:
+  interval: 0.1
   sequence:
-    - thump f105, tick
+    - [lead f105, tick]
     -
     - tick
     -
-    - phoom, tick
+    - [phoom, tick]
     -
     - tick
     -
-    - thump f73, tick
+    - [lead f73, tick]
     - tick f18000
     - tick
     - phoom f15000
@@ -272,16 +276,17 @@ part-f:
     -
 
 part-g:
+  interval: 0.1
   sequence:
-    - thump f100, tick
+    - [lead f100, tick]
     -
     - tick
     -
-    - phoom, tick
+    - [phoom, tick]
     -
     - tick
     -
-    - thump f60, tick
+    - [lead f60, tick]
     - tick f18000
     - tick
     - phoom f15000
@@ -302,16 +307,17 @@ part-g:
     -
 
 part-h:
+  interval: 0.1
   sequence:
-    - thump f90, tick
+    - [lead f90, tick]
     -
     - tick
     -
-    - phoom, tick
+    - [phoom, tick]
     -
     - tick
     -
-    - thump f105, tick
+    - [lead f105, tick]
     - tick f18000
     - tick
     - phoom f15000
@@ -336,6 +342,37 @@ part-h:
     -
     -
 
+sequence-sound-test:
+  interval: 0.3
+  sequence:
+    - [lead f200, tick]
+    - lead f220
+    - phoom f15000
+    - tick f280
+    -
+    - [phoom f290, tick]
+    - beep f13000
+    -
+    - tick
+    - beep f279
+    - [lead f278, tick]
+    - lead f284
+    - tick
+    - phoom f15000
+    - lead f285
+    -
+    - tick
+    -
+    -
+    - tick
+
 main-sequence:
   sequence:
-
+    - part-a
+    - part-b
+    - part-c
+    - part-d
+    - part-e
+    - part-f
+    - part-g
+    - part-h

@@ -1,13 +1,15 @@
 import numpy as np
 import os
 import sounddevice as sd
-from scipy.io.wavfile import write
+from scipy.io import wavfile
 import yaml
 import shutil
+import sys
 
 sounds = {}
 YAML_FILE = "waves.yaml"
 OUTPUT_DIR = "output"
+ENVELOPE_TYPE = "exponential"  # Options: "linear", "exponential"
 SAMPLE_RATE = 44100
 VISUALISATION_ROW_HEIGHT = 10
 DIVIDE_BY = 2
@@ -15,7 +17,7 @@ DO_FREQ_CLOUD = False
 DO_NORMALISE_EACH_SOUND = True
 
 
-def generate(sound_obj, amplitude=1, duration=None, frequency=None, do_normalize=True):
+def generate_sound(sound_obj, amplitude=1, duration=None, frequency=None, do_normalize=True):
     duration = (sound_obj["duration"] if "duration" in sound_obj else 1) * (
         duration if duration else 1
     )
@@ -47,7 +49,7 @@ def generate(sound_obj, amplitude=1, duration=None, frequency=None, do_normalize
                     total_wave += varied_amp * np.sin(2 * np.pi * varied_freq * t)
 
         if "group" in wave:
-            sub_waves = generate(
+            sub_waves = generate_sound(
                 wave["group"], wave_amp, duration, wave_freq, do_normalize=False
             )
 
@@ -60,13 +62,17 @@ def generate(sound_obj, amplitude=1, duration=None, frequency=None, do_normalize
             total_wave += base_amp * sub_waves
 
     if release > 0:
-        # Apply a linear fade-out for the release phase
-        fade_out = np.linspace(1, 0, int(SAMPLE_RATE * release))
+        if ENVELOPE_TYPE == "linear":
+            fade_out = np.linspace(1, 0, int(SAMPLE_RATE * release))
+        else:
+            fade_out = np.exp(-np.linspace(0, 5, int(SAMPLE_RATE * release)))
         total_wave[-len(fade_out) :] *= fade_out
 
     if attack > 0:
-        # Apply a linear fade-in for the attack phase
-        fade_in = np.linspace(0, 1, int(SAMPLE_RATE * attack))
+        if ENVELOPE_TYPE == "linear":
+            fade_in = np.linspace(0, 1, int(SAMPLE_RATE * attack))
+        else:
+            fade_in = 1 - np.exp(-np.linspace(0, 5, int(SAMPLE_RATE * attack)))
         total_wave[: len(fade_in)] *= fade_in
 
     if do_normalize and DO_NORMALISE_EACH_SOUND:
@@ -88,13 +94,13 @@ def save(wave, filename):
     wave_int16 = np.int16(wave * 32767)
     output_path = os.path.join(os.path.dirname(__file__), OUTPUT_DIR, filename)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    write(output_path, SAMPLE_RATE, wave_int16)
+    wavfile.write(output_path, SAMPLE_RATE, wave_int16)
     visualise_wave(wave)
     print(f"saved {filename}")
 
 
 def generate_and_save(sound_name):
-    wave = generate(sounds[sound_name])
+    wave = generate_sound(sounds[sound_name])
     save(wave, f"{sound_name}.wav")
     return wave
 
@@ -130,6 +136,10 @@ def shuffle_wave(wave, chunk_length=0.1, percentage_of_chunks_to_invert=0.2):
     # Split the wave into chunks
     chunks = [wave[i * chunk_size : (i + 1) * chunk_size] for i in range(num_chunks)]
 
+    # Wave to small to shuffle, return the original wave
+    if len(chunks) < 2:
+        return wave
+
     # Shuffle the chunks
     np.random.shuffle(chunks)
 
@@ -144,6 +154,15 @@ def shuffle_wave(wave, chunk_length=0.1, percentage_of_chunks_to_invert=0.2):
     combined_wave_shuffled = np.concatenate(chunks)
 
     return combined_wave_shuffled
+
+
+def load_wav_file(filename):
+    sample_rate, data = wavfile.read(filename)
+    if data.ndim > 1:
+        # If stereo, take only one channel
+        data = data[:, 0]
+    data = data.astype(np.float32) / 32767.0  # Normalize to [-1, 1]
+    return data
 
 
 def visualise_wave(wave):
@@ -179,327 +198,23 @@ def visualise_wave(wave):
         print(line)
 
 
-if __name__ == "__main__":
-    with open(YAML_FILE, "r") as file:
-        sounds = yaml.safe_load(file)
-
-    sequence = [
-        ["thump f80", "tick"],
-        "",
-        "",
-        "tick",
-        "",
-        ["phoom", "tick"],
-        "",
-        "",
-        "",
-        "tick f18000",
-        "tick",
-        "phoom f15000",
-        "tick f10000",
-        "",
-        "",
-        "",
-        "tick",
-        "tick f19000",
-        "",
-        "",
-        "",
-        "tick",
-    ]
-
-    sequence2 = [
-        ["thump f120", "tick"],
-        "",
-        ["thump f80"],
-        "",
-        "tick",
-        ["phoom f18000", "tick"],
-        "",
-        "tick",
-        "",
-        "",
-        "tick f19000",
-        "tick",
-        "",
-        "beep f13000",
-        "",
-        "tick",
-        "tick f18000",
-        "",
-        "tick f10000",
-        "",
-        "tick",
-        "",
-    ]
-
-    sequence = [
-        *sequence,
-        *sequence2,
-        *sequence,
-        *sequence,
-    ]
-
-    sequence = [
-        ["thump f80", "tick"],
-        "",
-        "tick",
-        "",
-        ["phoom", "tick"],
-        "",
-        "tick",
-        "beep f13000",
-        ["thump f120", "tick"],
-        "tick f18000",
-        "tick",
-        "phoom f15000",
-        "tick f10000",
-        "",
-        "tick",
-        "",
-        "",
-        "tick",
-        "tick",
-        "",
-        "",
-        "",
-        "tick",
-        "",
-        "",
-        "",
-        ["thump f69", "tick"],
-        "",
-        "tick",
-        "",
-        ["phoom f185", "tick"],
-        "",
-        "tick",
-        "",
-        ["thump f105", "tick"],
-        "tick f18000",
-        "tick",
-        "phoom f15000",
-        "tick f10000",
-        "",
-        "",
-        "tick",
-        "",
-        "",
-        "tick",
-        "tick",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        ["thump f60", "tick"],
-        "",
-        "tick",
-        "",
-        ["phoom f187", "tick"],
-        "beep f12000",
-        "tick",
-        "",
-        ["thump f90", "tick"],
-        "tick f18000",
-        "tick",
-        "phoom f15000",
-        "tick f10000",
-        "tick",
-        "",
-        "tick",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "tick",
-        "",
-        "",
-        ["thump f70", "tick"],
-        "",
-        "tick",
-        "",
-        ["phoom", "tick"],
-        "",
-        "tick",
-        "",
-        ["thump f105", "tick"],
-        ["tick f18000", "beep f11000"],
-        "tick",
-        "phoom f15000",
-        "tick f10000",
-        "",
-        "tick",
-        "",
-        "tick",
-        "",
-        "",
-        "tick",
-        "",
-        "",
-        "",
-        "",
-        "tick",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        ["thump f120", "tick"],
-        "",
-        "tick",
-        "",
-        ["phoom", "tick"],
-        "",
-        "tick",
-        "",
-        ["thump f97.5", "tick"],
-        "tick f18000",
-        "tick",
-        "phoom f15000",
-        "tick f10000",
-        "",
-        "",
-        "tick",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "tick",
-        "",
-        ["thump f105", "tick"],
-        "",
-        "tick",
-        "",
-        ["phoom", "tick"],
-        "",
-        "tick",
-        "",
-        ["thump f73", "tick"],
-        "tick f18000",
-        "tick",
-        "phoom f15000",
-        "tick f10000",
-        "tick",
-        "",
-        "",
-        "",
-        "tick",
-        "",
-        "tick",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        ["thump f100", "tick"],
-        "",
-        "tick",
-        "",
-        ["phoom", "tick"],
-        "",
-        "tick",
-        "",
-        ["thump f60", "tick"],
-        "tick f18000",
-        "tick",
-        "phoom f15000",
-        "tick f10000",
-        "tick",
-        "",
-        "",
-        "tick",
-        "",
-        "",
-        "tick",
-        "",
-        "tick",
-        "",
-        "",
-        "",
-        "",
-        "",
-        ["thump f90", "tick"],
-        "",
-        "tick",
-        "",
-        ["phoom", "tick"],
-        "",
-        "tick",
-        "",
-        ["thump f105", "tick"],
-        "tick f18000",
-        "tick",
-        "phoom f15000",
-        "tick f10000",
-        "tick",
-        "",
-        "",
-        "",
-        "tick",
-        "",
-        "tick",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "tick",
-        "",
-        "",
-        "",
-        "",
-    ]
-
-    sequence_ = [
-        ["thump f200", "tick"],
-        "thump f220",
-        "tick f280",
-        "",
-        ["phoom f290", "tick"],
-        "",
-        "tick",
-        "beep f279",
-        ["thump f278", "tick"],
-        "thump f284",
-        "tick",
-        "phoom f15000",
-        "thump f285",
-        "",
-        "tick",
-        "",
-        "",
-        "tick"
-    ]
-
+def generate_sequence_sound(sequence_sound):
     generated_waves = {}
 
-    # Get unique values in the sequence
+    sequence = sequence_sound["sequence"]
+    interval = sequence_sound.get("interval", 0)
+    repeat = sequence_sound.get("repeat", 1)
+
+    # Get unique sounds (sound names with parameters) in the sequence
     unique_sounds = set()
     for sound_names in sequence:
         if isinstance(sound_names, str):
             unique_sounds.add(sound_names)
-        else:
+        elif isinstance(sound_names, list):
             unique_sounds.update(sound_names)
 
     for sound_names in unique_sounds:
-        if sound_names != "":
+        if sound_names and sound_names not in generated_waves:
             parts = sound_names.split()
             main_sound_name = parts[0]
             params = parts[1:]
@@ -511,10 +226,12 @@ if __name__ == "__main__":
                 elif param.startswith("a"):
                     generation_params["amplitude"] = float(param[1:])
 
-
-            generated_waves[sound_names] = generate(
-                sounds[main_sound_name], **generation_params
-            )
+            if "waves" in sounds[main_sound_name]:
+                generated_waves[sound_names] = generate_sound(
+                    sounds[main_sound_name], **generation_params
+                )
+            else:
+                generated_waves[sound_names] = generate_sequence_sound(sounds[sound_names])
 
             save(generated_waves[sound_names], f"{sound_names}.wav")
             # play(generated_waves[sound_name])
@@ -522,31 +239,69 @@ if __name__ == "__main__":
     # Create a combined wave based on the sequence
     combined_wave = np.array([], dtype=np.float32)
 
-    max_length = int(SAMPLE_RATE * (0.1 * len(sequence) + 1))
+    max_length = int(SAMPLE_RATE * (interval * (len(sequence) + 1))) if interval else sum([len(generated_waves[sound_names]) for sound_names in sequence])
     combined_wave = np.zeros(max_length, dtype=np.float32)
 
+    last_end_idx = 0
     for i, sound_names in enumerate(sequence):
         # Ensure sound_names is always a list
         if isinstance(sound_names, str):
             sound_names = [sound_names]
 
-        sequence_of_waves = [
-            generated_waves[name] if name else [] for name in sound_names
-        ]
-        max_wave_length = max(len(w) for w in sequence_of_waves)
-        padded_waves = [
-            np.pad(w, (0, max_wave_length - len(w))) for w in sequence_of_waves
-        ]
-        wave = sum(padded_waves)
+        if sound_names:
+            sequence_of_waves = [
+                generated_waves[name] if name else [] for name in sound_names
+            ]
+            max_wave_length = max(len(w) for w in sequence_of_waves)
+            overlapping_waves = [
+                np.pad(w, (0, max_wave_length - len(w))) for w in sequence_of_waves
+            ]
+            wave = sum(overlapping_waves)
+        else:
+            wave = []
 
-        start_idx = int(SAMPLE_RATE * 0.1 * i)
+        if interval:
+            start_idx = int(SAMPLE_RATE * interval * i)
+        else:
+            start_idx = last_end_idx
+
         end_idx = start_idx + len(wave)
 
         if end_idx > len(combined_wave):
             combined_wave = np.pad(combined_wave, (0, end_idx - len(combined_wave)))
 
         combined_wave[start_idx:end_idx] += wave
+        last_end_idx = end_idx
     
+    # Repeat the combined wave "repeat" times with "interval" seconds in between
+    repeated_wave = np.array([], dtype=np.float32)
+    for _ in range(repeat):
+        repeated_wave = np.concatenate(
+            (repeated_wave, combined_wave, np.zeros(int(SAMPLE_RATE * interval)))
+        )
+    combined_wave = repeated_wave
+
+    return combined_wave
+
+
+
+if __name__ == "__main__":
+    with open(YAML_FILE, "r") as file:
+        sounds = yaml.safe_load(file)
+
+    if len(sys.argv) < 2:
+        print("Usage: python waves.py <sound-name>")
+        sys.exit(1)
+    
+    sound_to_play = sys.argv[1]
+
+    if "sequence" in sounds[sound_to_play]:
+        combined_wave = generate_sequence_sound(sounds[sound_to_play])
+        loop_count = sounds[sound_to_play].get("loop", 1)
+        interval = sounds[sound_to_play].get("interval", 0)
+    else:
+        combined_wave = generate_sound(sounds[sound_to_play])
+
     # Normalize the combined wave
     peak = np.max(np.abs(combined_wave))
     combined_wave /= DIVIDE_BY
@@ -574,11 +329,9 @@ if __name__ == "__main__":
 
     print ("Peak:", peak)
 
-    while True:
-        play(combined_wave)
-    # play(combined_wave_shuffled)
-    # play(combined_wave_reverb)
-    # play(combined_wave_super_shuffled)
-    # play(combined_wave_re_shuffled)
+    wave_to_play = combined_wave
+
+    play(wave_to_play)
+
 
 
