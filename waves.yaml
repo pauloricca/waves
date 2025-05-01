@@ -1,0 +1,341 @@
+phoom:
+  freq: 190
+  amp: 0.4
+  duration: 1.4
+  attack: 0.2
+  release: 0.8
+  waves:
+    - freq: 1
+      group:
+        amp: 0.4
+        duration: 0.01
+        waves:
+          - freq: 2
+            amp: 0.5
+          - freq: 2.2
+            amp: 0.5
+          - freq: 2.3
+            amp: 0.5
+          - freq: 4
+            amp: 0.5
+thump:
+  freq: 80
+  duration: 1.55
+  attack: 0.01
+  release: 1
+  waves:
+    - freq: 1
+      group:
+        amp: 1
+        duration: 0.0015
+        attack: 0.001
+        release: 0.3
+        waves:
+          - freq: 5
+            amp: 0.5
+          - freq: 7.2
+            amp: 0.5
+          - freq: 8.3
+            amp: 0.5
+          - freq: 10
+            amp: 0.5
+          - freq: 12
+            amp: 0.5
+lead:
+  freq: 80
+  duration: 1.55
+  attack: 0.01
+  release: 1
+  waves:
+    - freq: 1
+      group:
+        amp: 0.1
+        duration: 0.5
+        attack: 0.001
+        release: 1.0
+        waves:
+          - freq: 2
+            amp: 0.5
+          - freq: 5
+            amp: 0.5
+          - freq: 7.2
+            amp: 0.5
+          - freq: 8.3
+            amp: 0.5
+          - freq: 10
+            amp: 0.5
+          - freq: 12
+            amp: 0.5
+tick:
+  freq: 4400
+  duration: 0.0002
+  amp: 0.2
+  waves:
+    - freq: 1
+    - freq: 2
+      amp: 0.5
+    - freq: 0.5
+      amp: 0.2
+beep:
+  freq: 8800
+  amp: 0.4
+  duration: 0.07
+  attack: 1
+  waves:
+    - freq: 1
+    - freq: 2
+      amp: 0.5
+    - freq: 0.5
+      amp: 0.2
+
+part-a:
+  sequence:
+    - thump f80, tick
+    -
+    - tick
+    -
+    - phoom, tick
+    -
+    - tick
+    - beep f13000
+    - thump f120
+    - tick f18000
+    - tick
+    - phoom f15000
+    - tick f10000
+    -
+    - tick
+    -
+    -
+    - tick
+    - tick
+    -
+    -
+    -
+    - tick
+    -
+    -
+    -
+
+part-b:
+  sequence:
+    - thump f69, tick
+    -
+    - tick
+    -
+    - thump f185, tick
+    -
+    - tick
+    -
+    - thump f105, tick
+    - tick f18000
+    - tick
+    - phoom f15000
+    - tick f10000
+    -
+    -
+    - tick
+    -
+    -
+    - tick
+    - tick
+    -
+    -
+    -
+    -
+    -
+    -
+
+part-c:
+  sequence:
+    - thump f60, tick
+    -
+    - tick
+    -
+    - phoom f187, tick
+    - beep f12000
+    - tick
+    -
+    - thump f90, tick
+    - tick f18000
+    - tick
+    - phoom f15000
+    - tick f10000
+    - tick
+    -
+    - tick
+    -
+    -
+    -
+    -
+    -
+    -
+    -
+    - tick
+    -
+    -
+
+part-d:
+  sequence:
+    - thump f70, tick
+    -
+    - tick
+    -
+    - phoom, tick
+    -
+    - tick
+    -
+    - thump f105, tick
+    - tick f18000, beep f11000
+    - tick
+    - phoom f15000
+    - tick f10000
+    -
+    - tick
+    -
+    - tick
+    -
+    -
+    - tick
+    -
+    -
+    -
+    -
+    - tick
+    -
+    -
+    -
+    -
+    -
+    -
+    -
+    -
+    -
+
+part-e:
+  sequence:
+    - thump f120, tick
+    -
+    - tick
+    -
+    - phoom, tick
+    -
+    - tick
+    -
+    - thump f97.5, tick
+    - tick f18000
+    - tick
+    - phoom f15000
+    - tick f10000
+    -
+    -
+    - tick
+    -
+    -
+    -
+    -
+    -
+    -
+    -
+    -
+    - tick
+    -
+
+part-f:
+  sequence:
+    - thump f105, tick
+    -
+    - tick
+    -
+    - phoom, tick
+    -
+    - tick
+    -
+    - thump f73, tick
+    - tick f18000
+    - tick
+    - phoom f15000
+    - tick f10000
+    - tick
+    -
+    -
+    -
+    - tick
+    -
+    - tick
+    -
+    -
+    -
+    -
+    -
+    -
+    -
+
+part-g:
+  sequence:
+    - thump f100, tick
+    -
+    - tick
+    -
+    - phoom, tick
+    -
+    - tick
+    -
+    - thump f60, tick
+    - tick f18000
+    - tick
+    - phoom f15000
+    - tick f10000
+    - tick
+    -
+    -
+    - tick
+    -
+    -
+    - tick
+    -
+    - tick
+    -
+    -
+    -
+    -
+    -
+
+part-h:
+  sequence:
+    - thump f90, tick
+    -
+    - tick
+    -
+    - phoom, tick
+    -
+    - tick
+    -
+    - thump f105, tick
+    - tick f18000
+    - tick
+    - phoom f15000
+    - tick f10000
+    - tick
+    -
+    -
+    -
+    - tick
+    -
+    - tick
+    -
+    -
+    -
+    -
+    -
+    -
+    -
+    - tick
+    -
+    -
+    -
+    -
+
+main-sequence:
+  sequence:
+
