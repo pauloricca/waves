@@ -18,29 +18,51 @@ phoom:
             amp: 0.5
           - freq: 4
             amp: 0.5
+
 thump:
-  freq: 80
+  freq: [[10000, 0], [500, 0.01], [60, 0.02], [60, 1]]
   duration: 0.6
   attack: 0.01
   release: 1
   waves:
     - freq: 1
       group:
-        amp: 1
-        duration: 0.0015
-        attack: 0.001
-        release: 0.3
+        amp: 0.5
+        duration: 0.05
+        attack: 0.1
+        release: 1
         waves:
           - freq: 5
             amp: 0.5
           - freq: 7.2
-            amp: 0.5
-          - freq: 8.3
-            amp: 0.5
+            amp: 0.4
+          - freq: 8.2
+            amp: 0.3
           - freq: 10
-            amp: 0.5
+            amp: 0.2
           - freq: 12
-            amp: 0.5
+            amp: 0.1
+
+hat:
+  freq: [[10000, 0], [500, 0.01], [60, 0.02], [60, 1]]
+  # freq:
+  #   type: cos
+  #   freq: [100, 50, 10, 1]
+  #   min: 30
+  #   max: 90
+  amp: [[0, 0], [1, 0.08], [0.4, 0.2], [0.8, 0.3], [0.6, 0.4], [0, 1]]
+  duration: 8
+  release: 0.5
+  waves:
+    - freq: 1
+    - freq: 2
+      amp: [0.5, 0]
+    - type: noise
+      amp: [0, 0.002, 0.01]
+    - freq: [[5, 0], [50, 0.3]]
+      type: saw
+      amp: [0.02, 0.001, 0]
+
 lead:
   freq: 80
   duration: 2

@@ -2,9 +2,13 @@ import numpy as np
 import os
 import sounddevice as sd
 from scipy.io import wavfile
+from scipy.interpolate import CubicSpline
 import yaml
 import shutil
 import sys
+import time
+from enum import Enum
+from scipy.interpolate import PchipInterpolator
 
 sounds = {}
 YAML_FILE = "waves.yaml"
@@ -14,15 +18,95 @@ SAMPLE_RATE = 44100
 VISUALISATION_ROW_HEIGHT = 10
 DIVIDE_BY = 2
 DO_FREQ_CLOUD = False
-DO_NORMALISE_EACH_SOUND = True
+DO_NORMALISE_EACH_SOUND = False
+DO_SHUFFLE_WAVES = False
 
+class WaveFunction(Enum):
+    SINE = "sin"
+    COSINE = "cos"
+    SQUARE = "sqr"
+    TRIANGLE = "tri"
+    SAWTOOTH = "saw"
+    NOISE = "noise"
 
-def generate_sound(sound_obj, amplitude=1, duration=None, frequency=None, do_normalize=True):
-    duration = (sound_obj["duration"] if "duration" in sound_obj else 1) * (
-        duration if duration else 1
-    )
-    release = (sound_obj["release"] * duration) if "release" in sound_obj else 0
-    attack = (sound_obj["attack"] * duration) if "attack" in sound_obj else 0
+class InterpolationTypes(Enum):
+    LINEAR = "linear"
+    SMOOTH = "smooth"
+    STEP = "step"
+
+# Interpolates a list of values or a list of lists with relative positions
+def interpolate_values(values, num_samples, interpolation_type):
+    if all(isinstance(v, list) and len(v) == 2 for v in values):
+        # Handle list of lists with relative positions
+        positions = [v[1] for v in values]
+        values = [v[0] for v in values]
+        if interpolation_type == InterpolationTypes.STEP.value:
+            # Step interpolation
+            positions = np.array(positions)
+            values = np.array(values)
+            interpolated_values = np.zeros(num_samples)
+            for i in range(len(positions) - 1):
+                start = int(positions[i] * num_samples)
+                end = int(positions[i + 1] * num_samples)
+                interpolated_values[start:end] = values[i]
+        elif interpolation_type == InterpolationTypes.SMOOTH.value:
+            # Smooth interpolation with a tighter curve
+            positions = np.array(positions)
+            values = np.array(values)
+            x = np.linspace(0, 1, num_samples)
+            interpolated_values = np.interp(x, positions, values)
+            pchip = PchipInterpolator(positions, values)
+            interpolated_values = pchip(x)
+        else:
+            # Linear interpolation
+            positions = np.array(positions)
+            values = np.array(values)
+            interpolated_values = np.zeros(num_samples)
+            for i in range(len(positions) - 1):
+                start = int(positions[i] * num_samples)
+                end = int(positions[i + 1] * num_samples)
+                x = np.linspace(0, 1, end - start)
+                interpolated_values[start:end] = np.interp(x, [0, 1], [values[i], values[i + 1]])
+    elif len(values) > 1:
+        # Handle simple list of values
+        if interpolation_type == InterpolationTypes.STEP.value:
+            # Step interpolation
+            interpolated_values = np.repeat(values, num_samples // len(values))
+        elif interpolation_type == InterpolationTypes.SMOOTH.value:
+            # Smooth interpolation with a tighter curve
+            positions = np.linspace(0, 1, len(values))
+            pchip = PchipInterpolator(positions, values)
+            x = np.linspace(0, 1, num_samples)
+            interpolated_values = pchip(x)
+        else:
+            # Linear interpolation
+            x = np.linspace(0, 1, len(values))
+            x_interp = np.linspace(0, 1, num_samples)
+            interpolated_values = np.interp(x_interp, x, values)
+    else:
+        interpolated_values = values[0]
+    return interpolated_values
+
+# Returns a value or a wave, for a given attribute
+def get_wavable_value(object, attribute_name, duration, default_value=None):
+    value = object.get(attribute_name, default_value)
+    # Linear interpolation of values in a list
+    if isinstance(value, list):
+        interpolation_type = object.get("interpolation", InterpolationTypes.SMOOTH.value)
+        num_samples = int(duration * SAMPLE_RATE)
+        value = interpolate_values(value, num_samples, interpolation_type)
+    # Wave object
+    if isinstance(value, dict):
+        value = generate_wave(value, duration=duration)
+    return value
+
+def generate_wave(sound_obj, amplitude=1, duration=None, frequency=None, do_normalize=True):
+    resolve_wave_syntax_sugars(sound_obj)
+    duration = sound_obj.get("duration", 1) * (duration if duration else 1)
+    release = min(1, sound_obj.get("release", 0)) * duration
+    attack = min(1, sound_obj.get("attack", 0)) * duration
+    min_wave_value = sound_obj.get("min", -1)
+    max_wave_value = sound_obj.get("max", 1)
     t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
 
     total_wave = 0 * t
@@ -30,26 +114,47 @@ def generate_sound(sound_obj, amplitude=1, duration=None, frequency=None, do_nor
     base_freq = (
         frequency
         if frequency is not None
-        else sound_obj["freq"] if "freq" in sound_obj else 0
+        else get_wavable_value(sound_obj, "freq", duration, 0)
     )
-    base_amp = (sound_obj["amp"] if "amp" in sound_obj else 1) * amplitude
-    for wave in sound_obj["waves"]:
-        wave_amp = wave["amp"] if "amp" in wave else 1
-        if "freq" in wave:
-            wave_freq = base_freq * wave["freq"]
-            total_wave += base_amp * wave_amp * np.sin(2 * np.pi * wave_freq * t)
 
-            if DO_FREQ_CLOUD:
-                # Generate 15 waves with slight variations in frequency and amplitude
-                for _ in range(50):
-                    freq_variation = np.random.normal(0, 0.1 * wave_freq)
-                    amp_variation = np.exp(-0.5 * (freq_variation / (0.1 * wave_freq))**2)
-                    varied_freq = wave_freq + freq_variation
-                    varied_amp = 0.2 * base_amp * wave_amp * amp_variation
-                    total_wave += varied_amp * np.sin(2 * np.pi * varied_freq * t)
+    base_amp = get_wavable_value(sound_obj, "amp", duration, 1) * amplitude
+
+    for wave in sound_obj["waves"]:
+        wave_amp = get_wavable_value(wave, "amp", duration, 1)
+        wave_type = wave.get("type", WaveFunction.SINE.value)
+        if "freq" in wave or wave_type == WaveFunction.NOISE.value:
+            if wave_type == WaveFunction.NOISE.value:
+                total_wave += base_amp * wave_amp * np.random.normal(0, 1, len(t))
+            else:
+                wave_freq = base_freq * get_wavable_value(wave, "freq", duration, 0)
+
+                if wave_type in [WaveFunction.SINE.value, WaveFunction.COSINE.value]:
+                    wave_function = np.sin if wave_type == WaveFunction.SINE.value else np.cos
+                    # Is frequency variable?
+                    if(isinstance(wave_freq, np.ndarray)):
+                        dt = 1 / SAMPLE_RATE
+                        # Compute cumulative phase
+                        phase = 2 * np.pi * np.cumsum(wave_freq) * dt
+                        total_wave += base_amp * wave_amp * wave_function(phase[:len(total_wave)])
+                    else:
+                        total_wave += base_amp * wave_amp * wave_function(2 * np.pi * wave_freq * t)
+                elif wave_type == WaveFunction.SQUARE.value:
+                    total_wave += base_amp * wave_amp * np.sign(np.sin(2 * np.pi * wave_freq * t))
+                elif wave_type == WaveFunction.TRIANGLE.value:
+                    total_wave += base_amp * wave_amp * (2 / np.pi) * np.arcsin(np.sin(2 * np.pi * wave_freq * t))
+                elif wave_type == WaveFunction.SAWTOOTH.value:
+                    total_wave += base_amp * wave_amp * (2 / np.pi) * np.arctan(np.tan(np.pi * wave_freq * t))
+                if DO_FREQ_CLOUD:
+                    # Generate 15 waves with slight variations in frequency and amplitude
+                    for _ in range(50):
+                        freq_variation = np.random.normal(0, 0.1 * wave_freq)
+                        amp_variation = np.exp(-0.5 * (freq_variation / (0.1 * wave_freq))**2)
+                        varied_freq = wave_freq + freq_variation
+                        varied_amp = 0.2 * base_amp * wave_amp * amp_variation
+                        total_wave += varied_amp * np.sin(2 * np.pi * varied_freq * t)
 
         if "group" in wave:
-            sub_waves = generate_sound(
+            sub_waves = generate_wave(
                 wave["group"], wave_amp, duration, wave_freq, do_normalize=False
             )
 
@@ -79,6 +184,10 @@ def generate_sound(sound_obj, amplitude=1, duration=None, frequency=None, do_nor
         total_wave = np.clip(total_wave, -1, 1)  # Ensure wave is in the range [-1, 1]
         total_wave = total_wave.astype(np.float32)  # Convert to float32 for sounddevice
 
+    # Convert from [-1, 1] to [min_wave_value, max_wave_value]
+    total_wave = (total_wave + 1) / 2
+    total_wave = total_wave * (max_wave_value - min_wave_value) + min_wave_value
+
     return total_wave
 
 
@@ -90,8 +199,8 @@ def play(wave):
 def save(wave, filename):
     # Normalize wave to 16-bit PCM format
     wave = np.clip(wave, -1, 1)  # Ensure wave is in the range [-1, 1]
-    wave = wave.astype(np.float32)  # Convert to float32 for sounddevice
-    wave_int16 = np.int16(wave * 32767)
+    wave = wave.astype(np.float32)
+    wave_int16 = np.int16(wave * np.iinfo(np.int16).max)
     output_path = os.path.join(os.path.dirname(__file__), OUTPUT_DIR, filename)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     wavfile.write(output_path, SAMPLE_RATE, wave_int16)
@@ -100,12 +209,13 @@ def save(wave, filename):
 
 
 def generate_and_save(sound_name):
-    wave = generate_sound(sounds[sound_name])
+    wave = generate_wave(sounds[sound_name])
     save(wave, f"{sound_name}.wav")
     return wave
 
 
-def add_convolution(wave):
+# WIP, reverb gets cut off, and should create a better kernal
+def add_reverb(wave):
     # Apply a convolution to create a reverb effect
     reverb_kernel = -np.exp(
         np.linspace(0, 1, int(SAMPLE_RATE * 0.2))
@@ -227,7 +337,7 @@ def generate_sequence_sound(sequence_sound):
                     generation_params["amplitude"] = float(param[1:])
 
             if "waves" in sounds[main_sound_name]:
-                generated_waves[sound_names] = generate_sound(
+                generated_waves[sound_names] = generate_wave(
                     sounds[main_sound_name], **generation_params
                 )
             else:
@@ -284,8 +394,33 @@ def generate_sequence_sound(sequence_sound):
     return combined_wave
 
 
+def resolve_wave_syntax_sugars(sound_obj):
+    """
+    A wave should have a waves list, but for commodity, if we only have a single wave, 
+    we allow the wave to be defined in the root object and this function moves it to a waves list.
+    E.g.:
+    {
+        "freq": 440,
+        "amp": 1
+    }
+    becomes:
+    {
+        "waves": [
+            {
+                "freq": 440,
+                "amp": 1
+            }
+        ]
+    }
+    """
+    if "waves" not in sound_obj and "freq" in sound_obj:
+        sound_obj["waves"] = [{**sound_obj}]
+        sound_obj["freq"] = 1
 
-if __name__ == "__main__":
+
+def main():
+    global sounds
+
     with open(YAML_FILE, "r") as file:
         sounds = yaml.safe_load(file)
 
@@ -297,10 +432,8 @@ if __name__ == "__main__":
 
     if "sequence" in sounds[sound_to_play]:
         combined_wave = generate_sequence_sound(sounds[sound_to_play])
-        loop_count = sounds[sound_to_play].get("loop", 1)
-        interval = sounds[sound_to_play].get("interval", 0)
     else:
-        combined_wave = generate_sound(sounds[sound_to_play])
+        combined_wave = generate_wave(sounds[sound_to_play])
 
     # Normalize the combined wave
     peak = np.max(np.abs(combined_wave))
@@ -308,23 +441,24 @@ if __name__ == "__main__":
 
     save(combined_wave, "combined.wav")
 
-    combined_wave_shuffled = shuffle_wave(combined_wave, 0.1)
+    if DO_SHUFFLE_WAVES:
+        combined_wave_shuffled = shuffle_wave(combined_wave, 0.1)
 
-    save(combined_wave_shuffled, "combined-shuffled.wav")
+        save(combined_wave_shuffled, "combined-shuffled.wav")
 
-    # combined_wave_reverb = add_convolution(combined_wave_shuffled)
+        # combined_wave_reverb = add_convolution(combined_wave_shuffled)
 
-    # normalise_wave(combined_wave_reverb)
+        # normalise_wave(combined_wave_reverb)
 
-    # save(combined_wave_reverb, "combined-shuffled-reverb.wav")
+        # save(combined_wave_reverb, "combined-shuffled-reverb.wav")
 
-    # combined_wave_super_shuffled = shuffle_wave(combined_wave_reverb, 0.3)
+        # combined_wave_super_shuffled = shuffle_wave(combined_wave_reverb, 0.3)
 
-    # save(combined_wave_super_shuffled, "combined-shuffled-super-shuffled.wav")
+        # save(combined_wave_super_shuffled, "combined-shuffled-super-shuffled.wav")
 
-    combined_wave_re_shuffled = shuffle_wave(combined_wave_shuffled, 0.3)
+        combined_wave_re_shuffled = shuffle_wave(combined_wave_shuffled, 0.3)
 
-    save(combined_wave_re_shuffled, "combined-shuffled-re-shuffled.wav")
+        save(combined_wave_re_shuffled, "combined-shuffled-re-shuffled.wav")
 
 
     print ("Peak:", peak)
@@ -332,6 +466,20 @@ if __name__ == "__main__":
     wave_to_play = combined_wave
 
     play(wave_to_play)
+
+
+def get_file_modified_time(filepath):
+    return os.path.getmtime(filepath)
+
+
+if __name__ == "__main__":
+    last_modified_time = ""
+    while True:
+        current_modified_time = get_file_modified_time(YAML_FILE)
+        if current_modified_time != last_modified_time:
+            last_modified_time = current_modified_time
+            main()
+        time.sleep(0.5)
 
 
 
