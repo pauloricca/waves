@@ -2,13 +2,14 @@ import numpy as np
 import os
 import sounddevice as sd
 from scipy.io import wavfile
-from scipy.interpolate import CubicSpline
+from scipy import signal
 import yaml
 import shutil
 import sys
 import time
 from enum import Enum
 from scipy.interpolate import PchipInterpolator
+import traceback
 
 sounds = {}
 YAML_FILE = "waves.yaml"
@@ -36,7 +37,23 @@ class InterpolationTypes(Enum):
 
 # Interpolates a list of values or a list of lists with relative positions
 def interpolate_values(values, num_samples, interpolation_type):
-    if all(isinstance(v, list) and len(v) == 2 for v in values):
+    # If all the values aparet from the first and last are lists, we assume they are relative positions
+    # It's ok for the first and last not to be lists, as we can assume 0 and 1 positions
+    if all(isinstance(v, list) and len(v) == 2 for v in values[1:-1]):
+        
+        # Assume 0 and 1 positions for the first and last values
+        if not isinstance(values[0], list):
+            values[0] = [values[0], 0]
+        if not isinstance(values[-1], list):
+            values[-1] = [values[-1], 1]
+
+        # If the first value is not in position 0, we add an extra value at the beginning
+        if values[0][1] != 0:
+            values = [[values[0][0], 0]] + values
+        # If the last value is not in position 1, we add an extra value at the end
+        if values[-1][1] != 1:
+            values = values + [[values[-1][0], 1]]
+
         # Handle list of lists with relative positions
         positions = [v[1] for v in values]
         values = [v[0] for v in values]
@@ -229,6 +246,24 @@ def add_reverb(wave):
 
     return combined_wave_reverb + wave
 
+
+def add_delay(wave, delay_time=0.1, repeats=3, feedback=0.3, do_trim=False):
+    # Apply a delay effect
+    delay_samples = int(SAMPLE_RATE * delay_time)
+    delayed_wave = np.zeros(len(wave) + delay_samples * repeats)
+
+    for i in range(repeats):
+        delayed_wave[i * delay_samples : i * delay_samples + len(wave)] += wave * (feedback ** i)
+
+    return delayed_wave[: len(wave)] if do_trim else delayed_wave # Trim to original length
+
+def add_low_pass_filter(wave, cutoff_freq=1000):
+    # Apply a low-pass filter to the wave
+    nyquist = 0.5 * SAMPLE_RATE
+    normal_cutoff = cutoff_freq / nyquist
+    b, a = signal.butter(1, normal_cutoff, btype="low", analog=False)
+    filtered_wave = signal.filtfilt(b, a, wave)
+    return filtered_wave
 
 def normalise_wave(wave):
     # Normalize the wave to the range [-1, 1]
@@ -439,7 +474,7 @@ def main():
     peak = np.max(np.abs(combined_wave))
     combined_wave /= DIVIDE_BY
 
-    save(combined_wave, "combined.wav")
+    save(combined_wave, f"{sound_to_play}.wav")
 
     if DO_SHUFFLE_WAVES:
         combined_wave_shuffled = shuffle_wave(combined_wave, 0.1)
@@ -465,6 +500,10 @@ def main():
 
     wave_to_play = combined_wave
 
+    # wave_to_play = add_delay(wave_to_play, 0.3, 3)
+    # wave_to_play = add_low_pass_filter(wave_to_play)
+
+    wave_to_play = normalise_wave(wave_to_play)
     play(wave_to_play)
 
 
@@ -478,7 +517,11 @@ if __name__ == "__main__":
         current_modified_time = get_file_modified_time(YAML_FILE)
         if current_modified_time != last_modified_time:
             last_modified_time = current_modified_time
-            main()
+            try:
+                main()
+            except Exception as e:
+                print(f"Error: {e}")
+                traceback.print_exc()
         time.sleep(0.5)
 
 
