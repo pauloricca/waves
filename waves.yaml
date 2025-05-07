@@ -1,18 +1,55 @@
 test2:
-  freq:
-    osc: perlin
-    scale: 2
-    seed: 3
-    min: 300
-    max: 350
-  duration: 4
-  osc: tri
-  attack: 0.01
+  freq: [100, 600]
+  duration: 10
+  attack: 0.3
   release: 0.3
+  partials:
+    - osc: saw
+      amp: 0.5
+      freq:
+        osc: perlin
+        scale: 3
+        seed: 1
+        min: 0.99
+        max: 1.01
+    - osc: tri
+      amp: 0.8
+      freq:
+        osc: perlin
+        scale: 2
+        seed: 2
+        min: 0.99
+        max: 1.21
+    - osc: sqr
+      amp: 0.8
+      freq:
+        osc: perlin
+        scale: 7
+        seed: 3
+        min: 0.95
+        max: 1.01
+    - osc: saw
+      amp: 0.5
+      freq:
+        osc: perlin
+        scale: 2
+        seed: 4
+        min: 0.99
+        max: 1.01
+    - osc: saw
+      amp: 0.5
+      freq:
+        osc: perlin
+        scale: 2
+        seed: 5
+        min: 0.9
+        max: 1.1
   amp:
     osc: perlin
-    scale: 2
-    seed: 4
+    scale: 3
+    seed: -1
+    min: 0.3
+    max: 0.8
 
 test:
   freq: [300, [100, 0.1]]
@@ -446,6 +483,7 @@ sequence-sound-test:
     - tick
 
 main-sequence:
+  repeat: 3
   chain:
     - part-a
     - part-b

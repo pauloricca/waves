@@ -6,8 +6,9 @@ import time
 import traceback
 
 from config import *
-from models import SoundLibraryModel
+from models import OscillatorModel, SoundLibraryModel
 from nodes.instantiate_node import instantiate_node
+from sound_library import get_sound_model, load_sound_library
 from utils import play, save
 
 rendered_sounds: dict[np.ndarray] = {}
@@ -15,25 +16,19 @@ rendered_sounds: dict[np.ndarray] = {}
 def main():
     global rendered_sounds
 
-    with open(YAML_FILE) as file:
-        raw_data = yaml.safe_load(file)
-
-    sound_library = SoundLibraryModel.model_validate(raw_data)
+    load_sound_library(YAML_FILE)
 
     if len(sys.argv) < 2:
         print("Usage: python waves.py <sound-name>")
         sys.exit(1)
 
     sound_name_to_play = sys.argv[1]    
-    
-    if not sound_name_to_play in sound_library.keys():
-        print(f"Error: Sound '{sound_name_to_play}' not found in the sound library.")
-        sys.exit(1)
-    
-    sound_to_play = instantiate_node(sound_library[sound_name_to_play])
+
+    sound_model_to_play = get_sound_model(sound_name_to_play)
+    sound_node_to_play = instantiate_node(sound_model_to_play)
 
     rendering_start_time = time.time()
-    rendered_sound = sound_to_play.render(int(SAMPLE_RATE * sound_library[sound_name_to_play].duration))
+    rendered_sound = sound_node_to_play.render(int(SAMPLE_RATE * sound_model_to_play.duration if isinstance(sound_model_to_play, OscillatorModel) else 1))
     rendering_end_time = time.time()
 
     # Normalize the combined wave

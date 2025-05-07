@@ -52,6 +52,7 @@ WavableValue = Union[float, List[Union[float, List[float]]], OscillatorModel]
 class SequenceModel(BaseModel):
     model_config = ConfigDict(extra='forbid')
     interval: float = 0
+    repeat: int = 1
     sequence: Optional[List[Union[str, List[str], None]]] = None
     chain: Optional[List[str]] = None
 
