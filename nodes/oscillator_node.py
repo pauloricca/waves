@@ -1,18 +1,18 @@
 import numpy as np
 
 from config import DO_NORMALISE_EACH_SOUND, ENVELOPE_TYPE, SAMPLE_RATE
-from models import WaveModel, WaveTypes
+from models import OscillatorModel, OscillatorTypes
 from nodes.instantiate_node import instantiate_node
 from nodes.wavable_value_node import WavableValueNode
 from nodes.base_node import BaseNode
+from vnoise import Noise
 
-class WaveNode(BaseNode):
-    def __init__(self, wave_model: WaveModel):
+class OscillatorNode(BaseNode):
+    def __init__(self, wave_model: OscillatorModel):
         self.wave_model = wave_model
         self.freq = WavableValueNode(wave_model.freq, wave_model.freq_interpolation) if wave_model.freq else None
         self.amp = WavableValueNode(wave_model.amp, wave_model.amp_interpolation)
         self.partials = [instantiate_node(partial) for partial in wave_model.partials]
-        self.filters = [instantiate_node(filter) for filter in wave_model.filters]
         self._phase_acc = 0
 
     def render(self, num_samples, **kwargs):
@@ -35,49 +35,52 @@ class WaveNode(BaseNode):
         frequency *= frequency_multiplier
 
         amplitude = self.amp.render(num_samples) * amplitude_multiplier
-        wave_type = self.wave_model.type
+        osc_type = self.wave_model.osc
 
-        if wave_type != WaveTypes.NONE.value:
-            if wave_type == WaveTypes.NOISE.value:
-                total_wave = amplitude * np.random.normal(0, 1, len(t))
+        if osc_type == OscillatorTypes.NOISE:
+            total_wave = amplitude * np.random.normal(0, 1, len(t))
+        elif osc_type in [OscillatorTypes.SIN, OscillatorTypes.COS]:
+            wave_function = np.sin if osc_type == OscillatorTypes.SIN else np.cos
+            # Is frequency variable?
+            if(isinstance(frequency, np.ndarray)):
+                dt = 1 / SAMPLE_RATE
+                # Compute cumulative phase
+                phase = 2 * np.pi * np.cumsum(frequency) * dt
+                total_wave = amplitude * wave_function(phase[:len(total_wave)])
             else:
-                if wave_type in [WaveTypes.SIN.value, WaveTypes.COS.value]:
-                    wave_function = np.sin if wave_type == WaveTypes.SIN.value else np.cos
-                    # Is frequency variable?
-                    if(isinstance(frequency, np.ndarray)):
-                        dt = 1 / SAMPLE_RATE
-                        # Compute cumulative phase
-                        phase = 2 * np.pi * np.cumsum(frequency) * dt
-                        total_wave = amplitude * wave_function(phase[:len(total_wave)])
-                    else:
-                        total_wave = amplitude * wave_function(2 * np.pi * frequency * t)
-                elif wave_type == WaveTypes.SQR.value:
-                    # Is frequency variable?
-                    if(isinstance(frequency, np.ndarray)):
-                        dt = 1 / SAMPLE_RATE
-                        # Compute cumulative phase
-                        phase = 2 * np.pi * np.cumsum(frequency) * dt
-                        total_wave = amplitude * np.sign(np.sin(phase[:len(total_wave)]))
-                    else:
-                        total_wave = amplitude * np.sign(np.sin(2 * np.pi * frequency * t))
-                elif wave_type == WaveTypes.TRI.value:
-                    # Is frequency variable?
-                    if(isinstance(frequency, np.ndarray)):
-                        dt = 1 / SAMPLE_RATE
-                        # Compute cumulative phase
-                        phase = 2 * np.pi * np.cumsum(frequency) * dt
-                        total_wave = amplitude * (2 / np.pi) * np.arcsin(np.sin(phase[:len(total_wave)]))
-                    else:
-                        total_wave = amplitude * (2 / np.pi) * np.arcsin(np.sin(2 * np.pi * frequency * t))
-                elif wave_type == WaveTypes.SAW.value:
-                    # Is frequency variable?
-                    if(isinstance(frequency, np.ndarray)):
-                        dt = 1 / SAMPLE_RATE
-                        # Compute cumulative phase
-                        phase = 2 * np.pi * np.cumsum(frequency) * dt
-                        total_wave = amplitude * (2 / np.pi) * np.arctan(np.tan(phase[:len(total_wave)]))
-                    else:
-                        total_wave = amplitude * (2 / np.pi) * np.arctan(np.tan(np.pi * frequency * t))
+                total_wave = amplitude * wave_function(2 * np.pi * frequency * t)
+        elif osc_type == OscillatorTypes.SQR:
+            # Is frequency variable?
+            if(isinstance(frequency, np.ndarray)):
+                dt = 1 / SAMPLE_RATE
+                # Compute cumulative phase
+                phase = 2 * np.pi * np.cumsum(frequency) * dt
+                total_wave = amplitude * np.sign(np.sin(phase[:len(total_wave)]))
+            else:
+                total_wave = amplitude * np.sign(np.sin(2 * np.pi * frequency * t))
+        elif osc_type == OscillatorTypes.TRI:
+            # Is frequency variable?
+            if(isinstance(frequency, np.ndarray)):
+                dt = 1 / SAMPLE_RATE
+                # Compute cumulative phase
+                phase = 2 * np.pi * np.cumsum(frequency) * dt
+                total_wave = amplitude * (2 / np.pi) * np.arcsin(np.sin(phase[:len(total_wave)]))
+            else:
+                total_wave = amplitude * (2 / np.pi) * np.arcsin(np.sin(2 * np.pi * frequency * t))
+        elif osc_type == OscillatorTypes.SAW:
+            # Is frequency variable?
+            if(isinstance(frequency, np.ndarray)):
+                dt = 1 / SAMPLE_RATE
+                # Compute cumulative phase
+                phase = 2 * np.pi * np.cumsum(frequency) * dt
+                total_wave = amplitude * (2 / np.pi) * np.arctan(np.tan(phase[:len(total_wave)]))
+            else:
+                total_wave = amplitude * (2 / np.pi) * np.arctan(np.tan(np.pi * frequency * t))
+        elif osc_type == OscillatorTypes.PERLIN:
+            noise_function = Noise(self.wave_model.seed).noise1
+            perlin_noise = np.array(noise_function(t * self.wave_model.scale))
+            # print(perlin_noise)
+            total_wave = amplitude * perlin_noise
 
         if len(self.partials) > 0:
             for partial in self.partials:

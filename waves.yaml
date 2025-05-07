@@ -1,17 +1,33 @@
+test2:
+  freq:
+    osc: perlin
+    scale: 2
+    seed: 3
+    min: 300
+    max: 350
+  duration: 4
+  osc: tri
+  attack: 0.01
+  release: 0.3
+  amp:
+    osc: perlin
+    scale: 2
+    seed: 4
+
 test:
   freq: [300, [100, 0.1]]
-  type: saw
   amp: 1
+  osc: saw
   duration: 1
   partials:
     - freq: 2
       amp: 0.5
-      type: saw
+      osc: saw
     - freq: 6
       amp: 0.3
-      type: sqr
-    - amp: 2
-      type: noise
+      osc: sqr
+    - osc: noise
+      amp: 2
       duration: 0.05
       release: 1
   attack: 0.02
@@ -66,11 +82,11 @@ charge:
   partials:
     - freq: 2
       amp: [0.5, 0]
-    - type: noise
+    - osc: noise
       amp: [0, 0.002, 0.01]
     - freq: [[5, 0], [50, 0.3]]
       amp: [0.02, 0.001, 0]
-      type: saw
+      osc: saw
 
 ding:
   freq: 800
@@ -81,12 +97,12 @@ ding:
   duration: 1
   release: 1
   partials:
-    - type: noise
+    - osc: noise
       amp: [0.04, 0]
 
 synth:
   freq: 240
-  type: none
+  osc: none
   amp: 
     freq: 200
     min: -0.7
@@ -98,13 +114,13 @@ synth:
     - freq: [5, [1, 0.01]]
       partials:
         - freq: 1
-          type: saw
+          osc: saw
           amp: [0.3, [0, 0.8]]
         - freq: 1.0015
-          type: saw
+          osc: saw
           amp: [0.3, [0, 0.8]]
         - freq: 0.9985
-          type: saw
+          osc: saw
           amp: [0.3, [0, 0.8]]
 
 lead:

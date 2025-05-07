@@ -1,7 +1,7 @@
     
 from __future__ import annotations
 import numpy as np
-from models import InterpolationTypes, WavableValue, WaveModel
+from models import InterpolationTypes, WavableValue, OscillatorModel
 from nodes.base_node import BaseNode
 from nodes.instantiate_node import instantiate_node
 from utils import interpolate_values
@@ -11,7 +11,7 @@ class WavableValueNode(BaseNode):
     def __init__(self, value: WavableValue, interpolation_type: InterpolationTypes = "LINEAR"):
         self.value = value
         self.interpolation_type = interpolation_type
-        self.wave_node = instantiate_node(value) if isinstance(value, WaveModel) else None
+        self.wave_node = instantiate_node(value) if isinstance(value, OscillatorModel) else None
 
     def render(self, num_samples):
         if self.wave_node:

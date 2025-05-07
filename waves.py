@@ -33,10 +33,8 @@ def main():
     sound_to_play = instantiate_node(sound_library[sound_name_to_play])
 
     rendering_start_time = time.time()
-
-    rendering_end_time = time.time()
-
     rendered_sound = sound_to_play.render(int(SAMPLE_RATE * sound_library[sound_name_to_play].duration))
+    rendering_end_time = time.time()
 
     # Normalize the combined wave
     peak = np.max(np.abs(rendered_sound))
