@@ -1,29 +1,12 @@
 import numpy as np
 
 from config import DO_NORMALISE_EACH_SOUND, ENVELOPE_TYPE, SAMPLE_RATE
-from models import InterpolationTypes, SequenceModel, WavableValue, WaveModel, WaveTypes
-from utils import interpolate_values
+from models import WaveModel, WaveTypes
+from nodes.instantiate_node import instantiate_node
+from nodes.wavable_value_node import WavableValueNode
+from nodes.base_node import BaseNode
 
-
-class Node:
-    def render(self, num_samples: int, **kwargs) -> np.ndarray:
-        raise NotImplementedError
-    
-class WavableValueNode(Node):
-    def __init__(self, value: WavableValue, interpolation_type: InterpolationTypes = "LINEAR"):
-        self.value = value
-        self.interpolation_type = interpolation_type
-        self.wave_node = instantiate_node(value) if isinstance(value, WaveModel) else None
-
-    def render(self, num_samples):
-        if self.wave_node:
-            return self.wave_node.render(num_samples)
-        elif isinstance(self.value, (float, int)):
-            return np.array([self.value])
-        if isinstance(self.value, list):
-            return interpolate_values(self.value, num_samples, self.interpolation_type)
-
-class WaveNode(Node):
+class WaveNode(BaseNode):
     def __init__(self, wave_model: WaveModel):
         self.wave_model = wave_model
         self.freq = WavableValueNode(wave_model.freq, wave_model.freq_interpolation) if wave_model.freq else None
@@ -130,10 +113,3 @@ class WaveNode(Node):
             total_wave = total_wave * (self.wave_model.max - self.wave_model.min) + self.wave_model.min
 
         return total_wave
-
-
-def instantiate_node(obj) -> Node:
-    if isinstance(obj, SequenceModel):
-        return None
-    elif isinstance(obj, WaveModel):
-        return WaveNode(obj)

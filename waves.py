@@ -6,8 +6,8 @@ import time
 import traceback
 
 from config import *
-from models import SequenceModel, SoundLibraryModel, WaveModel, WaveTypes
-from nodes import instantiate_node
+from models import SoundLibraryModel
+from nodes.instantiate_node import instantiate_node
 from utils import play, save
 
 rendered_sounds: dict[np.ndarray] = {}
@@ -36,45 +36,21 @@ def main():
 
     rendering_end_time = time.time()
 
-    combined_wave = sound_to_play.render(int(SAMPLE_RATE * sound_library[sound_name_to_play].duration))
+    rendered_sound = sound_to_play.render(int(SAMPLE_RATE * sound_library[sound_name_to_play].duration))
 
     # Normalize the combined wave
-    peak = np.max(np.abs(combined_wave))
-    combined_wave /= DIVIDE_BY
+    peak = np.max(np.abs(rendered_sound))
+    rendered_sound /= DIVIDE_BY
 
-    save(combined_wave, f"{sound_name_to_play}.wav")
+    save(rendered_sound, f"{sound_name_to_play}.wav")
 
-    # if DO_SHUFFLE_WAVES:
-        # combined_wave_shuffled = shuffle_wave(combined_wave, 0.1)
-
-        # save(combined_wave_shuffled, "combined-shuffled.wav")
-
-        # combined_wave_reverb = add_convolution(combined_wave_shuffled)
-
-        # normalise_wave(combined_wave_reverb)
-
-        # save(combined_wave_reverb, "combined-shuffled-reverb.wav")
-
-        # combined_wave_super_shuffled = shuffle_wave(combined_wave_reverb, 0.3)
-
-        # save(combined_wave_super_shuffled, "combined-shuffled-super-shuffled.wav")
-
-        # combined_wave_re_shuffled = shuffle_wave(combined_wave_shuffled, 0.3)
-
-        # save(combined_wave_re_shuffled, "combined-shuffled-re-shuffled.wav")
-
-    print(f"Sound length: {len(combined_wave) / SAMPLE_RATE:.2f} seconds")
+    print(f"Sound length: {len(rendered_sound) / SAMPLE_RATE:.2f} seconds")
     print(f"Render time: {rendering_end_time - rendering_start_time:.2f} seconds")
     print ("Peak:", peak)
 
-    wave_to_play = combined_wave
-
-    # wave_to_play = add_delay(wave_to_play, 0.3, 3)
-    # wave_to_play = add_low_pass_filter(wave_to_play)
-
-    # wave_to_play = normalise_wave(wave_to_play)
-    wave_to_play = np.clip(wave_to_play, -1, 1)
-    play(wave_to_play)
+    # rendered_sound = normalise_wave(rendered_sound)
+    rendered_sound = np.clip(rendered_sound, -1, 1)
+    play(rendered_sound)
 
 if __name__ == "__main__":
     last_modified_time = ""
