@@ -1,62 +1,76 @@
+test:
+  freq: [300, [100, 0.1]]
+  type: saw
+  amp: 1
+  duration: 1
+  partials:
+    - freq: 2
+      amp: 0.5
+      type: saw
+    - freq: 6
+      amp: 0.3
+      type: sqr
+    - amp: 2
+      type: noise
+      duration: 0.05
+      release: 1
+  attack: 0.02
+  release: 0.8
+
 phoom:
   freq: 190
   amp: 0.4
   duration: 1.4
   attack: 0.2
   release: 0.8
-  waves:
-    - freq: 1
-      group:
-        amp: 0.4
-        duration: 0.01
-        waves:
-          - freq: 2
-            amp: 0.5
-          - freq: 2.2
-            amp: 0.5
-          - freq: 2.3
-            amp: 0.5
-          - freq: 4
-            amp: 0.5
+  partials:
+    - amp: 0.4
+      duration: 0.01
+      partials:
+        - freq: 2
+          amp: 0.5
+        - freq: 2.2
+          amp: 0.5
+        - freq: 2.3
+          amp: 0.5
+        - freq: 5
+          amp: 0.5
 
 thump:
-  freq: [[10000, 0], [500, 0.01], [60, 0.02], [60, 1]]
+  freq: [10000, [500, 0.01], [60, 0.02]]
   duration: 0.6
   attack: 0.01
   release: 1
-  waves:
-    - freq: 1
-      group:
-        amp: 0.5
-        duration: 0.05
-        attack: 0.1
-        release: 1
-        waves:
-          - freq: 5
-            amp: 0.5
-          - freq: 7.2
-            amp: 0.4
-          - freq: 8.2
-            amp: 0.3
-          - freq: 10
-            amp: 0.2
-          - freq: 12
-            amp: 0.1
+  partials:
+    - amp: 0.1
+      duration: 0.05
+      attack: 0.1
+      release: 1
+      partials:
+        - freq: 5
+          amp: 1
+        - freq: 7.2
+          amp: 0.8
+        - freq: 8.2
+          amp: 0.6
+        - freq: 10
+          amp: 0.4
+        - freq: 12
+          amp: 0.2
 
 charge:
   freq: [10000, [500, 0.01], [60, 0.02]]
   amp: [0, [1, 0.08], [0.4, 0.2], [0.8, 0.3], [0.6, 0.4], 0]
   duration: 8
   release: 0.5
-  waves:
-    - freq: 1
+  partials:
     - freq: 2
       amp: [0.5, 0]
     - type: noise
       amp: [0, 0.002, 0.01]
     - freq: [[5, 0], [50, 0.3]]
-      type: saw
       amp: [0.02, 0.001, 0]
+      type: saw
 
 ding:
   freq: 800
@@ -66,72 +80,70 @@ ding:
     max: 1
   duration: 1
   release: 1
-  waves:
-    - freq: 1
+  partials:
     - type: noise
       amp: [0.04, 0]
 
 synth:
   freq: 240
+  type: none
+  amp: 
+    freq: 200
+    min: -0.7
+    max: 0.7
   attack: 0.02
+  release: 0.8
   duration: 3
-  waves:
+  partials:
     - freq: [5, [1, 0.01]]
-      type: none
-      group:
-        waves:
-          - freq: 1
-            amp: [1, 0]
-          - freq: 1
-            type: saw
-            amp: [0.3, [0, 0.8]]
-          - freq: 1.0015
-            type: saw
-            amp: [0.3, [0, 0.8]]
-          - freq: 0.9985
-            type: saw
-            amp: [0.3, [0, 0.8]]
+      partials:
+        - freq: 1
+          type: saw
+          amp: [0.3, [0, 0.8]]
+        - freq: 1.0015
+          type: saw
+          amp: [0.3, [0, 0.8]]
+        - freq: 0.9985
+          type: saw
+          amp: [0.3, [0, 0.8]]
 
 lead:
   freq: 80
   duration: 2
   attack: 0.01
   release: 1
-  waves:
-    - freq: 1
-      group:
-        amp: 1
-        duration: 0.0015
-        attack: 0.001
-        release: 0.3
-        waves:
-          - freq: 5
-            amp: 0.5
-          - freq: 7.2
-            amp: 0.5
-          - freq: 8.3
-            amp: 0.5
-          - freq: 10
-            amp: 0.5
-          - freq: 12
-            amp: 0.5
+  partials:
+    - duration: 0.0015
+      attack: 0.001
+      release: 0.3
+      partials:
+        - freq: 5
+          amp: 0.5
+        - freq: 7.2
+          amp: 0.5
+        - freq: 8.3
+          amp: 0.5
+        - freq: 10
+          amp: 0.5
+        - freq: 12
+          amp: 0.5
+
 tick:
   freq: 4400
   duration: 0.0002
   amp: 0.2
-  waves:
-    - freq: 1
+  partials:
     - freq: 2
       amp: 0.5
     - freq: 0.5
       amp: 0.2
+
 beep:
   freq: 8800
   amp: 0.4
   duration: 0.07
   attack: 1
-  waves:
-    - freq: 1
+  partials:
     - freq: 2
       amp: 0.5
     - freq: 0.5
@@ -418,7 +430,7 @@ sequence-sound-test:
     - tick
 
 main-sequence:
-  sequence:
+  chain:
     - part-a
     - part-b
     - part-c

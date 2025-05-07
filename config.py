@@ -1,0 +1,9 @@
+YAML_FILE = "waves.yaml"
+OUTPUT_DIR = "output"
+ENVELOPE_TYPE = "exponential"  # Options: "linear", "exponential"
+SAMPLE_RATE = 44100
+VISUALISATION_ROW_HEIGHT = 10
+DIVIDE_BY = 2
+DO_FREQ_CLOUD = False
+DO_NORMALISE_EACH_SOUND = False
+DO_SHUFFLE_WAVES = False
