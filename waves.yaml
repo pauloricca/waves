@@ -4,12 +4,18 @@ test3:
       osc:
         freq:
           osc:
+            type: perlin
             scale: 2
             seed: 1
-            min: 0.99
-            max: 1.01
-        duration: 0.0002
-        amp: 0.2
+            min: 100
+            max: 200
+        duration: 1
+        amp:
+          osc:
+            type: sqr
+            freq: 100
+            min: 0
+            max: 1
         partials:
           - osc:
               freq: 2
@@ -20,8 +26,8 @@ test3:
 
 test2:
   osc:
-    freq: [100, 600]
-    duration: 10
+    freq: [10, 600]
+    duration: 4
     attack: 0.3
     release: 0.3
     partials:
@@ -72,7 +78,6 @@ test2:
       osc:
         type: perlin
         scale: 3
-        seed: -1
         min: 0.3
         max: 0.8
 
@@ -561,7 +566,6 @@ sequence-sound-test:
 
 main-sequence:
   sequencer:
-    repeat: 3
     chain:
       - part-a
       - part-b

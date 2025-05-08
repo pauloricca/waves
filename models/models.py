@@ -36,7 +36,7 @@ class OscillatorModel(BaseNodeModel):
     release: float = 0
     partials: List[OscillatorModel] = []
     scale: float = 1.0 # Perlin noise scale
-    seed: float = 0.0 # Perlin noise seed
+    seed: Optional[float] = None # Perlin noise seed
     min: Optional[float] = None # normalized min value
     max: Optional[float] = None # normalized max value
     

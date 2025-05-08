@@ -1,3 +1,4 @@
+import random
 import numpy as np
 
 from config import DO_NORMALISE_EACH_SOUND, ENVELOPE_TYPE, SAMPLE_RATE
@@ -77,9 +78,8 @@ class OscillatorNode(BaseNode):
             else:
                 total_wave = amplitude * (2 / np.pi) * np.arctan(np.tan(np.pi * frequency * t))
         elif osc_type == OscillatorTypes.PERLIN:
-            noise_function = Noise(self.wave_model.seed).noise1
+            noise_function = Noise(self.wave_model.seed or random.randint(0, 10000)).noise1
             perlin_noise = np.array(noise_function(t * self.wave_model.scale))
-            # print(perlin_noise)
             total_wave = amplitude * perlin_noise
 
         if len(self.partials) > 0:

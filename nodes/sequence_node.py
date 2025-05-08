@@ -36,7 +36,6 @@ class SequencerNode(BaseNode):
 
                 for param in params:
                     if param.startswith("f"):
-                        print("Setting frequency to", param[1:])
                         sound_model.freq = float(param[1:])
                     elif param.startswith("a"):
                         sound_model.amp *= float(param[1:])
