@@ -2,14 +2,14 @@
 from __future__ import annotations
 import numpy as np
 from config import SAMPLE_RATE
-from models import SequenceModel
+from models.models import SequencerModel
 from nodes.base_node import BaseNode
 from nodes.instantiate_node import instantiate_node
 from sound_library import get_sound_model
 
 
-class SequenceNode(BaseNode):
-    def __init__(self, sequence_model: SequenceModel):
+class SequencerNode(BaseNode):
+    def __init__(self, sequence_model: SequencerModel):
         self.sequence = sequence_model.sequence
         self.chain = sequence_model.chain
         self.interval = sequence_model.interval

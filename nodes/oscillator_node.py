@@ -1,7 +1,7 @@
 import numpy as np
 
 from config import DO_NORMALISE_EACH_SOUND, ENVELOPE_TYPE, SAMPLE_RATE
-from models import OscillatorModel, OscillatorTypes
+from models.models import OscillatorModel, OscillatorTypes
 from nodes.instantiate_node import instantiate_node
 from nodes.wavable_value_node import WavableValueNode
 from nodes.base_node import BaseNode
@@ -35,7 +35,7 @@ class OscillatorNode(BaseNode):
         frequency *= frequency_multiplier
 
         amplitude = self.amp.render(num_samples) * amplitude_multiplier
-        osc_type = self.wave_model.osc
+        osc_type = self.wave_model.type
 
         if osc_type == OscillatorTypes.NOISE:
             total_wave = amplitude * np.random.normal(0, 1, len(t))

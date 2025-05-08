@@ -1,7 +1,7 @@
     
 from __future__ import annotations
 import numpy as np
-from models import InterpolationTypes, WavableValue, OscillatorModel
+from models.models import InterpolationTypes, OscillatorModel, WavableValue
 from nodes.base_node import BaseNode
 from nodes.instantiate_node import instantiate_node
 from utils import interpolate_values

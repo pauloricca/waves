@@ -1,495 +1,573 @@
+test3:
+  delay:
+    signal:
+      osc:
+        freq:
+          osc:
+            scale: 2
+            seed: 1
+            min: 0.99
+            max: 1.01
+        duration: 0.0002
+        amp: 0.2
+        partials:
+          - osc:
+              freq: 2
+              amp: 0.5
+          - osc:
+              freq: 0.5
+              amp: 0.2
+
 test2:
-  freq: [100, 600]
-  duration: 10
-  attack: 0.3
-  release: 0.3
-  partials:
-    - osc: saw
-      amp: 0.5
-      freq:
-        osc: perlin
+  osc:
+    freq: [100, 600]
+    duration: 10
+    attack: 0.3
+    release: 0.3
+    partials:
+      - osc:
+          type: saw
+          amp: 0.5
+      - osc:
+          type: tri
+          amp: 0.8
+          freq:
+            osc: 
+              type: perlin
+              scale: 2
+              seed: 2
+              min: 0.99
+              max: 1.21
+      - osc:
+          type: sqr
+          amp: 0.8
+          freq:
+            osc:
+              type: perlin
+              scale: 7
+              seed: 3
+              min: 0.95
+              max: 1.01
+      - osc:
+          type: saw
+          amp: 0.5
+          freq:
+            osc: 
+              type: perlin
+              scale: 2
+              seed: 4
+              min: 0.99
+              max: 1.01
+      - osc: 
+          type: saw
+          amp: 0.5
+          freq:
+            osc:
+              type: perlin
+              scale: 2
+              seed: 5
+              min: 0.9
+              max: 1.1
+    amp:
+      osc:
+        type: perlin
         scale: 3
-        seed: 1
-        min: 0.99
-        max: 1.01
-    - osc: tri
-      amp: 0.8
-      freq:
-        osc: perlin
-        scale: 2
-        seed: 2
-        min: 0.99
-        max: 1.21
-    - osc: sqr
-      amp: 0.8
-      freq:
-        osc: perlin
-        scale: 7
-        seed: 3
-        min: 0.95
-        max: 1.01
-    - osc: saw
-      amp: 0.5
-      freq:
-        osc: perlin
-        scale: 2
-        seed: 4
-        min: 0.99
-        max: 1.01
-    - osc: saw
-      amp: 0.5
-      freq:
-        osc: perlin
-        scale: 2
-        seed: 5
-        min: 0.9
-        max: 1.1
-  amp:
-    osc: perlin
-    scale: 3
-    seed: -1
-    min: 0.3
-    max: 0.8
+        seed: -1
+        min: 0.3
+        max: 0.8
 
 test:
-  freq: [300, [100, 0.1]]
-  amp: 1
-  osc: saw
-  duration: 1
-  partials:
-    - freq: 2
-      amp: 0.5
-      osc: saw
-    - freq: 6
-      amp: 0.3
-      osc: sqr
-    - osc: noise
-      amp: 2
-      duration: 0.05
-      release: 1
-  attack: 0.02
-  release: 0.8
+  osc:
+    freq: [300, [100, 0.1]]
+    amp: 1
+    type: saw
+    duration: 1
+    partials:
+      - osc:
+          freq: 2
+          amp: 0.5
+          type: saw
+      - osc:
+          freq: 6
+          amp: 0.3
+          type: sqr
+      - osc:
+          type: noise
+          amp: 2
+          duration: 0.05
+          release: 1
+    attack: 0.02
+    release: 0.8
 
 phoom:
-  freq: 190
-  amp: 0.4
-  duration: 1.4
-  attack: 0.2
-  release: 0.8
-  partials:
-    - amp: 0.4
-      duration: 0.01
-      partials:
-        - freq: 2
-          amp: 0.5
-        - freq: 2.2
-          amp: 0.5
-        - freq: 2.3
-          amp: 0.5
-        - freq: 5
-          amp: 0.5
+  osc:
+    freq: 190
+    amp: 0.4
+    duration: 1.4
+    attack: 0.2
+    release: 0.8
+    partials:
+      - osc:
+          amp: 0.4
+          duration: 0.01
+          partials:
+            - osc:
+                freq: 2
+                amp: 0.5
+            - osc:
+                freq: 2.2
+                amp: 0.5
+            - osc:
+                freq: 2.3
+                amp: 0.5
+            - osc:
+                freq: 5
+                amp: 0.5
 
 thump:
-  freq: [10000, [500, 0.01], [60, 0.02]]
-  duration: 0.6
-  attack: 0.01
-  release: 1
-  partials:
-    - amp: 0.1
-      duration: 0.05
-      attack: 0.1
-      release: 1
-      partials:
-        - freq: 5
-          amp: 1
-        - freq: 7.2
-          amp: 0.8
-        - freq: 8.2
-          amp: 0.6
-        - freq: 10
-          amp: 0.4
-        - freq: 12
-          amp: 0.2
+  osc:
+    freq: [10000, [500, 0.01], [60, 0.02]]
+    duration: 0.6
+    attack: 0.01
+    release: 1
+    partials:
+      - osc:
+          amp: 0.1
+          duration: 0.05
+          attack: 0.1
+          release: 1
+          partials:
+            - osc:
+                freq: 5
+                amp: 1
+            - osc:
+                freq: 7.2
+                amp: 0.8
+            - osc:
+                freq: 8.2
+                amp: 0.6
+            - osc:
+                freq: 10
+                amp: 0.4
+            - osc:
+                freq: 12
+                amp: 0.2
 
 charge:
-  freq: [10000, [500, 0.01], [60, 0.02]]
-  amp: [0, [1, 0.08], [0.4, 0.2], [0.8, 0.3], [0.6, 0.4], 0]
-  duration: 8
-  release: 0.5
-  partials:
-    - freq: 2
-      amp: [0.5, 0]
-    - osc: noise
-      amp: [0, 0.002, 0.01]
-    - freq: [[5, 0], [50, 0.3]]
-      amp: [0.02, 0.001, 0]
-      osc: saw
+  osc:
+    freq: [10000, [500, 0.01], [60, 0.02]]
+    amp: [0, [1, 0.08], [0.4, 0.2], [0.8, 0.3], [0.6, 0.4], 0]
+    duration: 8
+    release: 0.5
+    partials:
+      - osc:
+          freq: 2
+          amp: [0.5, 0]
+      - osc:
+          type: noise
+          amp: [0, 0.002, 0.01]
+      - osc:
+          freq: [[5, 0], [50, 0.3]]
+          amp: [0.02, 0.001, 0]
+          type: saw
 
 ding:
-  freq: 800
-  amp:
-    freq: 5000
-    min: 0
-    max: 1
-  duration: 1
-  release: 1
-  partials:
-    - osc: noise
-      amp: [0.04, 0]
+  osc:
+    freq: 800
+    amp:
+      osc:
+        freq: 5000
+        min: 0
+        max: 1
+    duration: 1
+    release: 1
+    partials:
+      - osc: 
+          type: noise
+          amp: [0.04, 0]
 
 synth:
-  freq: 240
-  osc: none
-  amp: 
-    freq: 200
-    min: -0.7
-    max: 0.7
-  attack: 0.02
-  release: 0.8
-  duration: 3
-  partials:
-    - freq: [5, [1, 0.01]]
-      partials:
-        - freq: 1
-          osc: saw
-          amp: [0.3, [0, 0.8]]
-        - freq: 1.0015
-          osc: saw
-          amp: [0.3, [0, 0.8]]
-        - freq: 0.9985
-          osc: saw
-          amp: [0.3, [0, 0.8]]
+  osc:
+    freq: 240
+    type: none
+    amp: 
+      osc:
+        freq: 200
+        min: -0.7
+        max: 0.7
+    attack: 0.02
+    release: 0.8
+    duration: 3
+    partials:
+      - osc:
+          freq: [5, [1, 0.01]]
+          partials:
+            - osc:
+                freq: 1
+                type: saw
+                amp: [0.3, [0, 0.8]]
+            - osc:
+                freq: 1.0015
+                type: saw
+                amp: [0.3, [0, 0.8]]
+            - osc:
+                freq: 0.9985
+                type: saw
+                amp: [0.3, [0, 0.8]]
 
 lead:
-  freq: 80
-  duration: 2
-  attack: 0.01
-  release: 1
-  partials:
-    - duration: 0.0015
-      attack: 0.001
-      release: 0.3
-      partials:
-        - freq: 5
-          amp: 0.5
-        - freq: 7.2
-          amp: 0.5
-        - freq: 8.3
-          amp: 0.5
-        - freq: 10
-          amp: 0.5
-        - freq: 12
-          amp: 0.5
+  osc:
+    freq: 80
+    duration: 2
+    attack: 0.01
+    release: 1
+    partials:
+      - osc:
+          duration: 0.0015
+          attack: 0.001
+          release: 0.3
+          partials:
+            - osc:
+                freq: 5
+                amp: 0.5
+            - osc:
+                freq: 7.2
+                amp: 0.5
+            - osc:
+                freq: 8.3
+                amp: 0.5
+            - osc:
+                freq: 10
+                amp: 0.5
+            - osc:
+                freq: 12
+                amp: 0.5
 
 tick:
-  freq: 4400
-  duration: 0.0002
-  amp: 0.2
-  partials:
-    - freq: 2
-      amp: 0.5
-    - freq: 0.5
-      amp: 0.2
+  osc:
+    freq: 4400
+    duration: 0.0002
+    amp: 0.2
+    partials:
+      - osc:
+          freq: 2
+          amp: 0.5
+      - osc:
+          freq: 0.5
+          amp: 0.2
 
 beep:
-  freq: 8800
-  amp: 0.4
-  duration: 0.07
-  attack: 1
-  partials:
-    - freq: 2
-      amp: 0.5
-    - freq: 0.5
-      amp: 0.2
+  osc:
+    freq: 8800
+    amp: 0.4
+    duration: 0.07
+    attack: 1
+    partials:
+      - osc:
+          freq: 2
+          amp: 0.5
+      - osc:
+          freq: 0.5
+          amp: 0.2
 
 part-a:
-  interval: 0.1
-  sequence:
-    - [lead f80, tick]
-    -
-    - tick
-    -
-    - [phoom, tick]
-    -
-    - tick
-    - beep f13000
-    - lead f120
-    - tick f18000
-    - tick
-    - phoom f15000
-    - tick f10000
-    -
-    - tick
-    -
-    -
-    - tick
-    - tick
-    -
-    -
-    -
-    - tick
-    -
-    -
-    -
+  sequencer:
+    interval: 0.1
+    sequence:
+      - [lead f80, tick]
+      -
+      - tick
+      -
+      - [phoom, tick]
+      -
+      - tick
+      - beep f13000
+      - lead f120
+      - tick f18000
+      - tick
+      - phoom f15000
+      - tick f10000
+      -
+      - tick
+      -
+      -
+      - tick
+      - tick
+      -
+      -
+      -
+      - tick
+      -
+      -
+      -
 
 part-b:
-  interval: 0.1
-  sequence:
-    - [lead f69, tick]
-    -
-    - tick
-    -
-    - [lead f185, tick]
-    -
-    - tick
-    -
-    - [lead f105, tick]
-    - tick f18000
-    - tick
-    - phoom f15000
-    - tick f10000
-    -
-    -
-    - tick
-    -
-    -
-    - tick
-    - tick
-    -
-    -
-    -
-    -
-    -
-    -
+  sequencer:
+    interval: 0.1
+    sequence:
+      - [lead f69, tick]
+      -
+      - tick
+      -
+      - [lead f185, tick]
+      -
+      - tick
+      -
+      - [lead f105, tick]
+      - tick f18000
+      - tick
+      - phoom f15000
+      - tick f10000
+      -
+      -
+      - tick
+      -
+      -
+      - tick
+      - tick
+      -
+      -
+      -
+      -
+      -
+      -
 
 part-c:
-  interval: 0.1
-  sequence:
-    - [lead f60, tick]
-    -
-    - tick
-    -
-    - [phoom f187, tick]
-    - beep f12000
-    - tick
-    -
-    - [lead f90, tick]
-    - tick f18000
-    - tick
-    - phoom f15000
-    - tick f10000
-    - tick
-    -
-    - tick
-    -
-    -
-    -
-    -
-    -
-    -
-    -
-    - tick
-    -
-    -
+  sequencer:
+    interval: 0.1
+    sequence:
+      - [lead f60, tick]
+      -
+      - tick
+      -
+      - [phoom f187, tick]
+      - beep f12000
+      - tick
+      -
+      - [lead f90, tick]
+      - tick f18000
+      - tick
+      - phoom f15000
+      - tick f10000
+      - tick
+      -
+      - tick
+      -
+      -
+      -
+      -
+      -
+      -
+      -
+      - tick
+      -
+      -
 
 part-d:
-  interval: 0.1
-  sequence:
-    - [lead f70, tick]
-    -
-    - tick
-    -
-    - [phoom, tick]
-    -
-    - tick
-    -
-    - [lead f105, tick]
-    - [tick f18000, beep f11000]
-    - tick
-    - phoom f15000
-    - tick f10000
-    -
-    - tick
-    -
-    - tick
-    -
-    -
-    - tick
-    -
-    -
-    -
-    -
-    - tick
-    -
-    -
-    -
-    -
-    -
-    -
-    -
-    -
-    -
+  sequencer:
+    interval: 0.1
+    sequence:
+      - [lead f70, tick]
+      -
+      - tick
+      -
+      - [phoom, tick]
+      -
+      - tick
+      -
+      - [lead f105, tick]
+      - [tick f18000, beep f11000]
+      - tick
+      - phoom f15000
+      - tick f10000
+      -
+      - tick
+      -
+      - tick
+      -
+      -
+      - tick
+      -
+      -
+      -
+      -
+      - tick
+      -
+      -
+      -
+      -
+      -
+      -
+      -
+      -
+      -
 
 part-e:
-  interval: 0.1
-  sequence:
-    - [lead f120, tick]
-    -
-    - tick
-    -
-    - [phoom, tick]
-    -
-    - tick
-    -
-    - [lead f97.5, tick]
-    - tick f18000
-    - tick
-    - phoom f15000
-    - tick f10000
-    -
-    -
-    - tick
-    -
-    -
-    -
-    -
-    -
-    -
-    -
-    -
-    - tick
-    -
+  sequencer:
+    interval: 0.1
+    sequence:
+      - [lead f120, tick]
+      -
+      - tick
+      -
+      - [phoom, tick]
+      -
+      - tick
+      -
+      - [lead f97.5, tick]
+      - tick f18000
+      - tick
+      - phoom f15000
+      - tick f10000
+      -
+      -
+      - tick
+      -
+      -
+      -
+      -
+      -
+      -
+      -
+      -
+      - tick
+      -
 
 part-f:
-  interval: 0.1
-  sequence:
-    - [lead f105, tick]
-    -
-    - tick
-    -
-    - [phoom, tick]
-    -
-    - tick
-    -
-    - [lead f73, tick]
-    - tick f18000
-    - tick
-    - phoom f15000
-    - tick f10000
-    - tick
-    -
-    -
-    -
-    - tick
-    -
-    - tick
-    -
-    -
-    -
-    -
-    -
-    -
-    -
+  sequencer:
+    interval: 0.1
+    sequence:
+      - [lead f105, tick]
+      -
+      - tick
+      -
+      - [phoom, tick]
+      -
+      - tick
+      -
+      - [lead f73, tick]
+      - tick f18000
+      - tick
+      - phoom f15000
+      - tick f10000
+      - tick
+      -
+      -
+      -
+      - tick
+      -
+      - tick
+      -
+      -
+      -
+      -
+      -
+      -
+      -
 
 part-g:
-  interval: 0.1
-  sequence:
-    - [lead f100, tick]
-    -
-    - tick
-    -
-    - [phoom, tick]
-    -
-    - tick
-    -
-    - [lead f60, tick]
-    - tick f18000
-    - tick
-    - phoom f15000
-    - tick f10000
-    - tick
-    -
-    -
-    - tick
-    -
-    -
-    - tick
-    -
-    - tick
-    -
-    -
-    -
-    -
-    -
+  sequencer:
+    interval: 0.1
+    sequence:
+      - [lead f100, tick]
+      -
+      - tick
+      -
+      - [phoom, tick]
+      -
+      - tick
+      -
+      - [lead f60, tick]
+      - tick f18000
+      - tick
+      - phoom f15000
+      - tick f10000
+      - tick
+      -
+      -
+      - tick
+      -
+      -
+      - tick
+      -
+      - tick
+      -
+      -
+      -
+      -
+      -
 
 part-h:
-  interval: 0.1
-  sequence:
-    - [lead f90, tick]
-    -
-    - tick
-    -
-    - [phoom, tick]
-    -
-    - tick
-    -
-    - [lead f105, tick]
-    - tick f18000
-    - tick
-    - phoom f15000
-    - tick f10000
-    - tick
-    -
-    -
-    -
-    - tick
-    -
-    - tick
-    -
-    -
-    -
-    -
-    -
-    -
-    -
-    - tick
-    -
-    -
-    -
-    -
+  sequencer:
+    interval: 0.1
+    sequence:
+      - [lead f90, tick]
+      -
+      - tick
+      -
+      - [phoom, tick]
+      -
+      - tick
+      -
+      - [lead f105, tick]
+      - tick f18000
+      - tick
+      - phoom f15000
+      - tick f10000
+      - tick
+      -
+      -
+      -
+      - tick
+      -
+      - tick
+      -
+      -
+      -
+      -
+      -
+      -
+      -
+      - tick
+      -
+      -
+      -
+      -
 
 sequence-sound-test:
-  interval: 0.3
-  sequence:
-    - [lead f200, tick]
-    - lead f220
-    - phoom f15000
-    - tick f280
-    -
-    - [phoom f290, tick]
-    - beep f13000
-    -
-    - ding
-    - beep f279
-    - [lead f278, tick]
-    - lead f284
-    - tick
-    - phoom f15000
-    - lead f285
-    -
-    - tick
-    -
-    -
-    - tick
+  sequencer:
+    interval: 0.3
+    sequence:
+      - [lead f200, tick]
+      - lead f220
+      - phoom f15000
+      - tick f280
+      -
+      - [phoom f290, tick]
+      - beep f13000
+      -
+      - ding
+      - beep f279
+      - [lead f278, tick]
+      - lead f284
+      - tick
+      - phoom f15000
+      - lead f285
+      -
+      - tick
+      -
+      -
+      - tick
 
 main-sequence:
-  repeat: 3
-  chain:
-    - part-a
-    - part-b
-    - part-c
-    - part-d
-    - part-e
-    - part-f
-    - part-g
-    - part-h
+  sequencer:
+    repeat: 3
+    chain:
+      - part-a
+      - part-b
+      - part-c
+      - part-d
+      - part-e
+      - part-f
+      - part-g
+      - part-h

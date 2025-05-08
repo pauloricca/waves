@@ -1,7 +1,7 @@
 from __future__ import annotations
 from enum import Enum
-from typing import Union, Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, RootModel, field_validator, model_validator
+from typing import Union, List, Optional
+from pydantic import BaseModel, ConfigDict, field_validator
 
 class OscillatorTypes(str, Enum):
     SIN = "SIN"
@@ -20,8 +20,13 @@ class InterpolationTypes(str, Enum):
     STEP = "STEP"
 
 
-class OscillatorModel(BaseModel):
+class BaseNodeModel(BaseModel):
+    pass
+
+
+class OscillatorModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
+    type: OscillatorTypes = OscillatorTypes.SIN
     freq: Optional[WavableValue] = None
     freq_interpolation: InterpolationTypes = InterpolationTypes.LINEAR
     amp: WavableValue = 1.0
@@ -29,14 +34,13 @@ class OscillatorModel(BaseModel):
     duration: Optional[float] = None
     attack: float = 0
     release: float = 0
-    osc: OscillatorTypes = OscillatorTypes.SIN
     partials: List[OscillatorModel] = []
     scale: float = 1.0 # Perlin noise scale
     seed: float = 0.0 # Perlin noise seed
     min: Optional[float] = None # normalized min value
     max: Optional[float] = None # normalized max value
     
-    @field_validator("osc", mode="before")
+    @field_validator("type", mode="before")
     @classmethod
     def normalize_wave_type(cls, v):
         if v is None:
@@ -46,10 +50,10 @@ class OscillatorModel(BaseModel):
         return v
 
 
-WavableValue = Union[float, List[Union[float, List[float]]], OscillatorModel]
+WavableValue = Union[float, List[Union[float, List[float]]], BaseNodeModel]
 
 
-class SequenceModel(BaseModel):
+class SequencerModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     interval: float = 0
     repeat: int = 1
@@ -57,21 +61,10 @@ class SequenceModel(BaseModel):
     chain: Optional[List[str]] = None
 
 
-class SoundLibraryModel(RootModel[Dict[str, Union[OscillatorModel, SequenceModel]]]):
-    @model_validator(mode="before")
-    @classmethod
-    def discriminate(cls, data):
-        parsed = {}
-        for k, v in data.items():
-            if isinstance(v, dict) and ("sequence" in v or "chain" in v):
-                parsed[k] = SequenceModel(**v)
-            elif isinstance(v, dict) and ("freq" in v or "osc" in v):
-                parsed[k] = OscillatorModel(**v)
-        return parsed
-
-    def __getitem__(self, key):
-        return self.root[key]
-
-    def keys(self):
-        return self.root.keys()
-
+class DelayModel(BaseNodeModel):
+    model_config = ConfigDict(extra='forbid')
+    delay_time: float = 0.1
+    repeats: int = 3
+    feedback: float = 0.3
+    do_trim: bool = False
+    signal: BaseNodeModel = None

@@ -1,12 +1,11 @@
 import numpy as np
 import os
-import yaml
 import sys
 import time
 import traceback
 
 from config import *
-from models import OscillatorModel, SoundLibraryModel
+from models.models import OscillatorModel
 from nodes.instantiate_node import instantiate_node
 from sound_library import get_sound_model, load_sound_library
 from utils import play, save
@@ -16,7 +15,8 @@ rendered_sounds: dict[np.ndarray] = {}
 def main():
     global rendered_sounds
 
-    load_sound_library(YAML_FILE)
+    if not load_sound_library(YAML_FILE):
+        return
 
     if len(sys.argv) < 2:
         print("Usage: python waves.py <sound-name>")

@@ -5,7 +5,7 @@ import numpy as np
 from scipy.io import wavfile
 
 from config import *
-from models import InterpolationTypes
+from models.models import InterpolationTypes
 
 def play(wave):
     wave = np.clip(wave, -1, 1)
