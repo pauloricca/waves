@@ -63,7 +63,7 @@ class SequencerModel(BaseNodeModel):
 
 class DelayModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
-    delay_time: float = 0.1
+    time: float = 0.1
     repeats: int = 3
     feedback: float = 0.3
     do_trim: bool = False

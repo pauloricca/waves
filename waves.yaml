@@ -1,20 +1,25 @@
 test3:
   delay:
+    time: 0.5
+    repeats: 7
+    feedback: 0.5
     signal:
       osc:
+        attack: 0.01
+        release: 0.1
+        duration: 1
         freq:
           osc:
             type: perlin
             scale: 2
             seed: 1
-            min: 100
-            max: 200
-        duration: 1
+            min: 50
+            max: 500
         amp:
           osc:
-            type: sqr
-            freq: 100
-            min: 0
+            type: tri
+            freq: 5
+            min: 0.2
             max: 1
         partials:
           - osc:

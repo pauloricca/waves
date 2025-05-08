@@ -14,10 +14,10 @@ class DelayNode(BaseNode):
 
     def render(self, num_samples):
         wave = self.signal_node.render(num_samples)
-        delay_samples = int(SAMPLE_RATE * self.delay_model.delay_time)
-        delayed_wave = np.zeros(len(wave) + delay_samples * self.delay_model.repeats)
+        n_delay_time_samples = int(SAMPLE_RATE * self.delay_model.time)
+        delayed_wave = np.zeros(len(wave) + n_delay_time_samples * self.delay_model.repeats)
 
         for i in range(self.delay_model.repeats):
-            delayed_wave[i * delay_samples : i * delay_samples + len(wave)] += wave * (self.delay_model.feedback ** i)
+            delayed_wave[i * n_delay_time_samples : i * n_delay_time_samples + len(wave)] += wave * (self.delay_model.feedback ** i)
 
         return delayed_wave[: len(wave)] if self.delay_model.do_trim else delayed_wave # Trim to original length

@@ -28,7 +28,7 @@ def main():
     sound_node_to_play = instantiate_node(sound_model_to_play)
 
     rendering_start_time = time.time()
-    rendered_sound = sound_node_to_play.render(int(SAMPLE_RATE * sound_model_to_play.duration if isinstance(sound_model_to_play, OscillatorModel) else 1))
+    rendered_sound = sound_node_to_play.render(int(SAMPLE_RATE * sound_model_to_play.duration if isinstance(sound_model_to_play, OscillatorModel) else 1 * SAMPLE_RATE))
     rendering_end_time = time.time()
 
     # Normalize the combined wave
