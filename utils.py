@@ -131,3 +131,15 @@ def interpolate_values(values, num_samples, interpolation_type):
     else:
         interpolated_values = values[0]
     return interpolated_values
+
+def consume_kwargs(kwargs: dict, keys_and_default_values: dict):
+    """
+    Extracts keys from `kwargs` using defaults from `defaults`, without mutating the original.
+    Returns a tuple of values (in the order of keys_and_default_values) and a new kwargs dict
+    with those keys removed.
+    """
+    remaining = kwargs.copy()
+    values = []
+    for key, default in keys_and_default_values.items():
+        values.append(remaining.pop(key, default))
+    return (*values, remaining)

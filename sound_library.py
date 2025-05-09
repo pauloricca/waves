@@ -22,4 +22,4 @@ def get_sound_model(sound_name: str):
     if sound_name not in sound_library.keys():
         raise ValueError(f"Sound '{sound_name}' not found in the sound library.")
     
-    return sound_library[sound_name].model_copy(deep=True)
+    return sound_library[sound_name]

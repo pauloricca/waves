@@ -1,5 +1,6 @@
 test3:
   delay:
+    duration: 3
     time: 0.5
     repeats: 7
     feedback: 0.5
@@ -7,14 +8,13 @@ test3:
       osc:
         attack: 0.01
         release: 0.1
-        duration: 1
         freq:
           osc:
             type: perlin
             scale: 2
             seed: 1
             min: 50
-            max: 500
+            max: 400
         amp:
           osc:
             type: tri

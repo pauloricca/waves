@@ -2,6 +2,7 @@
 from __future__ import annotations
 import numpy as np
 from config import SAMPLE_RATE
+from constants import RenderArgs
 from models.models import SequencerModel
 from nodes.base_node import BaseNode
 from nodes.instantiate_node import instantiate_node
@@ -34,14 +35,16 @@ class SequencerNode(BaseNode):
                 
                 sound_model = get_sound_model(main_sound_name)
 
+                render_args = {}
+
                 for param in params:
                     if param.startswith("f"):
-                        sound_model.freq = float(param[1:])
+                        render_args[RenderArgs.FREQUENCY] = float(param[1:])
                     elif param.startswith("a"):
-                        sound_model.amp *= float(param[1:])
+                        render_args[RenderArgs.AMPLITUDE_MULTIPLIER] = float(param[1:])
                 
                 sound_node = instantiate_node(sound_model)
-                generated_waves[sound_names] = sound_node.render(num_samples)
+                generated_waves[sound_names] = sound_node.render(num_samples, **render_args)
 
         # Create a combined wave based on the sequence
         combined_wave = np.array([], dtype=np.float32)

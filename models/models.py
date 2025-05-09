@@ -21,6 +21,7 @@ class InterpolationTypes(str, Enum):
 
 
 class BaseNodeModel(BaseModel):
+    duration: Optional[float] = None
     pass
 
 
@@ -31,7 +32,6 @@ class OscillatorModel(BaseNodeModel):
     freq_interpolation: InterpolationTypes = InterpolationTypes.LINEAR
     amp: WavableValue = 1.0
     amp_interpolation: InterpolationTypes = InterpolationTypes.LINEAR
-    duration: Optional[float] = None
     attack: float = 0
     release: float = 0
     partials: List[OscillatorModel] = []
