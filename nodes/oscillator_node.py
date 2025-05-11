@@ -25,6 +25,7 @@ class OscillatorNode(BaseNode):
 
 
         duration = self.wave_model.duration or (num_samples / SAMPLE_RATE)
+        number_of_samples_to_render = int(SAMPLE_RATE * duration)
         release_time = self.wave_model.release * duration
         attack_time = self.wave_model.attack * duration
         t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
@@ -34,7 +35,7 @@ class OscillatorNode(BaseNode):
         if frequency_override:
             frequency = frequency_override
         elif self.freq:
-            frequency = self.freq.render(num_samples, **kwargs_for_children)
+            frequency = self.freq.render(number_of_samples_to_render, **kwargs_for_children)
             if len(frequency) == 1:
                 frequency = frequency[0]
         else:
@@ -42,7 +43,7 @@ class OscillatorNode(BaseNode):
         
         frequency *= frequency_multiplier
 
-        amplitude = self.amp.render(num_samples, **kwargs_for_children) * amplitude_multiplier
+        amplitude = self.amp.render(number_of_samples_to_render, **kwargs_for_children) * amplitude_multiplier
         osc_type = self.wave_model.type
 
         if osc_type == OscillatorTypes.NOISE:
@@ -93,7 +94,7 @@ class OscillatorNode(BaseNode):
         if len(self.partials) > 0:
             partials_args = {RenderArgs.FREQUENCY_MULTIPLIER: frequency, RenderArgs.AMPLITUDE_MULTIPLIER: amplitude}
             for partial in self.partials:
-                partial_wave = partial.render(num_samples, **partials_args, **kwargs_for_children)
+                partial_wave = partial.render(number_of_samples_to_render, **partials_args, **kwargs_for_children)
                 # Pad the shorter wave to match the length of the longer one
                 if len(partial_wave) > len(total_wave):
                     total_wave = np.pad(total_wave, (0, len(partial_wave) - len(total_wave)))
