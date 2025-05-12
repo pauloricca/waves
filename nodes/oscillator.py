@@ -10,7 +10,7 @@ from constants import RenderArgs
 from models.models import BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import InterpolationTypes, WavableValue, WavableValueNode
-from nodes.base import BaseNode
+from nodes.node_utils.base import BaseNode
 from vnoise import Noise
 
 from utils import consume_kwargs

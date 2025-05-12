@@ -6,9 +6,9 @@ from pydantic import ConfigDict
 from config import SAMPLE_RATE
 from constants import RenderArgs
 from models.models import BaseNodeModel
-from nodes.base import BaseNode
+from models.sound_library import get_sound_model
+from nodes.node_utils.base import BaseNode
 from nodes.node_utils.node_definition_type import NodeDefinition
-from sound_library import get_sound_model
 
 
 class SequencerModel(BaseNodeModel):

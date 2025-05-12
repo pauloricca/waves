@@ -4,7 +4,7 @@ import numpy as np
 from pydantic import ConfigDict
 from config import SAMPLE_RATE
 from models.models import BaseNodeModel
-from nodes.base import BaseNode
+from nodes.node_utils.base import BaseNode
 from nodes.node_utils.node_definition_type import NodeDefinition
 
 class DelayModel(BaseNodeModel):

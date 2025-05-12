@@ -5,29 +5,33 @@ test3:
     repeats: 7
     feedback: 0.5
     signal:
-      osc:
-        attack: 0.01
-        release: 0.1
-        freq:
+      filter:
+        type: highpass
+        cutoff: 1200
+        signal:
           osc:
-            type: perlin
-            scale: 2
-            seed: 1
-            min: 50
-            max: 400
-        amp:
-          osc:
-            type: tri
-            freq: 5
-            min: 0.2
-            max: 1
-        partials:
-          - osc:
-              freq: 2
-              amp: 0.5
-          - osc:
-              freq: 0.5
-              amp: 0.2
+            attack: 0.01
+            release: 0.1
+            freq:
+              osc:
+                type: perlin
+                scale: 2
+                seed: 1
+                min: 50
+                max: 400
+            amp:
+              osc:
+                type: tri
+                freq: 5
+                min: 0.2
+                max: 1
+            partials:
+              - osc:
+                  freq: 2
+                  amp: 0.5
+              - osc:
+                  freq: 0.5
+                  amp: 0.2
 
 test2:
   osc:

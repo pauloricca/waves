@@ -1,5 +1,5 @@
 from __future__ import annotations
-from nodes.base import BaseNode
+from nodes.node_utils.base import BaseNode
 from nodes.node_utils.node_registry import NODE_REGISTRY
 
 def instantiate_node(obj) -> BaseNode:

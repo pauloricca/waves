@@ -4,7 +4,7 @@ from enum import Enum
 from typing import List, Union
 import numpy as np
 from models.models import BaseNodeModel
-from nodes.base import BaseNode
+from nodes.node_utils.base import BaseNode
 from utils import interpolate_values
 
 

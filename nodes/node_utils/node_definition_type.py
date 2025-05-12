@@ -1,5 +1,5 @@
 from models.models import BaseNodeModel
-from nodes.base import BaseNode
+from nodes.node_utils.base import BaseNode
 from dataclasses import dataclass
 
 @dataclass
