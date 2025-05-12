@@ -1,17 +1,11 @@
 from typing import Dict
 from pydantic import RootModel, model_validator
 
-from models.models import BaseNodeModel, DelayModel, OscillatorModel, SequencerModel
-
-
-NODE_TYPE_TO_MODEL = {
-    "osc": OscillatorModel,
-    "delay": DelayModel,
-    "sequencer": SequencerModel,
-}
+from models.models import BaseNodeModel
 
 
 def parse_node(data) -> BaseNodeModel:
+    from nodes.node_utils.node_registry import NODE_REGISTRY
     if not isinstance(data, dict) or len(data) != 1:
         raise ValueError(f"Each node must have exactly one node_type key: {data}")
     
@@ -26,10 +20,13 @@ def parse_node(data) -> BaseNodeModel:
                 parse_node(i) if isinstance(i, dict) and len(i) == 1 and isinstance(next(iter(i.values())), dict) else i
                 for i in v
             ]
+    
+    node_definition = next((n for n in NODE_REGISTRY if n.name == node_type), None)
 
-    model_cls = NODE_TYPE_TO_MODEL.get(node_type)
-    if not model_cls:
-        raise ValueError(f"Unknown node type: {node_type}")
+    if not node_definition:
+        raise ValueError(f"Node type '{node_type}' not recognised")
+
+    model_cls = node_definition.model
 
     return model_cls(**params)
 

@@ -1,14 +1,26 @@
     
 from __future__ import annotations
+from enum import Enum
+from typing import List, Union
 import numpy as np
-from models.models import InterpolationTypes, OscillatorModel, WavableValue
-from nodes.base_node import BaseNode
-from nodes.instantiate_node import instantiate_node
+from models.models import BaseNodeModel
+from nodes.base import BaseNode
 from utils import interpolate_values
+
+
+class InterpolationTypes(str, Enum):
+    LINEAR = "LINEAR"
+    SMOOTH = "SMOOTH"
+    STEP = "STEP"
+
+
+WavableValue = Union[float, List[Union[float, List[float]]], BaseNodeModel]
 
 
 class WavableValueNode(BaseNode):
     def __init__(self, value: WavableValue, interpolation_type: InterpolationTypes = "LINEAR"):
+        from nodes.node_utils.instantiate_node import instantiate_node
+        from nodes.oscillator import OscillatorModel
         self.value = value
         self.interpolation_type = interpolation_type
         self.wave_node = instantiate_node(value) if isinstance(value, OscillatorModel) else None

@@ -5,8 +5,7 @@ import time
 import traceback
 
 from config import *
-from models.models import OscillatorModel
-from nodes.instantiate_node import instantiate_node
+from nodes.node_utils.instantiate_node import instantiate_node
 from sound_library import get_sound_model, load_sound_library
 from utils import play, save
 

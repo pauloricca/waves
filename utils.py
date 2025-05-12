@@ -5,7 +5,6 @@ import numpy as np
 from scipy.io import wavfile
 
 from config import *
-from models.models import InterpolationTypes
 
 def play(wave):
     wave = np.clip(wave, -1, 1)
@@ -65,6 +64,7 @@ def visualise_wave(wave):
 
 # Interpolates a list of values or a list of lists with relative positions
 def interpolate_values(values, num_samples, interpolation_type):
+    from nodes.wavable_value import InterpolationTypes
     # If all the values aparet from the first and last are lists, we assume they are relative positions
     # It's ok for the first and last not to be lists, as we can assume 0 and 1 positions
     if all(isinstance(v, list) and len(v) == 2 for v in values[1:-1]):

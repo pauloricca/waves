@@ -1,14 +1,23 @@
     
 from __future__ import annotations
 import numpy as np
+from pydantic import ConfigDict
 from config import SAMPLE_RATE
-from models.models import DelayModel
-from nodes.base_node import BaseNode
-from nodes.instantiate_node import instantiate_node
+from models.models import BaseNodeModel
+from nodes.base import BaseNode
+from nodes.node_utils.node_definition_type import NodeDefinition
 
+class DelayModel(BaseNodeModel):
+    model_config = ConfigDict(extra='forbid')
+    time: float = 0.1
+    repeats: int = 3
+    feedback: float = 0.3
+    do_trim: bool = False
+    signal: BaseNodeModel = None
 
 class DelayNode(BaseNode):
     def __init__(self, delay_model: DelayModel):
+        from nodes.node_utils.instantiate_node import instantiate_node
         self.delay_model = delay_model
         self.signal_node = instantiate_node(delay_model.signal)
 
@@ -21,3 +30,5 @@ class DelayNode(BaseNode):
             delayed_wave[i * n_delay_time_samples : i * n_delay_time_samples + len(wave)] += wave * (self.delay_model.feedback ** i)
 
         return delayed_wave[: len(wave)] if self.delay_model.do_trim else delayed_wave # Trim to original length
+
+DELAY_DEFINITION = NodeDefinition("delay", DelayNode, DelayModel)

@@ -1,12 +1,22 @@
     
 from __future__ import annotations
+from typing import List, Optional, Union
 import numpy as np
+from pydantic import ConfigDict
 from config import SAMPLE_RATE
 from constants import RenderArgs
-from models.models import SequencerModel
-from nodes.base_node import BaseNode
-from nodes.instantiate_node import instantiate_node
+from models.models import BaseNodeModel
+from nodes.base import BaseNode
+from nodes.node_utils.node_definition_type import NodeDefinition
 from sound_library import get_sound_model
+
+
+class SequencerModel(BaseNodeModel):
+    model_config = ConfigDict(extra='forbid')
+    interval: float = 0
+    repeat: int = 1
+    sequence: Optional[List[Union[str, List[str], None]]] = None
+    chain: Optional[List[str]] = None
 
 
 class SequencerNode(BaseNode):
@@ -17,6 +27,7 @@ class SequencerNode(BaseNode):
         self.repeat = sequence_model.repeat
 
     def render(self, num_samples):
+        from nodes.node_utils.instantiate_node import instantiate_node
         generated_waves = {}
 
         # Get unique sounds (sound names with parameters) in the sequence
@@ -92,3 +103,5 @@ class SequencerNode(BaseNode):
         combined_wave = repeated_wave
 
         return combined_wave
+    
+SEQUENCER_DEFINITION = NodeDefinition("sequencer", SequencerNode, SequencerModel)

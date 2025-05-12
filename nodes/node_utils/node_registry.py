@@ -1,0 +1,9 @@
+from nodes.delay import DELAY_DEFINITION
+from nodes.oscillator import OSCILLATOR_DEFINITION
+from nodes.sequencer import SEQUENCER_DEFINITION
+
+NODE_REGISTRY = [
+    OSCILLATOR_DEFINITION,
+    SEQUENCER_DEFINITION,
+    DELAY_DEFINITION,
+]

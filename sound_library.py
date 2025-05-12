@@ -1,6 +1,6 @@
 import yaml
 
-from models.sound_library_model import SoundLibraryModel
+from models.sound_library import SoundLibraryModel
 
 
 sound_library: SoundLibraryModel = None

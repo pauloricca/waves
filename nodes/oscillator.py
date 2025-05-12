@@ -1,18 +1,60 @@
+from __future__ import annotations
+from enum import Enum
 import random
+from typing import List, Optional
 import numpy as np
+from pydantic import ConfigDict, field_validator
 
 from config import DO_NORMALISE_EACH_SOUND, ENVELOPE_TYPE, SAMPLE_RATE
 from constants import RenderArgs
-from models.models import OscillatorModel, OscillatorTypes
-from nodes.instantiate_node import instantiate_node
-from nodes.wavable_value_node import WavableValueNode
-from nodes.base_node import BaseNode
+from models.models import BaseNodeModel
+from nodes.node_utils.node_definition_type import NodeDefinition
+from nodes.wavable_value import InterpolationTypes, WavableValue, WavableValueNode
+from nodes.base import BaseNode
 from vnoise import Noise
 
 from utils import consume_kwargs
 
+
+class OscillatorTypes(str, Enum):
+    SIN = "SIN"
+    COS = "COS"
+    TRI = "TRI"
+    SQR = "SQR"
+    SAW = "SAW"
+    NOISE = "NOISE"
+    PERLIN = "PERLIN"
+    NONE = "NONE"
+
+
+class OscillatorModel(BaseNodeModel):
+    model_config = ConfigDict(extra='forbid')
+    type: OscillatorTypes = OscillatorTypes.SIN
+    freq: Optional[WavableValue] = None
+    freq_interpolation: InterpolationTypes = InterpolationTypes.LINEAR
+    amp: WavableValue = 1.0
+    amp_interpolation: InterpolationTypes = InterpolationTypes.LINEAR
+    attack: float = 0
+    release: float = 0
+    partials: List[OscillatorModel] = []
+    scale: float = 1.0 # Perlin noise scale
+    seed: Optional[float] = None # Perlin noise seed
+    min: Optional[float] = None # normalized min value
+    max: Optional[float] = None # normalized max value
+    
+    @field_validator("type", mode="before")
+    @classmethod
+    def normalize_wave_type(cls, v):
+        if v is None:
+            return OscillatorTypes.SIN.value
+        if isinstance(v, str):
+            return v.upper()
+        return v
+
+
 class OscillatorNode(BaseNode):
     def __init__(self, wave_model: OscillatorModel):
+        from nodes.node_utils.instantiate_node import instantiate_node
         self.wave_model = wave_model
         self.freq = WavableValueNode(wave_model.freq, wave_model.freq_interpolation) if wave_model.freq else None
         self.amp = WavableValueNode(wave_model.amp, wave_model.amp_interpolation)
@@ -127,3 +169,5 @@ class OscillatorNode(BaseNode):
             total_wave = total_wave * (self.wave_model.max - self.wave_model.min) + self.wave_model.min
 
         return total_wave
+    
+OSCILLATOR_DEFINITION = NodeDefinition("osc", OscillatorNode, OscillatorModel)
