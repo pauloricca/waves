@@ -5,6 +5,7 @@ import numpy as np
 from scipy.io import wavfile
 
 from config import *
+from models.models import BaseNodeModel
 
 def play(wave):
     wave = np.clip(wave, -1, 1)
@@ -143,3 +144,17 @@ def consume_kwargs(kwargs: dict, keys_and_default_values: dict):
     for key, default in keys_and_default_values.items():
         values.append(remaining.pop(key, default))
     return (*values, remaining)
+
+
+def look_for_duration(model: BaseNodeModel):
+        """
+        Recursively looks for the duration attribute in the model or its attributes.
+        """
+        if hasattr(model, "duration"):
+            return model.duration
+        for attr in model.__dict__.values():
+            if isinstance(attr, BaseNodeModel):
+                duration = look_for_duration(attr)
+                if duration is not None:
+                    return duration
+        return None

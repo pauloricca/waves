@@ -1,37 +1,56 @@
 test3:
-  delay:
-    duration: 3
-    time: 0.5
-    repeats: 7
-    feedback: 0.5
+  smooth:
+    step: 0.01
     signal:
-      filter:
-        type: highpass
-        cutoff: 1200
+      delay:
+        time: 0.5
+        repeats: 3
+        feedback: 0.5
         signal:
-          osc:
-            attack: 0.01
-            release: 0.1
-            freq:
-              osc:
-                type: perlin
-                scale: 2
-                seed: 1
-                min: 50
-                max: 400
-            amp:
-              osc:
-                type: tri
-                freq: 5
-                min: 0.2
-                max: 1
-            partials:
-              - osc:
-                  freq: 2
-                  amp: 0.5
-              - osc:
-                  freq: 0.5
-                  amp: 0.2
+          delay:
+            time: 1.5
+            repeats: 5
+            feedback: 0.3
+            signal:
+              filter:
+                duration: 3
+                cutoff: 8000
+                signal:
+                  smooth:
+                    step: 0.02
+                    signal:
+                      shuffle:
+                        invert: 0.5
+                        size: 0.3
+                        signal:
+                          osc:
+                            attack: 0.01
+                            release: 0.1
+                            freq:
+                              osc:
+                                type: perlin
+                                scale: 6
+                                seed: 1
+                                min: 20
+                                max: 200
+                            amp:
+                              osc:
+                                type: sqr
+                                freq: 5
+                                min: 0.7
+                                max: 1
+                                partials:
+                                  - osc:
+                                      amp: 0.5
+                            partials:
+                              - osc:
+                                  type: tri
+                                  freq: 2
+                                  amp: 0.5
+                              - osc:
+                                  type: sqr
+                                  freq: 0.5
+                                  amp: 0.2
 
 test2:
   osc:
@@ -285,35 +304,37 @@ beep:
           amp: 0.2
 
 part-a:
-  sequencer:
-    interval: 0.1
-    sequence:
-      - [lead f80, tick]
-      -
-      - tick
-      -
-      - [phoom, tick]
-      -
-      - tick
-      - beep f13000
-      - lead f120
-      - tick f18000
-      - tick
-      - phoom f15000
-      - tick f10000
-      -
-      - tick
-      -
-      -
-      - tick
-      - tick
-      -
-      -
-      -
-      - tick
-      -
-      -
-      -
+  invert:
+    signal:
+      sequencer:
+        interval: 0.1
+        sequence:
+          - [lead f80, tick]
+          -
+          - tick
+          -
+          - [phoom, tick]
+          -
+          - tick
+          - beep f13000
+          - lead f120
+          - tick f18000
+          - tick
+          - phoom f15000
+          - tick f10000
+          -
+          - tick
+          -
+          -
+          - tick
+          - tick
+          -
+          -
+          -
+          - tick
+          -
+          -
+          -
 
 part-b:
   sequencer:

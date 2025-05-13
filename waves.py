@@ -7,7 +7,7 @@ import traceback
 from config import *
 from models.sound_library import get_sound_model, load_sound_library
 from nodes.node_utils.instantiate_node import instantiate_node
-from utils import play, save
+from utils import look_for_duration, play, save
 
 rendered_sounds: dict[np.ndarray] = {}
 
@@ -27,7 +27,8 @@ def main():
     sound_node_to_play = instantiate_node(sound_model_to_play)
 
     rendering_start_time = time.time()
-    rendered_sound = sound_node_to_play.render(int(SAMPLE_RATE * sound_model_to_play.duration) if  sound_model_to_play.duration else 1 * SAMPLE_RATE)
+
+    rendered_sound = sound_node_to_play.render(int(SAMPLE_RATE * (look_for_duration(sound_model_to_play) or 1)))
     rendering_end_time = time.time()
 
     # Normalize the combined wave

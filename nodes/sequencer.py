@@ -18,6 +18,10 @@ class SequencerModel(BaseNodeModel):
     sequence: Optional[List[Union[str, List[str], None]]] = None
     chain: Optional[List[str]] = None
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.duration = self.interval * (len(self.sequence) + 1) if self.sequence else 0
+
 
 class SequencerNode(BaseNode):
     def __init__(self, sequence_model: SequencerModel):
