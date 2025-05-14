@@ -1,56 +1,70 @@
-test3:
-  smooth:
-    step: 0.01
+fx:
+  filter:
+    duration: 4
+    cutoff: [0, [20, 0.1], 0]
     signal:
-      delay:
-        time: 0.5
-        repeats: 3
-        feedback: 0.5
+      sample:
+        start: 0
+        end: 0.03
+        loop: true
+        overlap: 0.2
+        file: samples/fx.wav
+
+test3:
+  normalise:
+    signal:
+      smooth:
+        step: 0.01
         signal:
           delay:
-            time: 1.5
-            repeats: 5
-            feedback: 0.3
+            time: 0.5
+            repeats: 3
+            feedback: 0.5
             signal:
-              filter:
-                duration: 3
-                cutoff: 8000
+              delay:
+                time: 1.5
+                repeats: 5
+                feedback: 0.3
                 signal:
-                  smooth:
-                    step: 0.02
+                  filter:
+                    duration: 3
+                    cutoff: 200
                     signal:
-                      shuffle:
-                        invert: 0.5
-                        size: 0.3
+                      smooth:
+                        step: 0.02
                         signal:
-                          osc:
-                            attack: 0.01
-                            release: 0.1
-                            freq:
+                          shuffle:
+                            invert: 0.5
+                            size: 0.3
+                            signal:
                               osc:
-                                type: perlin
-                                scale: 6
-                                seed: 1
-                                min: 20
-                                max: 200
-                            amp:
-                              osc:
-                                type: sqr
-                                freq: 5
-                                min: 0.7
-                                max: 1
+                                attack: 0.01
+                                release: 0.1
+                                freq:
+                                  osc:
+                                    type: perlin
+                                    scale: 6
+                                    seed: 1
+                                    min: 20
+                                    max: 200
+                                amp:
+                                  osc:
+                                    type: sqr
+                                    freq: 5
+                                    min: 0.7
+                                    max: 1
+                                    partials:
+                                      - osc:
+                                          amp: 0.5
                                 partials:
                                   - osc:
+                                      type: tri
+                                      freq: 2
                                       amp: 0.5
-                            partials:
-                              - osc:
-                                  type: tri
-                                  freq: 2
-                                  amp: 0.5
-                              - osc:
-                                  type: sqr
-                                  freq: 0.5
-                                  amp: 0.2
+                                  - osc:
+                                      type: sqr
+                                      freq: 0.5
+                                      amp: 0.2
 
 test2:
   osc:

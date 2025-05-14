@@ -24,7 +24,8 @@ def save(wave, filename):
     print(f"Saved {filename}")
 
 def load_wav_file(filename):
-    sample_rate, data = wavfile.read(filename)
+    filepath = os.path.join(os.path.dirname(__file__), filename)
+    sample_rate, data = wavfile.read(filepath)
     if data.ndim > 1:
         # If stereo, take only one channel
         data = data[:, 0]
