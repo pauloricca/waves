@@ -33,36 +33,55 @@ def load_wav_file(filename):
     data = data.astype(np.float32) / 32767.0  # Normalize to [-1, 1]
     return data
 
-def visualise_wave(wave):
+def visualise_wave(wave, do_normalise = True):
     # Get terminal width
     visualisation_width = shutil.get_terminal_size().columns
-    visualisation_height = VISUALISATION_ROW_HEIGHT * 4
+    visualisation_height_resolution_halved = (VISUALISATION_ROW_HEIGHT * 4) // 2
 
-    # Normalize the waveform to fit within the terminal height
-    # normalized_wave = wave / np.max(np.abs(wave))
-    scaled_wave = (wave * visualisation_height).astype(int)
+    # Normalize the waveform to fit within the terminal height (otherwise it will clip, which can be useful too)
+    if do_normalise:
+        wave = wave / np.max(np.abs(wave))
+
+    scaled_wave = (wave * visualisation_height_resolution_halved).astype(int)
 
     # Group values in scaled_wave into visualisation_width groups
     group_size = max(1, len(scaled_wave) // visualisation_width)
     grouped_wave = [
-        max(abs(scaled_wave[i * group_size : (i + 1) * group_size]), default=0)
+        (
+            min(scaled_wave[i * group_size : (i + 1) * group_size]),
+            max(scaled_wave[i * group_size : (i + 1) * group_size]),
+        )
         for i in range(visualisation_width)
     ]
 
-    # Create a histogram-like visualization
-    for i in range(VISUALISATION_ROW_HEIGHT):
+    # Create a histogram-like visualization (floor the height to make sure we have an even number of rows)
+    for i in range(2 * (VISUALISATION_ROW_HEIGHT // 2)):
         line = ""
-        for value in grouped_wave:
-            if value >= visualisation_height - i * 4:
-                line += "█"  # Full block
-            elif value >= visualisation_height - i * 4 - 1:
-                line += "▆"  # U+2586 Lower three-quarters block
-            elif value >= visualisation_height - i * 4 - 2:
-                line += "▄"  # U+2584 Lower half block
-            elif value >= visualisation_height - i * 4 - 3:
-                line += "▂"  # U+2582 Lower one-quarter block
+        for (minVal, maxVal) in grouped_wave:
+            if i < visualisation_height_resolution_halved / 4:
+                row_value = visualisation_height_resolution_halved - i * 4
+                if maxVal >= row_value:
+                    line += "█"
+                elif maxVal >= row_value - 1:
+                    line += "▆" 
+                elif maxVal >= row_value - 2:
+                    line += "▄"
+                elif maxVal >= row_value - 3:
+                    line += "▂"
+                else:
+                    line += " " 
             else:
-                line += " "  # Empty space
+                row_value = (1 + i - VISUALISATION_ROW_HEIGHT // 2) * -4
+                if minVal >= row_value + 4:
+                    line += " "
+                elif minVal >= row_value + 3:
+                    line += "\033[7m▆\033[0m"  # lower third, inverted (looks like upper third)
+                elif minVal >= row_value + 2:
+                    line += "\033[7m▄\033[0m"  # lower half, inverted (looks like upper half)
+                elif minVal >= row_value + 1:
+                    line += "\033[7m▃\033[0m"  # lower two thirds, inverted (looks like upper two thirds)
+                else:
+                    line += "█"
         print(line)
 
 # Interpolates a list of values or a list of lists with relative positions

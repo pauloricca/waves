@@ -1,28 +1,28 @@
 paulo:
   envelope:
-    attack: 0.1
-    release: 0.4
+    attack: 0.04
+    release: 0.04
     signal:
       filter:
-        # cutoff: [0, [400, 0.2], [4000, 0.4], 0]
-        # cutoff: [[0, 0], [3000, 0.5], [1000, 1]]
-        # cutoff: [0, [3000, 0.5], 0]
-        # cutoff: [0, [3000, 0.5], [0, 1]]
-        cutoff: [0, 2000, 1000, 2000]
-        peak: 0.06
+        cutoff: [200, [2000, 0.2], [2000, 0.8], 200]
+        peak: 0.1
         signal:
           normalise:
             signal:
               sample:
-                duration: 3
+                duration: 8
                 start: 0.354
-                speed: 0.3
+                speed: [-2, 0.2, 2]
+                # speed:
+                #   osc:
+                #     type: perlin
+                #     min: 0.1
+                #     max: 3
+                #     scale: 5
                 end: 0.5
                 loop: true
                 overlap: 0.5
                 file: samples/paulo.wav
-              # osc:
-              #   type: noise
 
 fx:
   # filter:
