@@ -1,4 +1,5 @@
 from nodes.delay import DELAY_DEFINITION
+from nodes.envelope import ENVELOPE_DEFINITION
 from nodes.filter import FILTER_DEFINITION
 from nodes.invert import INVERT_DEFINITION
 from nodes.normalise import NORMALISE_DEFINITION
@@ -18,4 +19,5 @@ NODE_REGISTRY = [
     SMOOTH_DEFINITION,
     INVERT_DEFINITION,
     SAMPLE_DEFINITION,
+    ENVELOPE_DEFINITION,
 ]

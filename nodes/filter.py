@@ -2,7 +2,7 @@ from __future__ import annotations
 from enum import Enum
 import numpy as np
 import scipy.signal
-from pydantic import ConfigDict, field_validator
+from pydantic import ConfigDict
 from config import SAMPLE_RATE
 from models.models import BaseNodeModel
 from nodes.node_utils.base import BaseNode
@@ -23,19 +23,8 @@ class FilterModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     cutoff: WavableValue  # Cutoff frequency in Hz
     peak: float = 0.0  # A value between -1 and 1 that translates to a 0.5 to 50 Q factor
-    type: FilterTypes = FilterTypes.LOWPASS
+    type: str = "lowpass"  # "lowpass" or "highpass"
     signal: BaseNodeModel = None
-
-    @field_validator("type", mode="before")
-    @classmethod
-    def normalize_wave_type(cls, v):
-        if v is None:
-            return FilterTypes.LOWPASS.value
-        if isinstance(v, str):
-            v = v.upper()
-            if v in FilterTypes.__members__:
-                return FilterTypes[v].value
-        return v
 
 class FilterNode(BaseNode):
     def __init__(self, filter_model: FilterModel):
@@ -47,6 +36,7 @@ class FilterNode(BaseNode):
     def render(self, num_samples, **kwargs):
         wave = self.signal_node.render(num_samples, **kwargs)
         cutoff = self.cutoff_node.render(len(wave))
+
         if len(cutoff) == 1:
             cutoff = cutoff[0]
 
@@ -61,21 +51,34 @@ class FilterNode(BaseNode):
             elif filter_type == "bandpass":
                 nyq = SAMPLE_RATE / 2.0
                 b, a = scipy.signal.iirpeak(cutoff / nyq, Q=q)
-
+            else:
+                raise ValueError(f"Unsupported filter type: {filter_type}")
             return scipy.signal.lfilter(b, a, wave)
         else:
-            # Blockwise filter application for efficiency
-            block_size = 16
+            # Modulated cutoff with Q support
             out = np.zeros_like(wave)
-            for start in range(0, len(wave), block_size):
-                end = min(start + block_size, len(wave))
-                avg_fc = np.mean(cutoff[start:end])
-                if filter_type == "lowpass":
-                    b, a = biquad_lowpass(avg_fc, q, SAMPLE_RATE)
-                elif filter_type == "highpass":
-                    b, a = biquad_highpass(avg_fc, q, SAMPLE_RATE)
+            x1, x2 = 0.0, 0.0
+            y1, y2 = 0.0, 0.0
 
-                out[start:end] = scipy.signal.lfilter(b, a, wave[start:end])
+            for i in range(len(wave)):
+                fc = cutoff[i]
+
+                q_val = normalized_to_q(self.filter_model.peak)
+
+                if filter_type == "lowpass":
+                    b, a = biquad_lowpass(fc, q_val, SAMPLE_RATE)
+                elif filter_type == "highpass":
+                    b, a = biquad_highpass(fc, q_val, SAMPLE_RATE)
+                else:
+                    raise ValueError(f"Modulated filter type not supported: {filter_type}")
+
+                # Direct Form I Biquad filter (per-sample, using past values)
+                x0 = wave[i]
+                y0 = b[0] * x0 + b[1] * x1 + b[2] * x2 - a[1] * y1 - a[2] * y2
+
+                out[i] = y0
+                x2, x1 = x1, x0
+                y2, y1 = y1, y0
 
             return out
 

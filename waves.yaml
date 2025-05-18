@@ -1,14 +1,100 @@
+paulo:
+  envelope:
+    attack: 0.1
+    release: 0.4
+    signal:
+      filter:
+        # cutoff: [0, [400, 0.2], [4000, 0.4], 0]
+        # cutoff: [[0, 0], [3000, 0.5], [1000, 1]]
+        # cutoff: [0, [3000, 0.5], 0]
+        # cutoff: [0, [3000, 0.5], [0, 1]]
+        cutoff: [0, 2000, 1000, 2000]
+        peak: 0.06
+        signal:
+          normalise:
+            signal:
+              sample:
+                duration: 3
+                start: 0.354
+                speed: 0.3
+                end: 0.5
+                loop: true
+                overlap: 0.5
+                file: samples/paulo.wav
+              # osc:
+              #   type: noise
+
 fx:
+  # filter:
+  #   duration: 4
+  #   # cutoff: [0, [400, 0.2], [4000, 0.4], 0]
+  #   cutoff: [0, 3000, 0]
+  #   signal:
+      normalise:
+        duration: 14
+        signal:
+          sample:
+            start: 0.6
+            speed: 0.01
+            end: 0.63
+            loop: true
+            overlap: 0.2
+            file: samples/fx.wav
+
+gregor:
   filter:
     duration: 4
-    cutoff: [0, [20, 0.1], 0]
+    cutoff: [0, [600, 0.3], [0, 1]]
     signal:
-      sample:
-        start: 0
-        end: 0.03
-        loop: true
-        overlap: 0.2
-        file: samples/fx.wav
+      normalise:
+        signal:
+          sample:
+            duration: 4
+            start: 0.6
+            end: 0.63
+            loop: true
+            overlap: 0.2
+            file: samples/gregor.wav
+
+sample-seq-rumble:
+  normalise:
+    signal:
+      # invert:
+      #   signal:
+          delay:
+            feedback: 0.5
+            time: 0.2
+            signal:
+              # shuffle:
+              #   signal:
+                  sequencer:
+                    interval: 0.1
+                    sequence:
+                      - fx
+                      - tick
+                      -
+                      - tick f18000
+                      - tick
+                      - tick
+                      - 
+                      - tick f10000
+                      - 
+                      - tick
+                      - tick
+                      - thump
+                      - tick
+                      -
+                      -
+                      - 
+                      - thump
+                      - tick
+                      -
+                      - tick
+                      -
+                      -
+                      - tick
+                      -
+                      -
 
 test3:
   normalise:
@@ -170,6 +256,12 @@ phoom:
             - osc:
                 freq: 5
                 amp: 0.5
+      - osc:
+          freq: 1.5
+          amp: 0.5
+      - osc:
+          freq: 2
+          amp: 0.5
 
 thump:
   osc:
@@ -289,6 +381,17 @@ lead:
             - osc:
                 freq: 12
                 amp: 0.5
+      - osc:
+          attack: 0.001
+          release: 0.3
+          freq: 2
+          amp: 0.3
+      - osc:
+          attack: 0.001
+          release: 0.3
+          freq: 4
+          amp: 0.05
+
 
 tick:
   osc:
@@ -317,23 +420,21 @@ beep:
           freq: 0.5
           amp: 0.2
 
-part-a:
+part-a-inverted:
   invert:
     signal:
       sequencer:
         interval: 0.1
         sequence:
-          - [lead f80, tick]
           -
           - tick
           -
-          - [phoom, tick]
           -
           - tick
           - beep f13000
           - lead f120
           - tick f18000
-          - tick
+          - 
           - phoom f15000
           - tick f10000
           -
@@ -350,6 +451,99 @@ part-a:
           -
           -
 
+part-a-shuffled:
+  sequencer:
+    sequence:
+      - [lead f80, thump a0.2]
+      - shuffle:
+          seed: 7
+          chunks: 32
+          signal:
+            sequencer:
+              sequence:
+                - part-a
+
+part-b-shuffled:
+  sequencer:
+    sequence:
+      - [lead f69, thump a0.2]
+      - shuffle:
+          seed: 7
+          chunks: 32
+          signal:
+            sequencer:
+              sequence:
+                - part-b
+
+part-c-shuffled:
+  sequencer:
+    sequence:
+      - [lead f60, thump a0.2]
+      - shuffle:
+          seed: 7
+          chunks: 32
+          signal:
+            sequencer:
+              sequence:
+                - part-c
+
+part-d-shuffled:
+  sequencer:
+    sequence:
+      - [lead f70, thump a0.2]
+      - shuffle:
+          seed: 10
+          chunks: 35
+          signal:
+            sequencer:
+              sequence:
+                - part-d
+
+main-sequence-shuffled:
+  sequencer:
+    chain:
+      - part-a-inverted
+      - part-a-shuffled
+      - part-b-shuffled
+      - part-c-shuffled
+      - part-d-shuffled
+      # - part-e-shuffled
+      # - part-f-shuffled
+      # - part-g-shuffled
+      # - part-h-shuffled
+
+
+part-a:
+  sequencer:
+    interval: 0.1
+    sequence:
+      - [lead f80, tick]
+      -
+      - tick
+      -
+      - [phoom, tick]
+      -
+      - 
+      - beep f13000
+      - lead f120
+      - tick f18000
+      - 
+      - phoom f15000
+      - tick f10000
+      -
+      - tick
+      -
+      -
+      - tick
+      - tick
+      -
+      -
+      -
+      - tick
+      -
+      -
+      -
+
 part-b:
   sequencer:
     interval: 0.1
@@ -358,11 +552,11 @@ part-b:
       -
       - tick
       -
-      - [lead f185, tick]
+      - [lead f190 a0.3, tick]
       -
       - tick
       -
-      - [lead f105, tick]
+      - [lead f107, tick]
       - tick f18000
       - tick
       - phoom f15000
@@ -381,6 +575,7 @@ part-b:
       -
       -
 
+
 part-c:
   sequencer:
     interval: 0.1
@@ -389,7 +584,7 @@ part-c:
       -
       - tick
       -
-      - [phoom f187, tick]
+      - [phoom f192 a0.7, tick]
       - beep f12000
       - tick
       -
@@ -455,7 +650,7 @@ part-e:
   sequencer:
     interval: 0.1
     sequence:
-      - [lead f120, tick]
+      - [lead f121.5, tick]
       -
       - tick
       -
@@ -463,7 +658,7 @@ part-e:
       -
       - tick
       -
-      - [lead f97.5, tick]
+      - [lead f94, tick]
       - tick f18000
       - tick
       - phoom f15000
@@ -486,7 +681,7 @@ part-f:
   sequencer:
     interval: 0.1
     sequence:
-      - [lead f105, tick]
+      - [lead f110, tick]
       -
       - tick
       -
@@ -494,7 +689,7 @@ part-f:
       -
       - tick
       -
-      - [lead f73, tick]
+      - [lead f72, tick]
       - tick f18000
       - tick
       - phoom f15000
@@ -518,7 +713,7 @@ part-g:
   sequencer:
     interval: 0.1
     sequence:
-      - [lead f100, tick]
+      - [lead f95, tick]
       -
       - tick
       -
@@ -611,6 +806,7 @@ sequence-sound-test:
 main-sequence:
   sequencer:
     chain:
+      - part-a-inverted
       - part-a
       - part-b
       - part-c

@@ -18,7 +18,7 @@ WavableValue = Union[float, List[Union[float, List[float]]], BaseNodeModel]
 
 
 class WavableValueNode(BaseNode):
-    def __init__(self, value: WavableValue, interpolation_type: InterpolationTypes = "LINEAR"):
+    def __init__(self, value: WavableValue, interpolation_type: InterpolationTypes = InterpolationTypes.LINEAR):
         from nodes.node_utils.instantiate_node import instantiate_node
         from nodes.oscillator import OscillatorModel
         self.value = value

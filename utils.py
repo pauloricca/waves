@@ -3,6 +3,7 @@ import shutil
 import sounddevice as sd
 import numpy as np
 from scipy.io import wavfile
+from scipy.interpolate import PchipInterpolator
 
 from config import *
 from models.models import BaseNodeModel
@@ -67,10 +68,9 @@ def visualise_wave(wave):
 # Interpolates a list of values or a list of lists with relative positions
 def interpolate_values(values, num_samples, interpolation_type):
     from nodes.wavable_value import InterpolationTypes
-    # If all the values aparet from the first and last are lists, we assume they are relative positions
+    # If all the values apart from the first and last are lists, we assume they are relative positions
     # It's ok for the first and last not to be lists, as we can assume 0 and 1 positions
-    if all(isinstance(v, list) and len(v) == 2 for v in values[1:-1]):
-        
+    if all(isinstance(v, list) and len(v) == 2 for v in values[1:-1]):        
         # Assume 0 and 1 positions for the first and last values
         if not isinstance(values[0], list):
             values[0] = [values[0], 0]
@@ -151,11 +151,12 @@ def look_for_duration(model: BaseNodeModel):
         """
         Recursively looks for the duration attribute in the model or its attributes.
         """
-        if hasattr(model, "duration"):
+        if hasattr(model, "duration") and model.duration is not None:
             return model.duration
         for attr in model.__dict__.values():
             if isinstance(attr, BaseNodeModel):
                 duration = look_for_duration(attr)
                 if duration is not None:
                     return duration
+        
         return None
