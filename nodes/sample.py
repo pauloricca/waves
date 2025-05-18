@@ -5,78 +5,80 @@ from config import SAMPLE_RATE
 from models.models import BaseNodeModel
 from nodes.node_utils.base import BaseNode
 from nodes.node_utils.node_definition_type import NodeDefinition
+from nodes.wavable_value import WavableValue, WavableValueNode
 from utils import load_wav_file
+
 
 class SampleModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
-    file: str = None  # Path to the sample file
-    start: float = 0.0  # A value between 0 and 1 that translates to a position in the sample
-    end: float = 1.0  # A value between 0 and 1 that translates to a position in the sample
+    file: str = None
+    start: float = 0.0
+    end: float = 1.0
     loop: bool = False
-    overlap: float = 0.0  # Used when looking, 0 to 1 where 1 is the length of the sample between start and end
-    speed: float = 1.0  # Speed of playback, 1 is normal speed, 2 is double speed, etc.
+    overlap: float = 0.0
+    speed: WavableValue = 1.0
+    duration: float = None
 
 
 class SampleNode(BaseNode):
     def __init__(self, sample_model: SampleModel):
+        from nodes.node_utils.instantiate_node import instantiate_node
         self.sample_model = sample_model
         self.audio = load_wav_file(sample_model.file)
+        self.speed_node = WavableValueNode(sample_model.speed)
 
     def render(self, num_samples, **kwargs):
         start = int(self.sample_model.start * len(self.audio))
         end = int(self.sample_model.end * len(self.audio))
-        if end > len(self.audio):
-            end = len(self.audio)
-        if start < 0:
-            start = 0
+        end = min(end, len(self.audio))
+        start = max(start, 0)
         if end <= start:
             return np.zeros(num_samples)
 
         wave = self.audio[start:end]
-        sample_length = len(wave)
+        base_len = len(wave)
 
-        # Apply speed: resample the wave to stretch/shrink playback
-        if self.sample_model.speed != 1.0 and sample_length > 1:
-            # Calculate new indices for resampling
-            indices = np.arange(0, sample_length, self.sample_model.speed)
-            indices = indices[indices < sample_length]
-            wave = np.interp(indices, np.arange(sample_length), wave)
-            sample_length = len(wave)
+        speed = self.speed_node.render(num_samples)
+        is_modulated = isinstance(speed, np.ndarray) and len(speed) > 1
 
-        if sample_length >= num_samples:
+        if is_modulated:
+            indices = np.cumsum(speed)
+            indices = indices[indices < base_len]
+            wave = np.interp(indices, np.arange(base_len), wave)
+        else:
+            speed_value = float(speed[0]) if isinstance(speed, np.ndarray) else float(speed)
+            if speed_value <= 0 or np.isnan(speed_value):
+                return np.zeros(num_samples)
+            indices = np.arange(0, base_len, speed_value)
+            indices = indices[indices < base_len]
+            wave = np.interp(indices, np.arange(base_len), wave)
+
+        final_len = len(wave)
+        if final_len >= num_samples:
             return wave[:num_samples]
 
         if self.sample_model.loop:
             result = np.zeros(num_samples)
-            overlap_samples = int(sample_length * self.sample_model.overlap)
-            effective_length = sample_length - overlap_samples if overlap_samples > 0 else sample_length
+            overlap_samples = int(final_len * self.sample_model.overlap)
+            effective_length = final_len - overlap_samples if overlap_samples > 0 else final_len
             position = 0
 
             while position < num_samples:
                 remaining = num_samples - position
-                to_copy = min(sample_length, remaining)
+                to_copy = min(final_len, remaining)
 
-                if overlap_samples > 0:
-                    current_segment = wave[:to_copy].copy()
-                    if to_copy > overlap_samples:
-                        fade_out_start = to_copy - overlap_samples
-                        fade_out_window = np.linspace(1.0, 0.0, overlap_samples)
-                        current_segment[fade_out_start:to_copy] *= fade_out_window
-                    if position > 0 and overlap_samples > 0 and to_copy > 0:
-                        fade_in_length = min(overlap_samples, to_copy)
-                        fade_in_window = np.linspace(0.0, 1.0, fade_in_length)
-                        current_segment[:fade_in_length] *= fade_in_window
-                        result[position:position + to_copy] += current_segment
-                    else:
-                        result[position:position + to_copy] = current_segment
-                else:
-                    result[position:position + to_copy] = wave[:to_copy]
-
+                segment = wave[:to_copy].copy()
+                if overlap_samples > 0 and to_copy > overlap_samples:
+                    fade_out = np.linspace(1, 0, overlap_samples)
+                    fade_in = np.linspace(0, 1, overlap_samples)
+                    segment[-overlap_samples:] *= fade_out
+                    if position > 0:
+                        result[position:position+overlap_samples] += wave[:overlap_samples] * fade_in
+                result[position:position+to_copy] += segment
                 position += effective_length
-
             return result
         else:
-            return np.pad(wave, (0, num_samples - sample_length), 'constant')
+            return np.pad(wave, (0, num_samples - final_len), 'constant')
 
 
 SAMPLE_DEFINITION = NodeDefinition("sample", SampleNode, SampleModel)
