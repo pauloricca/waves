@@ -16,6 +16,8 @@ class NormaliseModel(BaseNodeModel):
     max: Optional[WavableValue] = None
     source_min: Optional[float] = None
     source_max: Optional[float] = None
+    clip_min: Optional[float] = None
+    clip_max: Optional[float] = None
 
 class NormaliseNode(BaseNode):
     def __init__(self, normalise_model: NormaliseModel):
@@ -66,6 +68,12 @@ class NormaliseNode(BaseNode):
             else:
                 # Handle case where source_min equals source_max to avoid division by zero
                 wave = np.full_like(wave, (self.min + self.max) / 2)
+
+        # Clip the wave to the specified range
+        if self.model.clip_min is not None:
+            wave = np.clip(wave, self.model.clip_min, None)
+        if self.model.clip_max is not None:
+            wave = np.clip(wave, None, self.model.clip_max)
 
         return wave
 

@@ -25,9 +25,9 @@ class WavableValueNode(BaseNode):
         self.interpolation_type = interpolation_type
         self.wave_node = instantiate_node(value) if isinstance(value, OscillatorModel) else None
 
-    def render(self, num_samples):
+    def render(self, num_samples, **kwargs):
         if self.wave_node:
-            return self.wave_node.render(num_samples)
+            return self.wave_node.render(num_samples, **kwargs)
         elif isinstance(self.value, (float, int)):
             return np.array([self.value])
         if isinstance(self.value, list):
