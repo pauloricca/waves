@@ -1,28 +1,55 @@
+norm:
+  envelope:
+    attack: 0.3
+    release: 0.7
+    signal:
+      normalise:
+        min: 2
+        max: 3
+        signal:
+          osc:
+            freq: 60
+            duration: 1
+            partials:
+              - osc:
+                  freq: 2
+                  amp: 0.1
+                  duration: 0.3
+                  release: 0.8
+                  type: sqr
+
 paulo:
   envelope:
     attack: 0.04
     release: 0.04
     signal:
-      filter:
-        cutoff: [200, [2000, 0.2], [2000, 0.8], 200]
-        peak: 0.1
+      delay:
+        time: 0.8
+        repeats: 5
         signal:
-          normalise:
+          shuffle:
+            chunks: 16
             signal:
-              sample:
-                duration: 8
-                start: 0.354
-                speed: [-2, 0.2, 2]
-                # speed:
-                #   osc:
-                #     type: perlin
-                #     min: 0.1
-                #     max: 3
-                #     scale: 5
-                end: 0.5
-                loop: true
-                overlap: 0.5
-                file: samples/paulo.wav
+              # filter:
+              #   cutoff: [200, [2000, 0.2], [2000, 0.8], 200]
+              #   peak: 0.1
+              #   signal:
+                  normalise:
+                    signal:
+                      sample:
+                        duration: 8
+                        start: 0.354
+                        speed: [-2, 0.2, 2]
+                        # speed:
+                        #   osc:
+                        #     type: perlin
+                        #     min: 0.1
+                        #     max: 3
+                        #     scale: 5
+                        end: 0.5
+                        loop: true
+                        overlap: 0.5
+                        file: samples/paulo.wav
 
 fx:
   # filter:

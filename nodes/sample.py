@@ -85,9 +85,7 @@ class SampleNode(BaseNode):
                 
             wave = np.interp(indices, np.arange(base_len), wave)
 
-        final_len = len(wave)
-        if final_len >= num_samples:
-            return wave[:num_samples]
+        return wave[:num_samples]
 
         # Uncomment the following lines if you want to implement looping with overlap, but this doesn't work with variable speed
         # if self.model.loop:

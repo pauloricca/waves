@@ -15,8 +15,8 @@ class EnvelopeModel(BaseNodeModel):
 class EnvelopeNode(BaseNode):
     def __init__(self, envelope_model: EnvelopeModel):
         from nodes.node_utils.instantiate_node import instantiate_node
-        self.attack = envelope_model.attack
-        self.release = envelope_model.release
+        self.attack = envelope_model.attack # length of attack in seconds
+        self.release = envelope_model.release # length of release in seconds
         self.signal_node = instantiate_node(envelope_model.signal)
 
     def render(self, num_samples, **kwargs):
@@ -24,19 +24,25 @@ class EnvelopeNode(BaseNode):
         attack_len = int(self.attack * SAMPLE_RATE)
         release_len = int(self.release * SAMPLE_RATE)
 
-        if attack_len > 0:
-            if ENVELOPE_TYPE == "linear":
-                fade_in = np.linspace(0, 1, attack_len)
-            else:
-                fade_in = 1 - np.exp(-np.linspace(0, 5, attack_len))
-            wave[:attack_len] *= fade_in
+        if attack_len > 0 and len(wave) > 0:
+            # Ensure we don't try to apply a fade_in longer than the wave itself
+            actual_attack_len = min(attack_len, len(wave))
+            if actual_attack_len > 0:  # Additional check to ensure we have samples to process
+                if ENVELOPE_TYPE == "linear":
+                    fade_in = np.linspace(0, 1, actual_attack_len)
+                else:
+                    fade_in = 1 - np.exp(-np.linspace(0, 5, actual_attack_len))
+                wave[:actual_attack_len] *= fade_in
 
-        if release_len > 0:
-            if ENVELOPE_TYPE == "linear":
-                fade_out = np.linspace(1, 0, release_len)
-            else:
-                fade_out = np.exp(-np.linspace(0, 5, release_len))
-            wave[-release_len:] *= fade_out
+        if release_len > 0 and len(wave) > 0:
+            # Ensure we don't try to apply a fade_out longer than the wave itself
+            actual_release_len = min(release_len, len(wave))
+            if actual_release_len > 0:  # Additional check to ensure we have samples to process
+                if ENVELOPE_TYPE == "linear":
+                    fade_out = np.linspace(1, 0, actual_release_len)
+                else:
+                    fade_out = np.exp(-np.linspace(0, 5, actual_release_len))
+                wave[-actual_release_len:] *= fade_out
 
         return wave
 

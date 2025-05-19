@@ -33,7 +33,7 @@ def load_wav_file(filename):
     data = data.astype(np.float32) / 32767.0  # Normalize to [-1, 1]
     return data
 
-def visualise_wave(wave, do_normalise = True):
+def visualise_wave(wave, do_normalise = False):
     # Get terminal width
     visualisation_width = shutil.get_terminal_size().columns
     visualisation_height_resolution_halved = (VISUALISATION_ROW_HEIGHT * 4) // 2
