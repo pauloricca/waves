@@ -53,12 +53,12 @@ class OscillatorModel(BaseNodeModel):
 
 
 class OscillatorNode(BaseNode):
-    def __init__(self, wave_model: OscillatorModel):
+    def __init__(self, model: OscillatorModel):
         from nodes.node_utils.instantiate_node import instantiate_node
-        self.wave_model = wave_model
-        self.freq = WavableValueNode(wave_model.freq, wave_model.freq_interpolation) if wave_model.freq else None
-        self.amp = WavableValueNode(wave_model.amp, wave_model.amp_interpolation)
-        self.partials = [instantiate_node(partial) for partial in wave_model.partials]
+        self.model = model
+        self.freq = WavableValueNode(model.freq, model.freq_interpolation) if model.freq else None
+        self.amp = WavableValueNode(model.amp, model.amp_interpolation)
+        self.partials = [instantiate_node(partial) for partial in model.partials]
         self._phase_acc = 0
 
     def render(self, num_samples, **kwargs):
@@ -66,10 +66,10 @@ class OscillatorNode(BaseNode):
             kwargs, {RenderArgs.FREQUENCY_MULTIPLIER: 1, RenderArgs.AMPLITUDE_MULTIPLIER: 1, RenderArgs.FREQUENCY: None})
 
 
-        duration = self.wave_model.duration or (num_samples / SAMPLE_RATE)
+        duration = self.model.duration or (num_samples / SAMPLE_RATE)
         number_of_samples_to_render = int(SAMPLE_RATE * duration)
-        release_time = self.wave_model.release * duration
-        attack_time = self.wave_model.attack * duration
+        release_time = self.model.release * duration
+        attack_time = self.model.attack * duration
         t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
 
         total_wave = 0 * t
@@ -86,7 +86,7 @@ class OscillatorNode(BaseNode):
         frequency *= frequency_multiplier
 
         amplitude = self.amp.render(number_of_samples_to_render, **kwargs_for_children) * amplitude_multiplier
-        osc_type = self.wave_model.type
+        osc_type = self.model.type
 
         if osc_type == OscillatorTypes.NOISE:
             total_wave = amplitude * np.random.normal(0, 1, len(t))
@@ -128,8 +128,8 @@ class OscillatorNode(BaseNode):
             else:
                 total_wave = amplitude * (2 / np.pi) * np.arctan(np.tan(np.pi * frequency * t))
         elif osc_type == OscillatorTypes.PERLIN:
-            noise_function = Noise(self.wave_model.seed or random.randint(0, 10000)).noise1
-            perlin_noise = np.array(noise_function(t * self.wave_model.scale))
+            noise_function = Noise(self.model.seed or random.randint(0, 10000)).noise1
+            perlin_noise = np.array(noise_function(t * self.model.scale))
             total_wave = amplitude * perlin_noise
 
         # Render and add partials
@@ -164,9 +164,9 @@ class OscillatorNode(BaseNode):
             total_wave = total_wave.astype(np.float32)  # Convert to float32 for sounddevice
 
         # Convert from [-1, 1] to [min, max]
-        if self.wave_model.min is not None and self.wave_model.max is not None:
+        if self.model.min is not None and self.model.max is not None:
             total_wave = (total_wave + 1) / 2
-            total_wave = total_wave * (self.wave_model.max - self.wave_model.min) + self.wave_model.min
+            total_wave = total_wave * (self.model.max - self.model.min) + self.model.min
 
         return total_wave
     

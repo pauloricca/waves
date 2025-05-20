@@ -16,19 +16,19 @@ class DelayModel(BaseNodeModel):
     signal: BaseNodeModel = None
 
 class DelayNode(BaseNode):
-    def __init__(self, delay_model: DelayModel):
+    def __init__(self, model: DelayModel):
         from nodes.node_utils.instantiate_node import instantiate_node
-        self.delay_model = delay_model
-        self.signal_node = instantiate_node(delay_model.signal)
+        self.model = model
+        self.signal_node = instantiate_node(model.signal)
 
     def render(self, num_samples, **kwargs):
-        wave = self.signal_node.render(num_samples, **kwargs)
-        n_delay_time_samples = int(SAMPLE_RATE * self.delay_model.time)
-        delayed_wave = np.zeros(len(wave) + n_delay_time_samples * self.delay_model.repeats)
+        signal_wave = self.signal_node.render(num_samples, **kwargs)
+        n_delay_time_samples = int(SAMPLE_RATE * self.model.time)
+        delayed_wave = np.zeros(len(signal_wave) + n_delay_time_samples * self.model.repeats)
 
-        for i in range(self.delay_model.repeats):
-            delayed_wave[i * n_delay_time_samples : i * n_delay_time_samples + len(wave)] += wave * (self.delay_model.feedback ** i)
+        for i in range(self.model.repeats):
+            delayed_wave[i * n_delay_time_samples : i * n_delay_time_samples + len(signal_wave)] += signal_wave * (self.model.feedback ** i)
 
-        return delayed_wave[: len(wave)] if self.delay_model.do_trim else delayed_wave # Trim to original length
+        return delayed_wave[: len(signal_wave)] if self.model.do_trim else delayed_wave # Trim to original length
 
 DELAY_DEFINITION = NodeDefinition("delay", DelayNode, DelayModel)

@@ -27,21 +27,21 @@ class FilterModel(BaseNodeModel):
     signal: BaseNodeModel = None
 
 class FilterNode(BaseNode):
-    def __init__(self, filter_model: FilterModel):
+    def __init__(self, model: FilterModel):
         from nodes.node_utils.instantiate_node import instantiate_node
-        self.filter_model = filter_model
-        self.cutoff_node = WavableValueNode(filter_model.cutoff)
-        self.signal_node = instantiate_node(filter_model.signal)
+        self.model = model
+        self.cutoff_node = WavableValueNode(model.cutoff)
+        self.signal_node = instantiate_node(model.signal)
 
     def render(self, num_samples, **kwargs):
-        wave = self.signal_node.render(num_samples, **kwargs)
-        cutoff = self.cutoff_node.render(len(wave))
+        signal_wave = self.signal_node.render(num_samples, **kwargs)
+        cutoff = self.cutoff_node.render(len(signal_wave))
 
         if len(cutoff) == 1:
             cutoff = cutoff[0]
 
-        filter_type = self.filter_model.type.lower()
-        q = normalized_to_q(self.filter_model.peak)
+        filter_type = self.model.type.lower()
+        q = normalized_to_q(self.model.peak)
 
         if np.isscalar(cutoff):
             if filter_type == "lowpass":
@@ -53,17 +53,17 @@ class FilterNode(BaseNode):
                 b, a = scipy.signal.iirpeak(cutoff / nyq, Q=q)
             else:
                 raise ValueError(f"Unsupported filter type: {filter_type}")
-            return scipy.signal.lfilter(b, a, wave)
+            return scipy.signal.lfilter(b, a, signal_wave)
         else:
             # Modulated cutoff with Q support
-            out = np.zeros_like(wave)
+            out = np.zeros_like(signal_wave)
             x1, x2 = 0.0, 0.0
             y1, y2 = 0.0, 0.0
 
-            for i in range(len(wave)):
+            for i in range(len(signal_wave)):
                 fc = cutoff[i]
 
-                q_val = normalized_to_q(self.filter_model.peak)
+                q_val = normalized_to_q(self.model.peak)
 
                 if filter_type == "lowpass":
                     b, a = biquad_lowpass(fc, q_val, SAMPLE_RATE)
@@ -73,7 +73,7 @@ class FilterNode(BaseNode):
                     raise ValueError(f"Modulated filter type not supported: {filter_type}")
 
                 # Direct Form I Biquad filter (per-sample, using past values)
-                x0 = wave[i]
+                x0 = signal_wave[i]
                 y0 = b[0] * x0 + b[1] * x1 + b[2] * x2 - a[1] * y1 - a[2] * y2
 
                 out[i] = y0

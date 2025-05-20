@@ -25,11 +25,11 @@ class SequencerModel(BaseNodeModel):
 
 
 class SequencerNode(BaseNode):
-    def __init__(self, sequence_model: SequencerModel):
-        self.sequence = sequence_model.sequence
-        self.chain = sequence_model.chain
-        self.interval = sequence_model.interval
-        self.repeat = sequence_model.repeat
+    def __init__(self, model: SequencerModel):
+        self.sequence = model.sequence
+        self.chain = model.chain
+        self.interval = model.interval
+        self.repeat = model.repeat
 
     def render(self, num_samples):
         from nodes.node_utils.instantiate_node import instantiate_node
@@ -60,7 +60,8 @@ class SequencerNode(BaseNode):
                         render_args[RenderArgs.AMPLITUDE_MULTIPLIER] = float(param[1:])
                 
                 sound_node = instantiate_node(sound_model)
-                generated_waves[sounds_in_step] = sound_node.render(num_samples, **render_args)
+                number_of_samples_to_render = int(SAMPLE_RATE * (look_for_duration(sound_model) or 1))
+                generated_waves[sounds_in_step] = sound_node.render(number_of_samples_to_render, **render_args)
 
         # Create a combined wave based on the sequence
         combined_wave = np.array([], dtype=np.float32)
@@ -79,12 +80,11 @@ class SequencerNode(BaseNode):
 
                 for sound in sounds_in_step:
                     if sound:
-                        print(f"Processing {sound}")
                         if isinstance(sound, str):
                             wave = generated_waves[sound]
                         else:
                             sound_node = instantiate_node(sound)
-                            wave = sound_node.render(int(SAMPLE_RATE * (look_for_duration(sound_node) or 1)))
+                            wave = sound_node.render(int(SAMPLE_RATE * (look_for_duration(sound) or 1)))
                         if len(step_wave) < len(wave):
                             step_wave = np.pad(step_wave, (0, len(wave) - len(step_wave)))
                         elif len(wave) < len(step_wave):

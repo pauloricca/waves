@@ -20,10 +20,10 @@ class NormaliseModel(BaseNodeModel):
     clip_max: Optional[float] = None
 
 class NormaliseNode(BaseNode):
-    def __init__(self, normalise_model: NormaliseModel):
+    def __init__(self, model: NormaliseModel):
         from nodes.node_utils.instantiate_node import instantiate_node
-        self.model = normalise_model
-        self.signal_node = instantiate_node(normalise_model.signal)
+        self.model = model
+        self.signal_node = instantiate_node(model.signal)
         
         if self.model.source_min is None and self.model.source_max is not None:
             self.source_min = -self.model.source_max
@@ -41,12 +41,18 @@ class NormaliseNode(BaseNode):
             self.max = WavableValueNode(self.model.max or 1)
 
     def render(self, num_samples, **kwargs):
-        wave = self.signal_node.render(num_samples, **kwargs)
-        self.min = self.min.render(num_samples, **kwargs)
-        self.max = self.max.render(num_samples, **kwargs)
+        signal_wave = self.signal_node.render(num_samples, **kwargs)
+        self.min = self.min.render(num_samples)
+        self.max = self.max.render(num_samples)
+        
+        # Ensure min and max have the same length as wave
+        if isinstance(self.min, np.ndarray) and len(self.min) != len(signal_wave):
+            self.min = np.interp(np.linspace(0, 1, len(signal_wave)), np.linspace(0, 1, len(self.min)), self.min)
+        if isinstance(self.max, np.ndarray) and len(self.max) != len(signal_wave):
+            self.max = np.interp(np.linspace(0, 1, len(signal_wave)), np.linspace(0, 1, len(self.max)), self.max)
 
         if self.source_min is None:
-            peak = np.max(np.abs(wave))
+            peak = np.max(np.abs(signal_wave))
             self.source_min = -peak
             self.source_max = peak
 
@@ -55,27 +61,27 @@ class NormaliseNode(BaseNode):
             # Min and max are arrays, apply vectorized normalization
             if self.source_max != self.source_min:
                 # Vectorized normalization using NumPy's broadcasting
-                normalized_scale = (wave - self.source_min) / (self.source_max - self.source_min)
-                wave = self.min + (self.max - self.min) * normalized_scale
+                normalized_scale = (signal_wave - self.source_min) / (self.source_max - self.source_min)
+                signal_wave = self.min + (self.max - self.min) * normalized_scale
             else:
                 # Handle case where source_min equals source_max to avoid division by zero
-                wave = (self.min + self.max) / 2
+                signal_wave = (self.min + self.max) / 2
         else:
             # Min and max are scalar values, apply normalization uniformly
             if self.source_max != self.source_min:
-                wave = self.min + (self.max - self.min) * \
-                        (wave - self.source_min) / (self.source_max - self.source_min)
+                signal_wave = self.min + (self.max - self.min) * \
+                        (signal_wave - self.source_min) / (self.source_max - self.source_min)
             else:
                 # Handle case where source_min equals source_max to avoid division by zero
-                wave = np.full_like(wave, (self.min + self.max) / 2)
+                signal_wave = np.full_like(signal_wave, (self.min + self.max) / 2)
 
         # Clip the wave to the specified range
         if self.model.clip_min is not None:
-            wave = np.clip(wave, self.model.clip_min, None)
+            signal_wave = np.clip(signal_wave, self.model.clip_min, None)
         if self.model.clip_max is not None:
-            wave = np.clip(wave, None, self.model.clip_max)
+            signal_wave = np.clip(signal_wave, None, self.model.clip_max)
 
-        return wave
+        return signal_wave
 
 
 NORMALISE_DEFINITION = NodeDefinition("normalise", NormaliseNode, NormaliseModel)

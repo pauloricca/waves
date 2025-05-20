@@ -15,32 +15,32 @@ class ShuffleModel(BaseNodeModel):
     seed: int | None = None  # Add seed parameter
 
 class ShuffleNode(BaseNode):
-    def __init__(self, shuffle_model: ShuffleModel):
+    def __init__(self, model: ShuffleModel):
         from nodes.node_utils.instantiate_node import instantiate_node
-        self.shuffle_model = shuffle_model
-        self.signal_node = instantiate_node(shuffle_model.signal)
-        self.rng = np.random.default_rng(shuffle_model.seed)  # Use a random generator with seed
+        self.model = model
+        self.signal_node = instantiate_node(model.signal)
+        self.rng = np.random.default_rng(model.seed)  # Use a random generator with seed
 
     def render(self, num_samples, **kwargs):
-        wave = self.signal_node.render(num_samples, **kwargs)
-        if (self.shuffle_model.chunks):
-            num_chunks = self.shuffle_model.chunks
-            chunk_size = len(wave) // num_chunks
+        signal_wave = self.signal_node.render(num_samples, **kwargs)
+        if (self.model.chunks):
+            num_chunks = self.model.chunks
+            chunk_size = len(signal_wave) // num_chunks
         else:
-            chunk_size = int(SAMPLE_RATE * self.shuffle_model.size)
-            num_chunks = len(wave) // chunk_size
+            chunk_size = int(SAMPLE_RATE * self.model.size)
+            num_chunks = len(signal_wave) // chunk_size
 
         # Split the wave into chunks
-        chunks = [wave[i * chunk_size : (i + 1) * chunk_size] for i in range(num_chunks)]
+        chunks = [signal_wave[i * chunk_size : (i + 1) * chunk_size] for i in range(num_chunks)]
 
         # Wave too small to shuffle, return the original wave
         if len(chunks) < 2:
-            return wave
+            return signal_wave
 
         # Shuffle the chunks
         self.rng.shuffle(chunks)
         
-        num_chunks_to_invert = int(self.shuffle_model.invert * num_chunks)
+        num_chunks_to_invert = int(self.model.invert * num_chunks)
 
         if num_chunks_to_invert > 0:
             chunks_to_invert = self.rng.choice(num_chunks, num_chunks_to_invert, replace=False)

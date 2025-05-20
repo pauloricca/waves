@@ -21,19 +21,27 @@ seq:
 
 norm:
   envelope:
-    attack: 0.3
-    release: 0.7
+    duration: 1
+    attack: 0.2
+    release: 0.1
     signal:
       normalise:
-        min: -2
-        max: 4
+        min:
+          osc:
+            freq: [30, 1]
+            min: 0
+            max: -2
+        max: 
+          osc:
+            freq: [30, 1]
+            min: 0
+            max: 4
         clip_min: -1
         clip_max: 1
         signal:
           osc:
             freq: 60
-            duration: 1
-            release: 0.9
+            # release: 0.9
             partials:
               - osc:
                   freq: 1.1666
@@ -56,7 +64,7 @@ norm:
 
 paulo:
   normalise:
-    max: 0.4
+    max: 0.8
     signal:
       envelope:
         attack: 0.04
