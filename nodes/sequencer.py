@@ -5,9 +5,9 @@ import numpy as np
 from pydantic import ConfigDict
 from config import SAMPLE_RATE
 from constants import RenderArgs
-from models.models import BaseNodeModel
-from models.sound_library import get_sound_model
-from nodes.node_utils.base import BaseNode
+from nodes.oscillator import OSCILLATOR_RENDER_ARGS
+from sound_library import get_sound_model
+from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from utils import look_for_duration
 
@@ -26,12 +26,14 @@ class SequencerModel(BaseNodeModel):
 
 class SequencerNode(BaseNode):
     def __init__(self, model: SequencerModel):
+        super().__init__(model)
         self.sequence = model.sequence
         self.chain = model.chain
         self.interval = model.interval
         self.repeat = model.repeat
 
-    def render(self, num_samples):
+    def render(self, num_samples, **kwargs):
+        super().render(num_samples)
         from nodes.node_utils.instantiate_node import instantiate_node
         generated_waves = {}
 
@@ -61,7 +63,7 @@ class SequencerNode(BaseNode):
                 
                 sound_node = instantiate_node(sound_model)
                 number_of_samples_to_render = int(SAMPLE_RATE * (look_for_duration(sound_model) or 1))
-                generated_waves[sounds_in_step] = sound_node.render(number_of_samples_to_render, **render_args)
+                generated_waves[sounds_in_step] = sound_node.render(number_of_samples_to_render, **self.get_kwargs_for_children(kwargs, OSCILLATOR_RENDER_ARGS), **render_args)
 
         # Create a combined wave based on the sequence
         combined_wave = np.array([], dtype=np.float32)
@@ -84,7 +86,7 @@ class SequencerNode(BaseNode):
                             wave = generated_waves[sound]
                         else:
                             sound_node = instantiate_node(sound)
-                            wave = sound_node.render(int(SAMPLE_RATE * (look_for_duration(sound) or 1)))
+                            wave = sound_node.render(int(SAMPLE_RATE * (look_for_duration(sound) or 1)), **self.get_kwargs_for_children(kwargs, OSCILLATOR_RENDER_ARGS))
                         if len(step_wave) < len(wave):
                             step_wave = np.pad(step_wave, (0, len(wave) - len(step_wave)))
                         elif len(wave) < len(step_wave):

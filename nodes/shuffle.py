@@ -2,8 +2,7 @@ from __future__ import annotations
 import numpy as np
 from pydantic import ConfigDict
 from config import SAMPLE_RATE
-from models.models import BaseNodeModel
-from nodes.node_utils.base import BaseNode
+from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 
 class ShuffleModel(BaseNodeModel):
@@ -17,12 +16,14 @@ class ShuffleModel(BaseNodeModel):
 class ShuffleNode(BaseNode):
     def __init__(self, model: ShuffleModel):
         from nodes.node_utils.instantiate_node import instantiate_node
+        super().__init__(model)
         self.model = model
         self.signal_node = instantiate_node(model.signal)
         self.rng = np.random.default_rng(model.seed)  # Use a random generator with seed
 
     def render(self, num_samples, **kwargs):
-        signal_wave = self.signal_node.render(num_samples, **kwargs)
+        super().render(num_samples)
+        signal_wave = self.signal_node.render(num_samples, **self.get_kwargs_for_children(kwargs))
         if (self.model.chunks):
             num_chunks = self.model.chunks
             chunk_size = len(signal_wave) // num_chunks

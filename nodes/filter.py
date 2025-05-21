@@ -4,10 +4,10 @@ import numpy as np
 import scipy.signal
 from pydantic import ConfigDict
 from config import SAMPLE_RATE
-from models.models import BaseNodeModel
-from nodes.node_utils.base import BaseNode
+from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import WavableValue, WavableValueNode
+from nodes.oscillator import OSCILLATOR_RENDER_ARGS
+from nodes.wavable_value import WavableValue, wavable_value_node_factory
 
 class FilterTypes(str, Enum):
     HIGHPASS = "HIGHPASS"
@@ -23,19 +23,21 @@ class FilterModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     cutoff: WavableValue  # Cutoff frequency in Hz
     peak: float = 0.0  # A value between -1 and 1 that translates to a 0.5 to 50 Q factor
-    type: str = "lowpass"  # "lowpass" or "highpass"
+    type: str = "lowpass"
     signal: BaseNodeModel = None
 
 class FilterNode(BaseNode):
     def __init__(self, model: FilterModel):
         from nodes.node_utils.instantiate_node import instantiate_node
+        super().__init__(model)
         self.model = model
-        self.cutoff_node = WavableValueNode(model.cutoff)
+        self.cutoff_node = wavable_value_node_factory(model.cutoff)
         self.signal_node = instantiate_node(model.signal)
 
     def render(self, num_samples, **kwargs):
-        signal_wave = self.signal_node.render(num_samples, **kwargs)
-        cutoff = self.cutoff_node.render(len(signal_wave))
+        super().render(num_samples)
+        signal_wave = self.signal_node.render(num_samples, **self.get_kwargs_for_children(kwargs))
+        cutoff = self.cutoff_node.render(num_samples, **self.get_kwargs_for_children(kwargs, OSCILLATOR_RENDER_ARGS))
 
         if len(cutoff) == 1:
             cutoff = cutoff[0]

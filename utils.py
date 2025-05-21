@@ -3,10 +3,9 @@ import shutil
 import sounddevice as sd
 import numpy as np
 from scipy.io import wavfile
-from scipy.interpolate import PchipInterpolator
 
 from config import *
-from models.models import BaseNodeModel
+from nodes.node_utils.base_node import BaseNodeModel
 
 def play(wave):
     wave = np.clip(wave, -1, 1)
@@ -24,6 +23,7 @@ def save(wave, filename):
     visualise_wave(wave)
     print(f"Saved {filename}")
 
+
 def load_wav_file(filename):
     filepath = os.path.join(os.path.dirname(__file__), filename)
     sample_rate, data = wavfile.read(filepath)
@@ -33,7 +33,13 @@ def load_wav_file(filename):
     data = data.astype(np.float32) / 32767.0  # Normalize to [-1, 1]
     return data
 
-def visualise_wave(wave, do_normalise = False):
+
+has_printed_visualisation = False
+def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_lines = 0):
+    global has_printed_visualisation
+
+    wave = wave[0:BUFFER_SIZE]
+
     # Get terminal width
     visualisation_width = shutil.get_terminal_size().columns
     visualisation_height_resolution_halved = (VISUALISATION_ROW_HEIGHT * 4) // 2
@@ -54,13 +60,22 @@ def visualise_wave(wave, do_normalise = False):
         for i in range(visualisation_width)
     ]
 
+    full_visualisation_height = 2 * (VISUALISATION_ROW_HEIGHT // 2)
+
+    if replace_previous and has_printed_visualisation:
+        # Clear the terminal
+        for _ in range(full_visualisation_height + extra_lines):
+            print("\033[1A", end="\x1b[2K")
+
     # Create a histogram-like visualization (floor the height to make sure we have an even number of rows)
-    for i in range(2 * (VISUALISATION_ROW_HEIGHT // 2)):
+    for i in range(full_visualisation_height):
         line = ""
         for (minVal, maxVal) in grouped_wave:
             if i < visualisation_height_resolution_halved / 4:
                 row_value = visualisation_height_resolution_halved - i * 4
-                if maxVal >= row_value:
+                if maxVal > row_value and i == 0:
+                    line += "\033[31m█\033[0m" # Red
+                elif maxVal >= row_value:
                     line += "█"
                 elif maxVal >= row_value - 1:
                     line += "▆" 
@@ -80,90 +95,14 @@ def visualise_wave(wave, do_normalise = False):
                     line += "\033[7m▄\033[0m"  # lower half, inverted (looks like upper half)
                 elif minVal >= row_value + 1:
                     line += "\033[7m▃\033[0m"  # lower two thirds, inverted (looks like upper two thirds)
+                elif minVal < row_value and i == full_visualisation_height - 1:
+                    line += "\033[31m█\033[0m" # Red
                 else:
                     line += "█"
         print(line)
 
-# Interpolates a list of values or a list of lists with relative positions
-def interpolate_values(values, num_samples, interpolation_type):
-    from nodes.wavable_value import InterpolationTypes
-    # If all the values apart from the first and last are lists, we assume they are relative positions
-    # It's ok for the first and last not to be lists, as we can assume 0 and 1 positions
-    if all(isinstance(v, list) and len(v) == 2 for v in values[1:-1]):        
-        # Assume 0 and 1 positions for the first and last values
-        if not isinstance(values[0], list):
-            values[0] = [values[0], 0]
-        if not isinstance(values[-1], list):
-            values[-1] = [values[-1], 1]
+    has_printed_visualisation = True
 
-        # If the first value is not in position 0, we add an extra value at the beginning
-        if values[0][1] != 0:
-            values = [[values[0][0], 0]] + values
-        # If the last value is not in position 1, we add an extra value at the end
-        if values[-1][1] != 1:
-            values = values + [[values[-1][0], 1]]
-
-        # Handle list of lists with relative positions
-        positions = [v[1] for v in values]
-        values = [v[0] for v in values]
-        if interpolation_type == InterpolationTypes.STEP.value:
-            # Step interpolation
-            positions = np.array(positions)
-            values = np.array(values)
-            interpolated_values = np.zeros(num_samples)
-            for i in range(len(positions) - 1):
-                start = int(positions[i] * num_samples)
-                end = int(positions[i + 1] * num_samples)
-                interpolated_values[start:end] = values[i]
-        elif interpolation_type == InterpolationTypes.SMOOTH.value:
-            # Smooth interpolation with a tighter curve
-            positions = np.array(positions)
-            values = np.array(values)
-            x = np.linspace(0, 1, num_samples)
-            interpolated_values = np.interp(x, positions, values)
-            pchip = PchipInterpolator(positions, values)
-            interpolated_values = pchip(x)
-        else:
-            # Linear interpolation
-            positions = np.array(positions)
-            values = np.array(values)
-            interpolated_values = np.zeros(num_samples)
-            for i in range(len(positions) - 1):
-                start = int(positions[i] * num_samples)
-                end = int(positions[i + 1] * num_samples)
-                x = np.linspace(0, 1, end - start)
-                interpolated_values[start:end] = np.interp(x, [0, 1], [values[i], values[i + 1]])
-    elif len(values) > 1:
-        # Handle simple list of values
-        if interpolation_type == InterpolationTypes.STEP.value:
-            # Step interpolation
-            interpolated_values = np.repeat(values, num_samples // len(values))
-        elif interpolation_type == InterpolationTypes.SMOOTH.value:
-            # Smooth interpolation with a tighter curve
-            positions = np.linspace(0, 1, len(values))
-            pchip = PchipInterpolator(positions, values)
-            x = np.linspace(0, 1, num_samples)
-            interpolated_values = pchip(x)
-        else:
-            # Linear interpolation
-            x = np.linspace(0, 1, len(values))
-            x_interp = np.linspace(0, 1, num_samples)
-            interpolated_values = np.interp(x_interp, x, values)
-    else:
-        interpolated_values = values[0]
-    return interpolated_values
-
-def consume_kwargs(kwargs: dict, keys_and_default_values: dict):
-    """
-    Extracts keys from `kwargs` using defaults from `defaults`, without mutating the original.
-    Returns a tuple of values (in the order of keys_and_default_values) and a new kwargs dict
-    with those keys removed.
-    """
-    remaining = kwargs.copy()
-    values = []
-    for key, default in keys_and_default_values.items():
-        values.append(remaining.pop(key, default))
-    return (*values, remaining)
 
 
 def look_for_duration(model: BaseNodeModel):

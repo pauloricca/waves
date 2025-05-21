@@ -7,13 +7,17 @@ from pydantic import ConfigDict, field_validator
 
 from config import DO_NORMALISE_EACH_SOUND, ENVELOPE_TYPE, SAMPLE_RATE
 from constants import RenderArgs
-from models.models import BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import InterpolationTypes, WavableValue, WavableValueNode
-from nodes.node_utils.base import BaseNode
+from nodes.wavable_value import InterpolationTypes, WavableValue, wavable_value_node_factory
+from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from vnoise import Noise
 
-from utils import consume_kwargs
+
+OSCILLATOR_RENDER_ARGS = [
+    RenderArgs.FREQUENCY_MULTIPLIER,
+    RenderArgs.AMPLITUDE_MULTIPLIER,
+    RenderArgs.FREQUENCY,
+]
 
 
 class OscillatorTypes(str, Enum):
@@ -34,8 +38,8 @@ class OscillatorModel(BaseNodeModel):
     freq_interpolation: InterpolationTypes = InterpolationTypes.LINEAR
     amp: WavableValue = 1.0
     amp_interpolation: InterpolationTypes = InterpolationTypes.LINEAR
-    attack: float = 0
-    release: float = 0
+    attack: float = 0 # Attack time in seconds
+    release: float = 0 # Release time in seconds
     partials: List[OscillatorModel] = []
     scale: float = 1.0 # Perlin noise scale
     seed: Optional[float] = None # Perlin noise seed
@@ -55,29 +59,30 @@ class OscillatorModel(BaseNodeModel):
 class OscillatorNode(BaseNode):
     def __init__(self, model: OscillatorModel):
         from nodes.node_utils.instantiate_node import instantiate_node
+        super().__init__(model)
         self.model = model
-        self.freq = WavableValueNode(model.freq, model.freq_interpolation) if model.freq else None
-        self.amp = WavableValueNode(model.amp, model.amp_interpolation)
+        self.freq = wavable_value_node_factory(model.freq, model.freq_interpolation) if model.freq else None
+        self.amp = wavable_value_node_factory(model.amp, model.amp_interpolation)
         self.partials = [instantiate_node(partial) for partial in model.partials]
-        self._phase_acc = 0
+        self.seed = self.model.seed or random.randint(0, 10000)
+        self.phase_acc = 0  # Phase accumulator to maintain continuity between render calls
 
     def render(self, num_samples, **kwargs):
-        frequency_multiplier, amplitude_multiplier, frequency_override, kwargs_for_children = consume_kwargs(
+        super().render(num_samples)
+        frequency_multiplier, amplitude_multiplier, frequency_override, kwargs_for_children = self.consume_kwargs(
             kwargs, {RenderArgs.FREQUENCY_MULTIPLIER: 1, RenderArgs.AMPLITUDE_MULTIPLIER: 1, RenderArgs.FREQUENCY: None})
 
+        duration_seconds = num_samples / SAMPLE_RATE
+        release_time = self.model.release * SAMPLE_RATE
+        attack_time = self.model.attack * SAMPLE_RATE
+        t = np.linspace(0, duration_seconds, num_samples, endpoint=False)
 
-        duration = self.model.duration or (num_samples / SAMPLE_RATE)
-        number_of_samples_to_render = int(SAMPLE_RATE * duration)
-        release_time = self.model.release * duration
-        attack_time = self.model.attack * duration
-        t = np.linspace(0, duration, int(SAMPLE_RATE * duration), endpoint=False)
-
-        total_wave = 0 * t
+        total_wave = np.zeros(num_samples)
 
         if frequency_override:
             frequency = frequency_override
         elif self.freq:
-            frequency = self.freq.render(number_of_samples_to_render, **kwargs_for_children)
+            frequency = self.freq.render(num_samples, **kwargs_for_children)
             if len(frequency) == 1:
                 frequency = frequency[0]
         else:
@@ -85,7 +90,7 @@ class OscillatorNode(BaseNode):
         
         frequency *= frequency_multiplier
 
-        amplitude = self.amp.render(number_of_samples_to_render, **kwargs_for_children) * amplitude_multiplier
+        amplitude = self.amp.render(num_samples, **kwargs_for_children) * amplitude_multiplier
         osc_type = self.model.type
 
         if osc_type == OscillatorTypes.NOISE:
@@ -93,50 +98,66 @@ class OscillatorNode(BaseNode):
         elif osc_type in [OscillatorTypes.SIN, OscillatorTypes.COS]:
             wave_function = np.sin if osc_type == OscillatorTypes.SIN else np.cos
             # Is frequency variable?
-            if(isinstance(frequency, np.ndarray)):
+            if isinstance(frequency, np.ndarray):
                 dt = 1 / SAMPLE_RATE
-                # Compute cumulative phase
-                phase = 2 * np.pi * np.cumsum(frequency) * dt
+                # Compute phase increment for each sample
+                phase_increments = 2 * np.pi * frequency * dt
+                # Calculate cumulative phase
+                phase = self.phase_acc + np.cumsum(phase_increments)
                 total_wave = amplitude * wave_function(phase[:len(total_wave)])
+                # Save the last phase for next render
+                self.phase_acc = phase[-1]
             else:
-                total_wave = amplitude * wave_function(2 * np.pi * frequency * t)
+                # Calculate phase with accumulated phase offset
+                phase = self.phase_acc + 2 * np.pi * frequency * t
+                total_wave = amplitude * wave_function(phase)
+                # Update phase accumulator for next render
+                self.phase_acc = (self.phase_acc + 2 * np.pi * frequency * duration_seconds) % (2 * np.pi)
         elif osc_type == OscillatorTypes.SQR:
-            # Is frequency variable?
-            if(isinstance(frequency, np.ndarray)):
+            if isinstance(frequency, np.ndarray):
                 dt = 1 / SAMPLE_RATE
-                # Compute cumulative phase
-                phase = 2 * np.pi * np.cumsum(frequency) * dt
+                phase_increments = 2 * np.pi * frequency * dt
+                phase = self.phase_acc + np.cumsum(phase_increments)
                 total_wave = amplitude * np.sign(np.sin(phase[:len(total_wave)]))
+                self.phase_acc = phase[-1]
             else:
-                total_wave = amplitude * np.sign(np.sin(2 * np.pi * frequency * t))
+                phase = self.phase_acc + 2 * np.pi * frequency * t
+                total_wave = amplitude * np.sign(np.sin(phase))
+                self.phase_acc = (self.phase_acc + 2 * np.pi * frequency * duration_seconds) % (2 * np.pi)
         elif osc_type == OscillatorTypes.TRI:
-            # Is frequency variable?
-            if(isinstance(frequency, np.ndarray)):
+            if isinstance(frequency, np.ndarray):
                 dt = 1 / SAMPLE_RATE
-                # Compute cumulative phase
-                phase = 2 * np.pi * np.cumsum(frequency) * dt
+                phase_increments = 2 * np.pi * frequency * dt
+                phase = self.phase_acc + np.cumsum(phase_increments)
                 total_wave = amplitude * (2 / np.pi) * np.arcsin(np.sin(phase[:len(total_wave)]))
+                self.phase_acc = phase[-1]
             else:
-                total_wave = amplitude * (2 / np.pi) * np.arcsin(np.sin(2 * np.pi * frequency * t))
+                phase = self.phase_acc + 2 * np.pi * frequency * t
+                total_wave = amplitude * (2 / np.pi) * np.arcsin(np.sin(phase))
+                self.phase_acc = (self.phase_acc + 2 * np.pi * frequency * duration_seconds) % (2 * np.pi)
         elif osc_type == OscillatorTypes.SAW:
-            # Is frequency variable?
-            if(isinstance(frequency, np.ndarray)):
+            if isinstance(frequency, np.ndarray):
                 dt = 1 / SAMPLE_RATE
-                # Compute cumulative phase
-                phase = 2 * np.pi * np.cumsum(frequency) * dt
-                total_wave = amplitude * (2 / np.pi) * np.arctan(np.tan(phase[:len(total_wave)]))
+                phase_increments = 2 * np.pi * frequency * dt
+                phase = self.phase_acc + np.cumsum(phase_increments)
+                total_wave = amplitude * (2 / np.pi) * np.arctan(np.tan(phase[:len(total_wave)] / 2))
+                self.phase_acc = phase[-1]
             else:
-                total_wave = amplitude * (2 / np.pi) * np.arctan(np.tan(np.pi * frequency * t))
+                phase = self.phase_acc + np.pi * frequency * t
+                total_wave = amplitude * (2 / np.pi) * np.arctan(np.tan(phase))
+                self.phase_acc = (self.phase_acc + np.pi * frequency * duration_seconds) % np.pi
         elif osc_type == OscillatorTypes.PERLIN:
-            noise_function = Noise(self.model.seed or random.randint(0, 10000)).noise1
-            perlin_noise = np.array(noise_function(t * self.model.scale))
+            continuous_t = t + self.phase_acc
+            self.phase_acc = continuous_t[-1]
+            noise_function = Noise(self.seed).noise1
+            perlin_noise = np.array(noise_function(continuous_t * self.model.scale))
             total_wave = amplitude * perlin_noise
 
         # Render and add partials
         if len(self.partials) > 0:
             partials_args = {RenderArgs.FREQUENCY_MULTIPLIER: frequency, RenderArgs.AMPLITUDE_MULTIPLIER: amplitude}
             for partial in self.partials:
-                partial_wave = partial.render(number_of_samples_to_render, **partials_args, **kwargs_for_children)
+                partial_wave = partial.render(num_samples, **partials_args, **kwargs_for_children)
                 # Pad the shorter wave to match the length of the longer one
                 if len(partial_wave) > len(total_wave):
                     total_wave = np.pad(total_wave, (0, len(partial_wave) - len(total_wave)))

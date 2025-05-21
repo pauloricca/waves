@@ -3,7 +3,7 @@ from typing import Dict
 from pydantic import RootModel, model_validator
 import yaml
 
-from models.models import BaseNodeModel
+from nodes.node_utils.base_node import BaseNodeModel
 
 
 sound_library: SoundLibraryModel = None

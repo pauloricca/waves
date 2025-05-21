@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Optional
 import numpy as np
 from pydantic import ConfigDict
-from config import SAMPLE_RATE
-from models.models import BaseNodeModel
-from nodes.node_utils.base import BaseNode
+from config import *
+from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import WavableValue, WavableValueNode
+from nodes.oscillator import OSCILLATOR_RENDER_ARGS
+from nodes.wavable_value import WavableValue, wavable_value_node_factory
 
 class NormaliseModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
@@ -22,6 +22,7 @@ class NormaliseModel(BaseNodeModel):
 class NormaliseNode(BaseNode):
     def __init__(self, model: NormaliseModel):
         from nodes.node_utils.instantiate_node import instantiate_node
+        super().__init__(model)
         self.model = model
         self.signal_node = instantiate_node(model.signal)
         
@@ -34,22 +35,23 @@ class NormaliseNode(BaseNode):
 
         # If no min and max are provided, set them to the default range [-1, 1]
         if self.model.min is None and self.model.max is not None:
-            self.min = WavableValueNode(-self.model.max)
-            self.max = WavableValueNode(self.model.max)
+            self.min = wavable_value_node_factory(-self.model.max)
+            self.max = wavable_value_node_factory(self.model.max)
         else:
-            self.min = WavableValueNode(self.model.min or -1)
-            self.max = WavableValueNode(self.model.max or 1)
+            self.min = wavable_value_node_factory(self.model.min or -1)
+            self.max = wavable_value_node_factory(self.model.max or 1)
 
     def render(self, num_samples, **kwargs):
-        signal_wave = self.signal_node.render(num_samples, **kwargs)
-        self.min = self.min.render(num_samples)
-        self.max = self.max.render(num_samples)
+        super().render(num_samples)
+        signal_wave = self.signal_node.render(num_samples, **self.get_kwargs_for_children(kwargs))
+        min_wave = self.min.render(num_samples, **self.get_kwargs_for_children(kwargs, OSCILLATOR_RENDER_ARGS))
+        max_wave = self.max.render(num_samples, **self.get_kwargs_for_children(kwargs, OSCILLATOR_RENDER_ARGS))
         
         # Ensure min and max have the same length as wave
-        if isinstance(self.min, np.ndarray) and len(self.min) != len(signal_wave):
-            self.min = np.interp(np.linspace(0, 1, len(signal_wave)), np.linspace(0, 1, len(self.min)), self.min)
-        if isinstance(self.max, np.ndarray) and len(self.max) != len(signal_wave):
-            self.max = np.interp(np.linspace(0, 1, len(signal_wave)), np.linspace(0, 1, len(self.max)), self.max)
+        if isinstance(min_wave, np.ndarray) and len(min_wave) != len(signal_wave):
+            min_wave = np.interp(np.linspace(0, 1, len(signal_wave)), np.linspace(0, 1, len(min_wave)), min_wave)
+        if isinstance(max_wave, np.ndarray) and len(max_wave) != len(signal_wave):
+            max_wave = np.interp(np.linspace(0, 1, len(signal_wave)), np.linspace(0, 1, len(max_wave)), max_wave)
 
         if self.source_min is None:
             peak = np.max(np.abs(signal_wave))
@@ -57,23 +59,23 @@ class NormaliseNode(BaseNode):
             self.source_max = peak
 
         # Normalize the wave from [source_min, source_max] the range [min, max]
-        if(isinstance(self.min, np.ndarray) and isinstance(self.max, np.ndarray)):
+        if(isinstance(min_wave, np.ndarray) and isinstance(max_wave, np.ndarray)):
             # Min and max are arrays, apply vectorized normalization
             if self.source_max != self.source_min:
                 # Vectorized normalization using NumPy's broadcasting
                 normalized_scale = (signal_wave - self.source_min) / (self.source_max - self.source_min)
-                signal_wave = self.min + (self.max - self.min) * normalized_scale
+                signal_wave = min_wave + (max_wave - min_wave) * normalized_scale
             else:
                 # Handle case where source_min equals source_max to avoid division by zero
-                signal_wave = (self.min + self.max) / 2
+                signal_wave = (min_wave + max_wave) / 2
         else:
             # Min and max are scalar values, apply normalization uniformly
             if self.source_max != self.source_min:
-                signal_wave = self.min + (self.max - self.min) * \
+                signal_wave = min_wave + (max_wave - min_wave) * \
                         (signal_wave - self.source_min) / (self.source_max - self.source_min)
             else:
                 # Handle case where source_min equals source_max to avoid division by zero
-                signal_wave = np.full_like(signal_wave, (self.min + self.max) / 2)
+                signal_wave = np.full_like(signal_wave, (min_wave + max_wave) / 2)
 
         # Clip the wave to the specified range
         if self.model.clip_min is not None:

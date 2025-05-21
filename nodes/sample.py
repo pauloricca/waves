@@ -2,10 +2,10 @@ from __future__ import annotations
 import numpy as np
 from pydantic import ConfigDict
 from config import SAMPLE_RATE
-from models.models import BaseNodeModel
-from nodes.node_utils.base import BaseNode
+from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import WavableValue, WavableValueNode
+from nodes.oscillator import OSCILLATOR_RENDER_ARGS
+from nodes.wavable_value import WavableValue, wavable_value_node_factory
 from utils import load_wav_file
 
 
@@ -21,13 +21,15 @@ class SampleModel(BaseNodeModel):
 
 
 class SampleNode(BaseNode):
-    def __init__(self, sample_model: SampleModel):
+    def __init__(self, model: SampleModel):
         from nodes.node_utils.instantiate_node import instantiate_node
-        self.model = sample_model
-        self.audio = load_wav_file(sample_model.file)
-        self.speed_node = WavableValueNode(sample_model.speed)
+        super().__init__(model)
+        self.model = model
+        self.audio = load_wav_file(model.file)
+        self.speed_node = wavable_value_node_factory(model.speed)
 
     def render(self, num_samples, **kwargs):
+        super().render(num_samples)
         start = int(self.model.start * len(self.audio))
         end = int(self.model.end * len(self.audio))
         end = min(end, len(self.audio))
@@ -38,7 +40,7 @@ class SampleNode(BaseNode):
         wave = self.audio[start:end]
         base_len = len(wave)
 
-        speed = self.speed_node.render(num_samples, **kwargs)
+        speed = self.speed_node.render(num_samples, **self.get_kwargs_for_children(kwargs, OSCILLATOR_RENDER_ARGS))
         is_modulated = isinstance(speed, np.ndarray) and len(speed) > 1
 
         if is_modulated:

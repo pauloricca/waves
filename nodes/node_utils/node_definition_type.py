@@ -1,5 +1,4 @@
-from models.models import BaseNodeModel
-from nodes.node_utils.base import BaseNode
+from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from dataclasses import dataclass
 
 @dataclass

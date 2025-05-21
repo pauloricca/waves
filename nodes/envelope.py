@@ -1,8 +1,7 @@
 from __future__ import annotations
 import numpy as np
 from config import SAMPLE_RATE, ENVELOPE_TYPE
-from models.models import BaseNodeModel
-from nodes.node_utils.base import BaseNode
+from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 
 
@@ -15,11 +14,13 @@ class EnvelopeModel(BaseNodeModel):
 class EnvelopeNode(BaseNode):
     def __init__(self, model: EnvelopeModel):
         from nodes.node_utils.instantiate_node import instantiate_node
+        super().__init__(model)
         self.model = model
         self.signal_node = instantiate_node(model.signal)
 
     def render(self, num_samples, **kwargs):
-        signal_wave = self.signal_node.render(num_samples, **kwargs)
+        super().render(num_samples)
+        signal_wave = self.signal_node.render(num_samples, **self.get_kwargs_for_children(kwargs))
         attack_len = int(self.model.attack * SAMPLE_RATE)
         release_len = int(self.model.release * SAMPLE_RATE)
 
