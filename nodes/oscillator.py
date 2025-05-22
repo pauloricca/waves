@@ -67,10 +67,10 @@ class OscillatorNode(BaseNode):
         self.seed = self.model.seed or random.randint(0, 10000)
         self.phase_acc = 0  # Phase accumulator to maintain continuity between render calls
 
-    def render(self, num_samples, **kwargs):
+    def render(self, num_samples, **params):
         super().render(num_samples)
-        frequency_multiplier, amplitude_multiplier, frequency_override, kwargs_for_children = self.consume_kwargs(
-            kwargs, {RenderArgs.FREQUENCY_MULTIPLIER: 1, RenderArgs.AMPLITUDE_MULTIPLIER: 1, RenderArgs.FREQUENCY: None})
+        frequency_multiplier, amplitude_multiplier, frequency_override, params_for_children = self.consume_params(
+            params, {RenderArgs.FREQUENCY_MULTIPLIER: 1, RenderArgs.AMPLITUDE_MULTIPLIER: 1, RenderArgs.FREQUENCY: None})
 
         duration_seconds = num_samples / SAMPLE_RATE
         release_time = self.model.release * SAMPLE_RATE
@@ -82,7 +82,7 @@ class OscillatorNode(BaseNode):
         if frequency_override:
             frequency = frequency_override
         elif self.freq:
-            frequency = self.freq.render(num_samples, **kwargs_for_children)
+            frequency = self.freq.render(num_samples, **params_for_children)
             if len(frequency) == 1:
                 frequency = frequency[0]
         else:
@@ -90,7 +90,7 @@ class OscillatorNode(BaseNode):
         
         frequency *= frequency_multiplier
 
-        amplitude = self.amp.render(num_samples, **kwargs_for_children) * amplitude_multiplier
+        amplitude = self.amp.render(num_samples, **params_for_children) * amplitude_multiplier
         osc_type = self.model.type
 
         if osc_type == OscillatorTypes.NOISE:
@@ -157,7 +157,7 @@ class OscillatorNode(BaseNode):
         if len(self.partials) > 0:
             partials_args = {RenderArgs.FREQUENCY_MULTIPLIER: frequency, RenderArgs.AMPLITUDE_MULTIPLIER: amplitude}
             for partial in self.partials:
-                partial_wave = partial.render(num_samples, **partials_args, **kwargs_for_children)
+                partial_wave = partial.render(num_samples, **partials_args, **params_for_children)
                 # Pad the shorter wave to match the length of the longer one
                 if len(partial_wave) > len(total_wave):
                     total_wave = np.pad(total_wave, (0, len(partial_wave) - len(total_wave)))

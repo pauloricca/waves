@@ -33,16 +33,16 @@ class WavableValueNode(BaseNode):
         self.wave_node = instantiate_node(model.value) if isinstance(model.value, BaseNodeModel) else None
         self.interpolated_values = None
 
-    def render(self, num_samples, **kwargs):
+    def render(self, num_samples, **params):
         from nodes.oscillator import OSCILLATOR_RENDER_ARGS
         super().render(num_samples)
 
         if self.wave_node:
-            return self.wave_node.render(num_samples, **self.get_kwargs_for_children(kwargs, OSCILLATOR_RENDER_ARGS))
+            return self.wave_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
         elif isinstance(self.value, (float, int)):
             return np.array([self.value])
         if isinstance(self.value, list):
-            duration = kwargs.get(RenderArgs.DURATION, 0)
+            duration = params.get(RenderArgs.DURATION, 0)
 
             if duration == 0:
                 raise ValueError("Duration must be set somewhere above interpolated values.")

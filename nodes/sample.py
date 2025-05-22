@@ -28,7 +28,7 @@ class SampleNode(BaseNode):
         self.audio = load_wav_file(model.file)
         self.speed_node = wavable_value_node_factory(model.speed)
 
-    def render(self, num_samples, **kwargs):
+    def render(self, num_samples, **params):
         super().render(num_samples)
         start = int(self.model.start * len(self.audio))
         end = int(self.model.end * len(self.audio))
@@ -40,7 +40,7 @@ class SampleNode(BaseNode):
         wave = self.audio[start:end]
         base_len = len(wave)
 
-        speed = self.speed_node.render(num_samples, **self.get_kwargs_for_children(kwargs, OSCILLATOR_RENDER_ARGS))
+        speed = self.speed_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
         is_modulated = isinstance(speed, np.ndarray) and len(speed) > 1
 
         if is_modulated:

@@ -34,10 +34,10 @@ class FilterNode(BaseNode):
         self.cutoff_node = wavable_value_node_factory(model.cutoff)
         self.signal_node = instantiate_node(model.signal)
 
-    def render(self, num_samples, **kwargs):
+    def render(self, num_samples, **params):
         super().render(num_samples)
-        signal_wave = self.signal_node.render(num_samples, **self.get_kwargs_for_children(kwargs))
-        cutoff = self.cutoff_node.render(num_samples, **self.get_kwargs_for_children(kwargs, OSCILLATOR_RENDER_ARGS))
+        signal_wave = self.signal_node.render(num_samples, **self.get_params_for_children(params))
+        cutoff = self.cutoff_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
 
         if len(cutoff) == 1:
             cutoff = cutoff[0]

@@ -41,11 +41,11 @@ class NormaliseNode(BaseNode):
             self.min = wavable_value_node_factory(self.model.min or -1)
             self.max = wavable_value_node_factory(self.model.max or 1)
 
-    def render(self, num_samples, **kwargs):
+    def render(self, num_samples, **params):
         super().render(num_samples)
-        signal_wave = self.signal_node.render(num_samples, **self.get_kwargs_for_children(kwargs))
-        min_wave = self.min.render(num_samples, **self.get_kwargs_for_children(kwargs, OSCILLATOR_RENDER_ARGS))
-        max_wave = self.max.render(num_samples, **self.get_kwargs_for_children(kwargs, OSCILLATOR_RENDER_ARGS))
+        signal_wave = self.signal_node.render(num_samples, **self.get_params_for_children(params))
+        min_wave = self.min.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+        max_wave = self.max.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
         
         # Ensure min and max have the same length as wave
         if isinstance(min_wave, np.ndarray) and len(min_wave) != len(signal_wave):

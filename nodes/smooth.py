@@ -17,9 +17,9 @@ class SmoothNode(BaseNode):
         self.model = model
         self.signal_node = instantiate_node(model.signal)
 
-    def render(self, num_samples, **kwargs):
+    def render(self, num_samples, **params):
         super().render(num_samples)
-        signal_wave = self.signal_node.render(num_samples, **self.get_kwargs_for_children(kwargs, OSCILLATOR_RENDER_ARGS))
+        signal_wave = self.signal_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
         smoothed_wave = np.copy(signal_wave)
         for i in range(1, len(smoothed_wave)):
             diff = smoothed_wave[i] - smoothed_wave[i - 1]

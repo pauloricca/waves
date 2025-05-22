@@ -19,8 +19,8 @@ class SequencerModel(BaseNodeModel):
     sequence: Optional[List[Union[BaseNodeModel, str, List[Union[str, BaseNodeModel]], None]]] = None
     chain: Optional[List[str]] = None
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args, **params):
+        super().__init__(*args, **params)
         self.duration = self.interval * (len(self.sequence) + 1) if self.sequence else 0
 
 
@@ -32,7 +32,7 @@ class SequencerNode(BaseNode):
         self.interval = model.interval
         self.repeat = model.repeat
 
-    def render(self, num_samples, **kwargs):
+    def render(self, num_samples, **params):
         super().render(num_samples)
         from nodes.node_utils.instantiate_node import instantiate_node
         generated_waves = {}
@@ -63,7 +63,7 @@ class SequencerNode(BaseNode):
                 
                 sound_node = instantiate_node(sound_model)
                 number_of_samples_to_render = int(SAMPLE_RATE * (look_for_duration(sound_model) or 1))
-                generated_waves[sounds_in_step] = sound_node.render(number_of_samples_to_render, **self.get_kwargs_for_children(kwargs, OSCILLATOR_RENDER_ARGS), **render_args)
+                generated_waves[sounds_in_step] = sound_node.render(number_of_samples_to_render, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS), **render_args)
 
         # Create a combined wave based on the sequence
         combined_wave = np.array([], dtype=np.float32)
@@ -86,7 +86,7 @@ class SequencerNode(BaseNode):
                             wave = generated_waves[sound]
                         else:
                             sound_node = instantiate_node(sound)
-                            wave = sound_node.render(int(SAMPLE_RATE * (look_for_duration(sound) or 1)), **self.get_kwargs_for_children(kwargs, OSCILLATOR_RENDER_ARGS))
+                            wave = sound_node.render(int(SAMPLE_RATE * (look_for_duration(sound) or 1)), **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
                         if len(step_wave) < len(wave):
                             step_wave = np.pad(step_wave, (0, len(wave) - len(step_wave)))
                         elif len(wave) < len(step_wave):

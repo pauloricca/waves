@@ -21,9 +21,9 @@ class ShuffleNode(BaseNode):
         self.signal_node = instantiate_node(model.signal)
         self.rng = np.random.default_rng(model.seed)  # Use a random generator with seed
 
-    def render(self, num_samples, **kwargs):
+    def render(self, num_samples, **params):
         super().render(num_samples)
-        signal_wave = self.signal_node.render(num_samples, **self.get_kwargs_for_children(kwargs))
+        signal_wave = self.signal_node.render(num_samples, **self.get_params_for_children(params))
         if (self.model.chunks):
             num_chunks = self.model.chunks
             chunk_size = len(signal_wave) // num_chunks

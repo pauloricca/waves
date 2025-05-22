@@ -21,9 +21,9 @@ class DelayNode(BaseNode):
         self.model = model
         self.signal_node = instantiate_node(model.signal)
 
-    def render(self, num_samples, **kwargs):
+    def render(self, num_samples, **params):
         super().render(num_samples)
-        signal_wave = self.signal_node.render(num_samples, **self.get_kwargs_for_children(kwargs))
+        signal_wave = self.signal_node.render(num_samples, **self.get_params_for_children(params))
         n_delay_time_samples = int(SAMPLE_RATE * self.model.time)
         delayed_wave = np.zeros(len(signal_wave) + n_delay_time_samples * self.model.repeats)
 
