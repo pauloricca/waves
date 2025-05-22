@@ -37,23 +37,26 @@ class WavableValueNode(BaseNode):
         from nodes.oscillator import OSCILLATOR_RENDER_ARGS
         super().render(num_samples)
 
-        duration = kwargs.get(RenderArgs.DURATION, 0)
-
         if self.wave_node:
             return self.wave_node.render(num_samples, **self.get_kwargs_for_children(kwargs, OSCILLATOR_RENDER_ARGS))
         elif isinstance(self.value, (float, int)):
             return np.array([self.value])
         if isinstance(self.value, list):
+            duration = kwargs.get(RenderArgs.DURATION, 0)
+
+            if duration == 0:
+                raise ValueError("Duration must be set somewhere above interpolated values.")
+            
             if self.interpolated_values is None or len(self.interpolated_values) != int(duration * SAMPLE_RATE):
                 self.interpolated_values = interpolate_values(self.value, int(duration * SAMPLE_RATE), self.interpolation_type)
-            
+
             interpolated_values_section = self.interpolated_values[int(self.time_since_start * SAMPLE_RATE): int(self.time_since_start * SAMPLE_RATE + num_samples)]
-            
+
             if len(interpolated_values_section) < num_samples:
                 padding = np.full(num_samples - len(interpolated_values_section), self.interpolated_values[-1])
                 interpolated_values_section = np.concatenate([interpolated_values_section, padding])
 
-            return interpolated_values_section
+            return interpolated_values_section.copy()
 
 
 def wavable_value_node_factory(value: WavableValue, interpolation: InterpolationTypes = InterpolationTypes.LINEAR):

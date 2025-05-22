@@ -20,7 +20,6 @@ def save(wave, filename):
     output_path = os.path.join(os.path.dirname(__file__), OUTPUT_DIR, filename)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     wavfile.write(output_path, SAMPLE_RATE, wave_int16)
-    visualise_wave(wave)
     print(f"Saved {filename}")
 
 

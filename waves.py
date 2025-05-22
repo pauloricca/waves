@@ -49,7 +49,7 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float):
                 print(f"Render time: {100 * last_render_time / (BUFFER_SIZE / SAMPLE_RATE):.2f}%")
             time.sleep(1 / 30) # ~30 FPS
 
-    if DO_VISUALISE_REAL_TIME_OUTPUT:
+    if DO_VISUALISE_OUTPUT:
         vis_thread = threading.Thread(target=run_visualizer, daemon=True)
         vis_thread.start()
 
@@ -97,6 +97,9 @@ def main():
         rendered_sound /= DIVIDE_BY
 
         save(rendered_sound, f"{sound_name_to_play}.wav")
+
+        if DO_VISUALISE_OUTPUT:
+            visualise_wave(rendered_sound)
 
         print(f"Sound length: {len(rendered_sound) / SAMPLE_RATE:.2f} seconds")
         print(f"Render time: {rendering_end_time - rendering_start_time:.2f} seconds")
