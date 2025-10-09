@@ -66,6 +66,8 @@ To create a new type of node, we create a new file with the node name in the nod
 
 Then we need to add the new node to the NODE_REGISTRY in nodes/node_utils/node_registry.py.
 
+One thing we need to be careful about is to ensure that the render method of the node works correctly in both realtime and non-realtime modes. This means that we need the node to work as expected when rendering the whole sound at once (non-realtime) and also when rendering in chunks (realtime).
+
 ## Configuration
 
 In config.py we can set some global parameters for the project, such as the sample rate, the buffer size, etc. but also some options on the mode of operating like whether we play the sound in realtime (render in chunks) or pre-render the whole sound and play it back (non-realtime).
@@ -74,4 +76,10 @@ In config.py we can set some global parameters for the project, such as the samp
 
 In the earlier stages of the project, we only supported non-realtime playback and then slowly we started converting nodes to support realtime rendering. The goal is to eventually support all nodes in realtime mode, which will allow for more interactive sound design. The nodes that haven't been converted yet are in the nodes/non_real_time directory.
 
+One challenge at the moment is that some nodes generate artifacts or problems when rendered in chunks, for example the normalise node, when a source min isn't supplied in the model, calculates the peak of the input wave and then scales the wave to fit within a given range. When rendering in chunks, the first chunk is used to calculate the peak, which can lead to clipping or distortion in subsequent chunks if they have higher peaks.
+
 The objective of having realtime playback is to be able to connect the system to a MIDI controller or other input device and play the sounds live, as well as to potentially be able to tweak parameters in real time and hear the results immediately, but neither of these features are implemented yet.
+
+### Directives for AI
+
+- Avoid saying things like "this likely happens because ...", do further checks to confirm your hypothesis.

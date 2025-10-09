@@ -116,21 +116,21 @@ continuous-2:
 
 seq:
   sequencer:
-    interval: 0.5
+    interval: 0.1
     sequence:
-    - [norm, paulo]
+    - phoom
+    - tick
+    - tick
     - 
+    - tick
     -
     -
-    - norm f70
+    - phoom
+    - [tick, phoom]
     -
+    - tick
     -
-    -
-    - norm f65
-    -
-    -
-    -
-    - norm f62
+    - tick
     -
     -
     -
@@ -203,15 +203,17 @@ shaker:
 
 
 paulo-sample:
-  sample:
-    duration: 4
-    start: 0.354
-    # speed: [-0.2, 0.2, 0.1]
-    speed: -1
-    end: 0.5
-    loop: false
-    overlap: 0.5
-    file: samples/paulo.wav
+  normalise:
+    source_max: 1
+    signal:
+      sample:
+        duration: 8
+        start: 0.354
+        speed: [-0.2, 0.2, 0.1]
+        end: 0.5
+        loop: true
+        overlap: 0.5
+        file: samples/paulo.wav
 
 
 paulo:
@@ -285,14 +287,14 @@ gregor:
 sample-seq-rumble:
   normalise:
     signal:
-      # invert:
-      #   signal:
+      invert:
+        signal:
           delay:
             feedback: 0.5
             time: 0.2
             signal:
-              # shuffle:
-              #   signal:
+              shuffle:
+                signal:
                   sequencer:
                     interval: 0.1
                     sequence:

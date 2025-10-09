@@ -35,6 +35,9 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float):
         if should_stop:
             raise sd.CallbackStop()
 
+        # Apply master gain
+        audio_data *= RENDERED_MASTER_GAIN
+
         visualised_wave_buffer.extend(audio_data)
 
         clipped_audio_data = np.clip(audio_data, -1.0, 1.0)
@@ -77,7 +80,6 @@ def main():
     sound_node_to_play = instantiate_node(sound_model_to_play)
 
     sound_duration = look_for_duration(sound_model_to_play) or 1
-    sound_duration = 6
 
     if DO_PLAY_IN_REAL_TIME:
         play_in_real_time(sound_node_to_play, sound_duration)
@@ -117,17 +119,20 @@ if __name__ == "__main__":
     if DISABLE_GARBAGE_COLLECTION:
         gc.disable()
 
-    last_modified_time = ""
-    try:
-        while True:
-            current_modified_time = os.path.getmtime(YAML_FILE)
-            if current_modified_time != last_modified_time:
-                last_modified_time = current_modified_time
-                try:
-                    main()
-                except Exception as e:
-                    print(f"Error: {e}")
-                    traceback.print_exc()
-            time.sleep(0.2)
-    except KeyboardInterrupt:
-        sys.exit(0)
+    if WAIT_FOR_CHANGES_IN_WAVES_YAML:
+        last_modified_time = ""
+        try:
+            while True:
+                current_modified_time = os.path.getmtime(YAML_FILE)
+                if current_modified_time != last_modified_time:
+                    last_modified_time = current_modified_time
+                    try:
+                        main()
+                    except Exception as e:
+                        print(f"Error: {e}")
+                        traceback.print_exc()
+                time.sleep(0.2)
+        except KeyboardInterrupt:
+            sys.exit(0)
+    else:
+        main()
