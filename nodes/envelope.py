@@ -8,6 +8,8 @@ from nodes.node_utils.node_definition_type import NodeDefinition
 
 class EnvelopeModel(BaseNodeModel):
     attack: float = 0 # length of attack in seconds
+    decay: float = 0 # length of decay in seconds
+    sustain: float = 1.0 # sustain level (0 to 1)
     release: float = 0 # length of release in seconds
     signal: BaseNodeModel = None
 
@@ -21,7 +23,10 @@ class EnvelopeNode(BaseNode):
         
         # State tracking for real-time rendering
         self.fade_in_multiplier = None  # Attack envelope
+        self.decay_multiplier = None  # Decay envelope
         self.fade_out_multiplier = None  # Release envelope
+        self.is_in_decay_phase = False
+        self.is_in_sustain_phase = False
         self.is_in_release_phase = False
         self.release_started = False
 
@@ -43,11 +48,14 @@ class EnvelopeNode(BaseNode):
         if len(signal_wave) == 0 and not self.is_in_release_phase:
             return np.array([])
         
+        # Track which samples have been processed to avoid double-processing
+        processed_samples = 0
+        
         # Apply attack envelope
         attack_len = int(self.model.attack * SAMPLE_RATE)
         if attack_len > 0:
             if self.fade_in_multiplier is None:
-                # Create the attack envelope
+                # Create the attack envelope (0 to 1)
                 if OSC_ENVELOPE_TYPE == "linear":
                     self.fade_in_multiplier = np.linspace(0, 1, attack_len)
                 else:
@@ -56,19 +64,61 @@ class EnvelopeNode(BaseNode):
             # Apply fade in to the current chunk
             if len(self.fade_in_multiplier) > 0 and len(signal_wave) > 0:
                 fade_samples = min(len(self.fade_in_multiplier), len(signal_wave))
-                signal_wave[:fade_samples] *= self.fade_in_multiplier[:fade_samples]
+                signal_wave[processed_samples:processed_samples + fade_samples] *= self.fade_in_multiplier[:fade_samples]
+                processed_samples += fade_samples
                 # Keep the rest for next render
                 self.fade_in_multiplier = self.fade_in_multiplier[fade_samples:]
+                
+                # If attack is complete, move to decay phase
+                if len(self.fade_in_multiplier) == 0:
+                    self.is_in_decay_phase = True
+        else:
+            # No attack, go straight to decay
+            self.is_in_decay_phase = True
+        
+        # Apply decay envelope
+        decay_len = int(self.model.decay * SAMPLE_RATE)
+        if decay_len > 0 and self.is_in_decay_phase and not self.is_in_sustain_phase and not self.is_in_release_phase:
+            if self.decay_multiplier is None:
+                # Create the decay envelope (1 to sustain level)
+                if OSC_ENVELOPE_TYPE == "linear":
+                    self.decay_multiplier = np.linspace(1, self.model.sustain, decay_len)
+                else:
+                    # Exponential decay from 1 to sustain level
+                    decay_curve = np.exp(-np.linspace(0, 5, decay_len))
+                    # Scale from [1, ~0] to [1, sustain]
+                    self.decay_multiplier = self.model.sustain + (1 - self.model.sustain) * decay_curve
+            
+            # Apply decay to the current chunk
+            if len(self.decay_multiplier) > 0 and len(signal_wave) > processed_samples:
+                fade_samples = min(len(self.decay_multiplier), len(signal_wave) - processed_samples)
+                signal_wave[processed_samples:processed_samples + fade_samples] *= self.decay_multiplier[:fade_samples]
+                processed_samples += fade_samples
+                # Keep the rest for next render
+                self.decay_multiplier = self.decay_multiplier[fade_samples:]
+                
+                # If decay is complete, move to sustain phase
+                if len(self.decay_multiplier) == 0:
+                    self.is_in_sustain_phase = True
+        elif self.is_in_decay_phase and not self.is_in_release_phase:
+            # No decay time or decay complete, move to sustain
+            self.is_in_sustain_phase = True
+        
+        # Apply sustain level to remaining unprocessed samples
+        if self.is_in_sustain_phase and not self.is_in_release_phase and processed_samples < len(signal_wave):
+            signal_wave[processed_samples:] *= self.model.sustain
         
         # Apply release envelope
         release_len = int(self.model.release * SAMPLE_RATE)
         if release_len > 0 and self.is_in_release_phase:
             if self.fade_out_multiplier is None and self.release_started:
-                # Create the release envelope
+                # Create the release envelope (sustain level to 0)
                 if OSC_ENVELOPE_TYPE == "linear":
-                    self.fade_out_multiplier = np.linspace(1, 0, release_len)
+                    self.fade_out_multiplier = np.linspace(self.model.sustain, 0, release_len)
                 else:
-                    self.fade_out_multiplier = np.exp(-np.linspace(0, 5, release_len))
+                    # Exponential release from sustain level to 0
+                    release_curve = np.exp(-np.linspace(0, 5, release_len))
+                    self.fade_out_multiplier = self.model.sustain * release_curve
                 self.release_started = False
             
             # Apply fade out to the current chunk
