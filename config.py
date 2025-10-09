@@ -18,5 +18,6 @@ DO_PLAY_IN_REAL_TIME = True
 # Visualisation settings
 DO_VISUALISE_OUTPUT = True
 DO_ONLY_VISUALISE_ONE_BUFFER = False
+VISUALISATION_FPS = 25  # Lower FPS reduces CPU usage and audio interference
 
 DISABLE_GARBAGE_COLLECTION = False

@@ -62,12 +62,16 @@ def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_l
 
     full_visualisation_height = 2 * (VISUALISATION_ROW_HEIGHT // 2)
 
+    # Build entire visualization as a single string buffer to minimize print calls
+    output_buffer = ""
+
     if replace_previous and has_printed_visualisation:
-        # Clear the terminal
+        # Move cursor up and clear lines - these need to be done without newlines
         for _ in range(full_visualisation_height + extra_lines):
-            print("\033[1A", end="\x1b[2K")
+            output_buffer += "\033[1A\x1b[2K"
 
     # Create a histogram-like visualization (floor the height to make sure we have an even number of rows)
+    visualization_lines = []
     for i in range(full_visualisation_height):
         line = ""
         for (minVal, maxVal) in grouped_wave:
@@ -99,7 +103,13 @@ def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_l
                     line += "\033[31m█\033[0m" # Red
                 else:
                     line += "█"
-        print(line)
+        visualization_lines.append(line)
+    
+    # Append the visualization lines with newlines
+    output_buffer += '\n'.join(visualization_lines)
+
+    # Single print call with all content - efficient and preserves cursor positioning
+    print(output_buffer, flush=True)
 
     has_printed_visualisation = True
 
