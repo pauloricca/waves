@@ -71,8 +71,13 @@ class OscillatorNode(BaseNode):
         self.fase_in_multiplier: np.ndarray = None
         self.fase_out_multiplier: np.ndarray = None
 
-    def render(self, num_samples, **params):
+    def render(self, num_samples=None, **params):
         super().render(num_samples)
+        
+        # Resolve num_samples from duration if None
+        num_samples = self.resolve_num_samples(num_samples)
+        if num_samples is None:
+            raise ValueError("Cannot render full signal: oscillator has no duration specified")
         
         # Store original num_samples to check if we need to truncate params
         original_num_samples = num_samples

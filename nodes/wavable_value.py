@@ -33,22 +33,36 @@ class WavableValueNode(BaseNode):
         self.wave_node = instantiate_node(model.value) if isinstance(model.value, BaseNodeModel) else None
         self.interpolated_values = None
 
-    def render(self, num_samples, **params):
+    def render(self, num_samples=None, **params):
         from nodes.oscillator import OSCILLATOR_RENDER_ARGS
         super().render(num_samples)
 
         if self.wave_node:
-            wave = self.wave_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
-            # If the wave node returns fewer samples than requested, pad with the last value
-            if len(wave) > 0 and len(wave) < num_samples:
-                last_value = wave[-1] if len(wave) > 0 else 0
-                padding = np.full(num_samples - len(wave), last_value)
-                wave = np.concatenate([wave, padding])
-            # Only propagate empty if we have no previous value to use
-            elif len(wave) == 0:
-                return np.array([], dtype=np.float32)
-            return wave
+            # If num_samples is None, pass it through to child
+            if num_samples is None:
+                wave = self.wave_node.render(**self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+                if len(wave) > 0:
+                    self._last_chunk_samples = len(wave)
+                return wave
+            else:
+                wave = self.wave_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+                # If the wave node returns fewer samples than requested, pad with the last value
+                if len(wave) > 0 and len(wave) < num_samples:
+                    last_value = wave[-1] if len(wave) > 0 else 0
+                    padding = np.full(num_samples - len(wave), last_value)
+                    wave = np.concatenate([wave, padding])
+                # Only propagate empty if we have no previous value to use
+                elif len(wave) == 0:
+                    return np.array([], dtype=np.float32)
+                return wave
         elif isinstance(self.value, (float, int)):
+            if num_samples is None:
+                # For scalar values, we need a duration to know how many samples to generate
+                duration = params.get(RenderArgs.DURATION, 0)
+                if duration == 0:
+                    raise ValueError("Duration must be set for scalar wavable values when rendering full signal.")
+                num_samples = int(duration * SAMPLE_RATE)
+                self._last_chunk_samples = num_samples
             return np.full(num_samples, self.value)
         if isinstance(self.value, list):
             duration = params.get(RenderArgs.DURATION, 0)
@@ -58,6 +72,11 @@ class WavableValueNode(BaseNode):
             
             if self.interpolated_values is None or len(self.interpolated_values) != int(duration * SAMPLE_RATE):
                 self.interpolated_values = interpolate_values(self.value, int(duration * SAMPLE_RATE), self.interpolation_type)
+
+            if num_samples is None:
+                # Return the entire interpolated values
+                self._last_chunk_samples = len(self.interpolated_values)
+                return self.interpolated_values.copy()
 
             interpolated_values_section = self.interpolated_values[self.number_of_chunks_rendered: self.number_of_chunks_rendered + num_samples]
 

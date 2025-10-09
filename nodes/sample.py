@@ -28,8 +28,31 @@ class SampleNode(BaseNode):
         self.speed_node = wavable_value_node_factory(model.speed)
         self.last_playhead_position = 0
 
-    def render(self, num_samples, **params):
+    def render(self, num_samples=None, **params):
         super().render(num_samples)
+        
+        # If num_samples is None, render the entire sample
+        if num_samples is None:
+            num_samples = self.resolve_num_samples(num_samples)
+            if num_samples is None:
+                # Calculate the full length of the sample based on start/end
+                start = int(self.model.start * len(self.audio))
+                end = int(self.model.end * len(self.audio))
+                end = min(end, len(self.audio))
+                start = max(start, 0)
+                sample_length = end - start
+                
+                if sample_length <= 0:
+                    return np.array([])
+                
+                # For non-looping samples, length is just the sample length
+                # For looping samples, we need a duration to be specified
+                if not self.model.loop:
+                    num_samples = sample_length
+                    self._last_chunk_samples = num_samples
+                else:
+                    raise ValueError("Cannot render full signal: looping sample has no duration specified")
+        
         start = int(self.model.start * len(self.audio))
         end = int(self.model.end * len(self.audio))
         end = min(end, len(self.audio))

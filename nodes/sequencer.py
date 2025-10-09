@@ -18,8 +18,6 @@ class SequencerModel(BaseNodeModel):
     sequence: Optional[List[Union[BaseNodeModel, str, List[Union[str, BaseNodeModel]], None]]] = None
     chain: Optional[List[str]] = None
 
-    # No __init__ needed - duration stays None if not provided, and playback will stop when sequencer returns empty array
-
 
 class SequencerNode(BaseNode):
     def __init__(self, model: SequencerModel):
@@ -85,9 +83,41 @@ class SequencerNode(BaseNode):
                     sound_nodes_data.append((sound_node, {}, sound_duration, 0, step_index))
         
         return sound_nodes_data
+    
+    def _calculate_total_samples(self):
+        """Calculate total number of samples for the entire sequence"""
+        sequence = self.sequence or self.chain
+        if not sequence:
+            return 0
+        
+        total_sequence_duration = 0
+        for item in sequence:
+            if isinstance(item, str):
+                # String items don't have duration, use default
+                total_sequence_duration += 1.0
+            elif isinstance(item, dict):
+                total_sequence_duration += item.get('duration', 1.0)
+            elif isinstance(item, list):
+                # List items (like [lead f80, thump a0.2]) use default duration
+                total_sequence_duration += 1.0
+            else:
+                total_sequence_duration += 1.0
+        
+        total_duration = total_sequence_duration * self.repeat
+        return int(total_duration * SAMPLE_RATE)
 
-    def render(self, num_samples, **params):
+    def render(self, num_samples=None, **params):
         super().render(num_samples)
+        
+        # If num_samples is None, render the entire sequence
+        if num_samples is None:
+            num_samples = self.resolve_num_samples(num_samples)
+            if num_samples is None:
+                # Calculate total duration based on sequence and repeat
+                num_samples = self._calculate_total_samples()
+                if num_samples == 0:
+                    return np.array([])
+                self._last_chunk_samples = num_samples
         
         sequence = self.sequence or self.chain
         if not sequence:

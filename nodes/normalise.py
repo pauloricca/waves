@@ -41,14 +41,31 @@ class NormaliseNode(BaseNode):
             self.min = wavable_value_node_factory(self.model.min or -1)
             self.max = wavable_value_node_factory(self.model.max or 1)
 
-    def render(self, num_samples, **params):
+    def render(self, num_samples=None, **params):
         super().render(num_samples)
+        
+        # If num_samples is None, get the full child signal
+        if num_samples is None:
+            num_samples = self.resolve_num_samples(num_samples)
+            if num_samples is None:
+                # For normalise nodes, we need the full child signal to calculate proper normalization
+                signal_wave = self.render_full_child_signal(self.signal_node, **self.get_params_for_children(params))
+                if len(signal_wave) == 0:
+                    return np.array([])
+                
+                num_samples = len(signal_wave)
+                return self._apply_normalization(signal_wave, num_samples, params)
+        
         signal_wave = self.signal_node.render(num_samples, **self.get_params_for_children(params))
         
         # If signal is done, we're done
         if len(signal_wave) == 0:
             return np.array([], dtype=np.float32)
         
+        return self._apply_normalization(signal_wave, num_samples, params)
+    
+    def _apply_normalization(self, signal_wave, num_samples, params):
+        """Apply normalization to the signal wave"""
         min_wave = self.min.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
         max_wave = self.max.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
         

@@ -6,7 +6,7 @@ from nodes.normalise import NORMALISE_DEFINITION
 from nodes.oscillator import OSCILLATOR_DEFINITION
 from nodes.sample import SAMPLE_DEFINITION
 from nodes.sequencer import SEQUENCER_DEFINITION
-from nodes.non_real_time.shuffle import SHUFFLE_DEFINITION
+from nodes.shuffle import SHUFFLE_DEFINITION
 from nodes.smooth import SMOOTH_DEFINITION
 
 NODE_REGISTRY = [

@@ -20,6 +20,8 @@ A Node has a render method which takes in a number of samples to render and a se
 
 The render method is called multiple times (potentially in real time) to generate the final output wave. Each time it is called, it generates a chunk of samples (the size of which is defined by the num_samples parameter). We should take this into consideration when writing its implementation, we should take measures to ensure that this method is efficient and does not introduce artifacts in the output wave, for example as a result of value jumps between one chunk and the next. We might need to keep some internal state (or sometimes a buffer) in the node to ensure continuity between chunks.
 
+The number of samples is optional. If not provided, the node should render the whole wave at once. This is useful for non-realtime rendering, where we want to generate the whole sound in one go.
+
 ### Waves
 
 Waves can be used as audio or as input for parameters of other nodes. In this sense, there is no destinction between audio and control (like in modular synths), they are all just waves. The objective is to create a unified representation of all types of signals and make the system very flexible.

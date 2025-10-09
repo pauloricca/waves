@@ -218,7 +218,7 @@ part-a-shuffled:
 paulo2:
   shuffle:
     seed: 7
-    chunks: 4
+    chunks: 12
     signal:
       sample:
         file: samples/paulo.wav
