@@ -25,12 +25,18 @@ class DelayNode(BaseNode):
     def render(self, num_samples, **params):
         super().render(num_samples)
         signal_wave = self.signal_node.render(num_samples, **self.get_params_for_children(params))
+        
+        # If signal is done and we have no carry over, we're done
+        if len(signal_wave) == 0 and len(self.carry_over) == 0:
+            return np.array([], dtype=np.float32)
+        
         n_delay_time_samples = int(SAMPLE_RATE * self.model.time)
         delayed_wave = np.zeros(len(signal_wave) + n_delay_time_samples * self.model.repeats)
 
-        # Add delays
-        for i in range(self.model.repeats):
-            delayed_wave[i * n_delay_time_samples : i * n_delay_time_samples + len(signal_wave)] += signal_wave * (self.model.feedback ** i)
+        # Add delays (only if we have signal)
+        if len(signal_wave) > 0:
+            for i in range(self.model.repeats):
+                delayed_wave[i * n_delay_time_samples : i * n_delay_time_samples + len(signal_wave)] += signal_wave * (self.model.feedback ** i)
         
         # Add carry over from previous render
         if len(self.carry_over) > 0:

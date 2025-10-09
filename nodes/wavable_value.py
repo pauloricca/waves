@@ -38,7 +38,16 @@ class WavableValueNode(BaseNode):
         super().render(num_samples)
 
         if self.wave_node:
-            return self.wave_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+            wave = self.wave_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+            # If the wave node returns fewer samples than requested, pad with the last value
+            if len(wave) > 0 and len(wave) < num_samples:
+                last_value = wave[-1] if len(wave) > 0 else 0
+                padding = np.full(num_samples - len(wave), last_value)
+                wave = np.concatenate([wave, padding])
+            # Only propagate empty if we have no previous value to use
+            elif len(wave) == 0:
+                return np.array([], dtype=np.float32)
+            return wave
         elif isinstance(self.value, (float, int)):
             return np.full(num_samples, self.value)
         if isinstance(self.value, list):

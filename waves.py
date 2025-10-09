@@ -42,6 +42,13 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float):
 
         clipped_audio_data = np.clip(audio_data, -1.0, 1.0)
 
+        # If we got fewer samples than requested, pad with zeros or stop
+        if len(clipped_audio_data) < frames:
+            # This is the last chunk - pad with zeros and then stop
+            padding = np.zeros(frames - len(clipped_audio_data))
+            clipped_audio_data = np.concatenate([clipped_audio_data, padding])
+            should_stop = True
+
         outdata[:] = clipped_audio_data.reshape(-1, 1)
 
         rendering_end_time = time.time()
@@ -60,7 +67,8 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float):
 
     with sd.OutputStream(callback=audio_callback, blocksize=BUFFER_SIZE, samplerate=SAMPLE_RATE, channels=1): #, latency='low'
         while not should_stop:
-            if time.time() - start_time > duration_in_seconds:
+            # Only stop based on duration if one is specified
+            if duration_in_seconds and time.time() - start_time > duration_in_seconds:
                 should_stop = True
             time.sleep(0.1)
 
@@ -79,11 +87,15 @@ def main():
     sound_model_to_play = get_sound_model(sound_name_to_play)
     sound_node_to_play = instantiate_node(sound_model_to_play)
 
-    sound_duration = look_for_duration(sound_model_to_play) or 1
+    sound_duration = look_for_duration(sound_model_to_play)
 
     if DO_PLAY_IN_REAL_TIME:
         play_in_real_time(sound_node_to_play, sound_duration)
     else:
+        # Non-realtime mode requires a duration
+        if not sound_duration:
+            sound_duration = DEFAULT_PLAYBACK_TIME  # Fallback for nodes without explicit duration
+            
         rendering_start_time = time.time()
         
         if DO_PRE_RENDER_WHOLE_SOUND:

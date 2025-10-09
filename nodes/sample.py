@@ -51,12 +51,27 @@ class SampleNode(BaseNode):
         # Integrate speed to get playhead position
         playhead = self.last_playhead_position + np.cumsum(abs_speed * sign * dt * SAMPLE_RATE)
         
-        if self.model.loop:
+        # Check if we've reached the end (only if not looping)
+        if not self.model.loop:
+            # Check if playhead has gone past the end of the sample
+            if self.last_playhead_position >= base_len - 1:
+                # We're done
+                return np.array([], dtype=np.float32)
+            
+            # Check if playhead exceeds end during this chunk
+            playhead = np.clip(playhead, 0, base_len - 1)
+            # Find where playhead reaches the end
+            end_indices = np.where(playhead >= base_len - 1)[0]
+            if len(end_indices) > 0:
+                # Return only up to the end
+                truncate_at = end_indices[0] + 1
+                playhead = playhead[:truncate_at]
+                num_samples = truncate_at
+        else:
             playhead = np.mod(playhead, base_len)
-
-        # Negative values need to be adjusted to proper position in loop
-        playhead = np.where(playhead < 0, playhead + base_len, playhead)
-        playhead = np.clip(playhead, 0, base_len - 1)
+            # Negative values need to be adjusted to proper position in loop
+            playhead = np.where(playhead < 0, playhead + base_len, playhead)
+            playhead = np.clip(playhead, 0, base_len - 1)
     
         wave = np.interp(playhead, np.arange(base_len), wave)
 

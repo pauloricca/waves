@@ -21,6 +21,11 @@ class SmoothNode(BaseNode):
     def render(self, num_samples, **params):
         super().render(num_samples)
         signal_wave = self.signal_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+        
+        # If signal is done, we're done
+        if len(signal_wave) == 0:
+            return np.array([], dtype=np.float32)
+        
         smoothed_wave = np.copy(signal_wave)
         for i in range(1, len(smoothed_wave)):
             diff = smoothed_wave[i] - smoothed_wave[i - 1]

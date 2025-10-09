@@ -73,9 +73,36 @@ class OscillatorNode(BaseNode):
 
     def render(self, num_samples, **params):
         super().render(num_samples)
+        
+        # Store original num_samples to check if we need to truncate params
+        original_num_samples = num_samples
+        
+        # Check if we've reached the end of our duration
+        if self.duration is not None:
+            total_duration_samples = int(self.duration * SAMPLE_RATE)
+            if self.number_of_chunks_rendered >= total_duration_samples:
+                # We're done, return empty array
+                return np.array([], dtype=np.float32)
+            
+            # Check if this chunk will exceed duration
+            samples_remaining = total_duration_samples - self.number_of_chunks_rendered
+            if samples_remaining < num_samples:
+                # This is the last chunk, render only what's needed
+                num_samples = samples_remaining
+        
         frequency_multiplier, amplitude_multiplier, frequency_override, params_for_children = self.consume_params(
             params, {RenderArgs.FREQUENCY_MULTIPLIER: 1, RenderArgs.AMPLITUDE_MULTIPLIER: 1, RenderArgs.FREQUENCY: None})
 
+        # If we adjusted num_samples, we need to truncate any array parameters
+        if num_samples < original_num_samples:
+            if isinstance(frequency_multiplier, np.ndarray):
+                frequency_multiplier = frequency_multiplier[:num_samples]
+            if isinstance(amplitude_multiplier, np.ndarray):
+                amplitude_multiplier = amplitude_multiplier[:num_samples]
+            if isinstance(frequency_override, np.ndarray):
+                frequency_override = frequency_override[:num_samples]
+        
+        # These need to be calculated AFTER num_samples is potentially adjusted
         chunk_duration_seconds = num_samples / SAMPLE_RATE
         t = np.linspace(0, chunk_duration_seconds, num_samples, endpoint=False)
 
@@ -159,20 +186,12 @@ class OscillatorNode(BaseNode):
         if len(self.partials) > 0:
             partials_args = {RenderArgs.FREQUENCY_MULTIPLIER: frequency, RenderArgs.AMPLITUDE_MULTIPLIER: amplitude}
             for partial in self.partials:
-                partial_wave = partial.render(num_samples, **partials_args, **params_for_children)
+                # Pass params_for_children first, then partials_args to override with our local values
+                partial_wave = partial.render(num_samples, **params_for_children, **partials_args)
                 total_wave = add_waves(total_wave, partial_wave)
 
 
         attack_number_of_samples = int(self.model.attack * SAMPLE_RATE)
-        
-        # Apply envelope
-        # TODO: Implement release time
-        # if release_time > 0:
-        #     if OSC_ENVELOPE_TYPE == "linear":
-        #         fade_out = np.linspace(1, 0, int(SAMPLE_RATE * release_time))
-        #     else:
-        #         fade_out = np.exp(-np.linspace(0, 5, int(SAMPLE_RATE * release_time)))
-        #     total_wave[-len(fade_out) :] *= fade_out
 
         if attack_number_of_samples > 0:
             if self.fase_in_multiplier is None:

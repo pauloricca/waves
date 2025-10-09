@@ -18,11 +18,7 @@ class SequencerModel(BaseNodeModel):
     sequence: Optional[List[Union[BaseNodeModel, str, List[Union[str, BaseNodeModel]], None]]] = None
     chain: Optional[List[str]] = None
 
-    def __init__(self, *args, **params):
-        super().__init__(*args, **params)
-        # Only auto-calculate duration if not explicitly provided
-        if self.duration is None:
-            self.duration = self.interval * (len(self.sequence) + 1) if self.sequence else 0
+    # No __init__ needed - duration stays None if not provided, and playback will stop when sequencer returns empty array
 
 
 class SequencerNode(BaseNode):
@@ -108,15 +104,28 @@ class SequencerNode(BaseNode):
             # If sequence is complete but we still have active sounds, render them
             if self.sequence_complete:
                 if len(self.all_active_sounds) == 0:
-                    # No more sounds to render, we're done
-                    break
+                    # No more sounds to render, we're done - return what we have so far
+                    # If we haven't written anything yet, return empty array
+                    if samples_written == 0:
+                        return np.array([], dtype=np.float32)
+                    # Otherwise return the partial buffer we've filled
+                    return output_wave[:samples_written]
                 # Continue to render active sounds below
             
             # Check if we've completed the sequence (but haven't finished all repeats)
             elif self.current_step >= len(sequence):
                 # We've finished the sequence steps
-                # Move to next repeat with interval gap
-                if self.time_in_current_step >= self.interval:
+                # If we have no active sounds, we can advance immediately
+                if len(self.all_active_sounds) == 0:
+                    self.current_repeat += 1
+                    self.current_step = 0
+                    self.time_in_current_step = 0
+                    self.step_triggered = set()
+                    if self.current_repeat >= self.repeat:
+                        self.sequence_complete = True
+                        continue
+                # Move to next repeat with interval gap (only if we have active sounds)
+                elif self.time_in_current_step >= self.interval:
                     self.current_repeat += 1
                     self.current_step = 0
                     self.time_in_current_step = 0
@@ -190,10 +199,16 @@ class SequencerNode(BaseNode):
                 # Render from current position
                 sound_chunk = sound_node.render(samples_to_render_from_sound, **merged_params)
                 
-                # If the sound returns empty/zero array, it's done - mark for removal
-                if len(sound_chunk) == 0 or np.all(sound_chunk == 0):
+                # If the sound returns empty array, it's done - mark for removal
+                if len(sound_chunk) == 0:
                     sounds_to_remove.append(i)
                     continue
+                
+                # If the sound returns fewer samples than we asked for, it's finishing
+                # Update counter and mark for removal if we've caught up
+                if len(sound_chunk) < samples_to_render_from_sound:
+                    # Sound is finishing - this is the last chunk from it
+                    sounds_to_remove.append(i)
                 
                 # Update samples rendered counter
                 self.all_active_sounds[i] = (sound_node, render_args, sound_duration, samples_rendered_so_far + len(sound_chunk), step_idx)

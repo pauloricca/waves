@@ -28,11 +28,13 @@ seq2:
 
 
 continuous:
-      osc:
-        type: tri
-        duration: 4
-        amp: 5
-        freq: [200, 600, 200]
+  osc:
+    type: tri
+    duration: 4
+    amp: 5
+    attack: 0.2
+    release: 1
+    freq: 200
 
 
 continuous-partial:
@@ -201,24 +203,31 @@ shaker:
     # overlap: 0.5
     file: samples/shaker.wav
 
+part-a-shuffled:
+  sequencer:
+    sequence:
+      - [lead f80, thump a0.2]
+      - shuffle:
+          seed: 7
+          chunks: 32
+          signal:
+            sequencer:
+              sequence:
+                - part-a
 
-paulo-sample:
-  normalise:
-    source_max: 1
+paulo2:
+  shuffle:
+    seed: 7
+    chunks: 4
     signal:
       sample:
-        duration: 8
-        start: 0.354
-        speed: [-0.2, 0.2, 0.1]
-        end: 0.5
-        loop: true
-        overlap: 0.5
         file: samples/paulo.wav
 
 
 paulo:
   normalise:
     max: 0.8
+    source_max: 0.5
     signal:
       envelope:
         attack: 0.04
