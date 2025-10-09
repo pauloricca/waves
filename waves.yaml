@@ -1052,3 +1052,56 @@ main-sequence:
       - part-f
       - part-g
       - part-h
+
+# MIDI Example - Play sounds via MIDI input
+midi-test:
+  midi:
+    channel: 0  # MIDI channel (0-15)
+    signal:
+      osc:
+        type: SIN
+        duration: 1.0
+        amp: 0.5
+        attack: 0.01
+        release: 0.3
+
+# MIDI with more complex sound
+midi-synth:
+  midi:
+    channel: 0
+    signal:
+      osc:
+        amp: 1
+        duration: 1
+        attack: 0.2
+        release: 0.8
+        partials:
+          - osc:
+              amp: 0.4
+              duration: 0.01
+              partials:
+                - osc:
+                    freq: 2
+                    amp: 0.5
+                    attack: 0.2
+                - osc:
+                    freq: 2.2
+                    amp: 0.5
+                    attack: 0.2
+                - osc:
+                    freq: 2.3
+                    amp: 0.5
+                    attack: 0.2
+                - osc:
+                    freq: 5
+                    amp: 0.5
+                    attack: 0.2
+          - osc:
+              freq: 1.5
+              amp: 0.5
+              attack: 0.2
+          - osc:
+              freq: 2
+              amp: 0.5
+              attack: 0.2
+

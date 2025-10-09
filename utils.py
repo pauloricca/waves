@@ -107,9 +107,16 @@ def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_l
 def look_for_duration(model: BaseNodeModel):
         """
         Recursively looks for the duration attribute in the model or its attributes.
+        Returns None if no finite duration is found (e.g., for infinite-running nodes).
         """
+        import math
+        
         if hasattr(model, "duration") and model.duration is not None:
+            # If duration is infinite, treat it as None (no duration limit)
+            if math.isinf(model.duration):
+                return None
             return model.duration
+            
         for attr in model.__dict__.values():
             if isinstance(attr, BaseNodeModel):
                 duration = look_for_duration(attr)

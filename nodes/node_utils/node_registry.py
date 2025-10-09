@@ -2,6 +2,7 @@ from nodes.delay import DELAY_DEFINITION
 from nodes.non_real_time.envelope import ENVELOPE_DEFINITION
 from nodes.filter import FILTER_DEFINITION
 from nodes.deprecated.invert import INVERT_DEFINITION
+from nodes.midi import MIDI_DEFINITION
 from nodes.normalise import NORMALISE_DEFINITION
 from nodes.oscillator import OSCILLATOR_DEFINITION
 from nodes.sample import SAMPLE_DEFINITION
@@ -20,4 +21,5 @@ NODE_REGISTRY = [
     INVERT_DEFINITION,
     SAMPLE_DEFINITION,
     ENVELOPE_DEFINITION,
+    MIDI_DEFINITION,
 ]
