@@ -101,12 +101,6 @@ class MidiNode(BaseNode):
         # Create a new instance of the signal node for this note
         sound_node = instantiate_node(self.signal_model)
         
-        # Get the duration of the sound
-        sound_duration = look_for_duration(self.signal_model)
-        if sound_duration is None:
-            # If no duration specified, use a default (e.g., 2 seconds)
-            sound_duration = 2.0
-        
         # Setup render args with frequency
         render_args = {
             RenderArgs.FREQUENCY: frequency,
@@ -117,9 +111,8 @@ class MidiNode(BaseNode):
         self.active_notes[note_number] = {
             'node': sound_node,
             'render_args': render_args,
-            'duration': sound_duration,
-            'samples_rendered': 0,
-            'total_samples': int(sound_duration * SAMPLE_RATE)
+            'samples_rendered': 0,  # Track for potential future use
+            'is_in_sustain': True  # Note is being held
         }
         
         if MIDI_DEBUG:
@@ -127,12 +120,11 @@ class MidiNode(BaseNode):
     
     def _handle_note_off(self, note_number):
         """Handle MIDI note off event"""
-        # For now, we'll let notes play out naturally based on their duration
-        # In the future, we could implement envelope release here
+        # Mark the note as no longer in sustain, triggering release phase
         if note_number in self.active_notes:
+            self.active_notes[note_number]['is_in_sustain'] = False
             if MIDI_DEBUG:
-                print(f"Note OFF: {note_number} (will continue playing)")
-            # Could mark for release/fadeout here
+                print(f"Note OFF: {note_number} (starting release)")
     
     def render(self, num_samples=None, **params):
         super().render(num_samples)
@@ -157,37 +149,23 @@ class MidiNode(BaseNode):
         for note_number, note_data in self.active_notes.items():
             sound_node = note_data['node']
             render_args = note_data['render_args']
-            samples_rendered = note_data['samples_rendered']
-            total_samples = note_data['total_samples']
-            
-            # Check if this note has finished playing
-            if samples_rendered >= total_samples:
-                notes_to_remove.append(note_number)
-                continue
-            
-            # Calculate how many samples we can still render from this note
-            remaining_samples = total_samples - samples_rendered
-            samples_to_render = min(num_samples, remaining_samples)
-            
-            if samples_to_render <= 0:
-                notes_to_remove.append(note_number)
-                continue
+            is_in_sustain = note_data['is_in_sustain']
             
             # Merge render_args with params
             merged_params = self.get_params_for_children(params)
             merged_params.update(render_args)
             
+            # Add sustain state to params
+            merged_params[RenderArgs.IS_IN_SUSTAIN] = is_in_sustain
+            
             # Render the note
             try:
-                note_chunk = sound_node.render(samples_to_render, **merged_params)
+                note_chunk = sound_node.render(num_samples, **merged_params)
                 
-                # If the sound returns empty or too few samples, mark for removal
+                # If the sound returns empty, the note is finished (e.g., envelope release complete)
                 if len(note_chunk) == 0:
                     notes_to_remove.append(note_number)
                     continue
-                
-                if len(note_chunk) < samples_to_render:
-                    notes_to_remove.append(note_number)
                 
                 # Update samples rendered counter
                 note_data['samples_rendered'] += len(note_chunk)

@@ -1105,3 +1105,39 @@ midi-synth:
               amp: 0.5
               attack: 0.2
 
+# MIDI with more complex sound
+midi-env:
+  midi:
+    channel: 0
+    signal:
+      envelope:
+        attack: 0.2
+        release: 1
+        signal:
+          osc:
+            amp: 1
+            partials:
+              - osc:
+                  amp: 0.4
+                  duration: 0.2
+                  release: 0.2
+                  partials:
+                    - osc:
+                        freq: 2
+                        amp: 0.5
+                    - osc:
+                        freq: 2.2
+                        amp: 0.5
+                    - osc:
+                        freq: 2.3
+                        amp: 0.5
+                    - osc:
+                        freq: 5
+                        amp: 0.5
+              - osc:
+                  freq: 1.5
+                  amp: 0.5
+              - osc:
+                  freq: 2
+                  amp: 0.5
+

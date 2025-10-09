@@ -6,3 +6,4 @@ class RenderArgs(str, Enum):
     FREQUENCY_MULTIPLIER = "frequency_multiplier"
     AMPLITUDE_MULTIPLIER = "amplitude_multiplier"
     DURATION = "duration"
+    IS_IN_SUSTAIN = "is_in_sustain"

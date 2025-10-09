@@ -11,11 +11,9 @@ DEFAULT_PLAYBACK_TIME = 4  # seconds, for nodes without explicit duration
 WAIT_FOR_CHANGES_IN_WAVES_YAML = False
 
 # Playback settings
-DO_PLAY_IN_REAL_TIME = False
 DO_PRE_RENDER_WHOLE_SOUND = False
-
-# DO_PLAY_IN_REAL_TIME = True
-# DO_PRE_RENDER_WHOLE_SOUND = False
+DO_PLAY_IN_REAL_TIME = False
+DO_PLAY_IN_REAL_TIME = True
 
 # Visualisation settings
 DO_VISUALISE_OUTPUT = True
