@@ -1,14 +1,18 @@
 YAML_FILE = "waves.yaml"
 OUTPUT_DIR = "output"
-ENVELOPE_TYPE = "exponential"  # Options: "linear", "exponential"
+OSC_ENVELOPE_TYPE = "exponential"  # Options: "linear", "exponential"
 SAMPLE_RATE = 44100
-# BUFFER_SIZE = 512
 BUFFER_SIZE = 512
 VISUALISATION_ROW_HEIGHT = 10
-DIVIDE_BY = 1
-DO_FREQ_CLOUD = False
-DO_PLAY_IN_REAL_TIME = True
-PRE_RENDER_WHOLE_SOUND = False
+RENDERED_MASTER_GAIN = 1
 DO_NORMALISE_EACH_SOUND = False
+
+# Playback settings
+DO_PLAY_IN_REAL_TIME = False
+DO_PRE_RENDER_WHOLE_SOUND = False
+
+# Visualisation settings
 DO_VISUALISE_OUTPUT = True
+DO_ONLY_VISUALISE_ONE_BUFFER = False
+
 DISABLE_GARBAGE_COLLECTION = False

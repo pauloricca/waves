@@ -28,7 +28,6 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float):
         rendering_start_time = time.time()
 
         audio_data = sound_node.render(frames) 
-        clipped_audio_data = np.clip(audio_data, -1.0, 1.0)
 
         if len(audio_data) == 0:
             should_stop = True
@@ -37,6 +36,9 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float):
             raise sd.CallbackStop()
 
         visualised_wave_buffer.extend(audio_data)
+
+        clipped_audio_data = np.clip(audio_data, -1.0, 1.0)
+
         outdata[:] = clipped_audio_data.reshape(-1, 1)
 
         rendering_end_time = time.time()
@@ -74,19 +76,21 @@ def main():
     sound_model_to_play = get_sound_model(sound_name_to_play)
     sound_node_to_play = instantiate_node(sound_model_to_play)
 
+    sound_duration = look_for_duration(sound_model_to_play) or 1
+    sound_duration = 6
+
     if DO_PLAY_IN_REAL_TIME:
-        play_in_real_time(sound_node_to_play, 4)
+        play_in_real_time(sound_node_to_play, sound_duration)
     else:
         rendering_start_time = time.time()
-        total_render_length = 4
         
-        if PRE_RENDER_WHOLE_SOUND:
-            rendered_sound = sound_node_to_play.render(int(SAMPLE_RATE * (look_for_duration(sound_model_to_play) or 1)))
+        if DO_PRE_RENDER_WHOLE_SOUND:
+            rendered_sound = sound_node_to_play.render(int(SAMPLE_RATE * sound_duration))
         else:
             # Render in chunks
             rendered_sound: np.ndarray = []
             rendered_buffer: np.ndarray = None
-            while (rendered_buffer is None or len(rendered_buffer) != 0) and len(rendered_sound) < total_render_length * SAMPLE_RATE:
+            while (rendered_buffer is None or len(rendered_buffer) != 0) and len(rendered_sound) < sound_duration * SAMPLE_RATE:
                 rendered_buffer = sound_node_to_play.render(BUFFER_SIZE)
                 rendered_sound = np.concatenate((rendered_sound, rendered_buffer))
 
@@ -94,7 +98,7 @@ def main():
 
         # Normalize the combined wave
         peak = np.max(np.abs(rendered_sound))
-        rendered_sound /= DIVIDE_BY
+        rendered_sound *= RENDERED_MASTER_GAIN
 
         save(rendered_sound, f"{sound_name_to_play}.wav")
 

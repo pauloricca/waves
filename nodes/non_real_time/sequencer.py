@@ -31,6 +31,21 @@ class SequencerNode(BaseNode):
         self.chain = model.chain
         self.interval = model.interval
         self.repeat = model.repeat
+    
+    def instantiate_sound_node(self, sound_model: BaseNodeModel, sound_name_with_params, num_samples, **params):
+        from nodes.node_utils.instantiate_node import instantiate_node
+        parts = sound_name_with_params.split()
+        params = parts[1:] if len(parts) > 1 else []
+        
+        render_args = {}
+
+        for param in params:
+            if param.startswith("f"):
+                render_args[RenderArgs.FREQUENCY] = float(param[1:])
+            elif param.startswith("a"):
+                render_args[RenderArgs.AMPLITUDE_MULTIPLIER] = float(param[1:])
+        
+        return instantiate_node(sound_model)
 
     def render(self, num_samples, **params):
         super().render(num_samples)
@@ -47,23 +62,12 @@ class SequencerNode(BaseNode):
 
         for sounds_in_step in unique_sounds:
             if sounds_in_step and sounds_in_step not in generated_waves:
-                parts = sounds_in_step.split()
-                main_sound_name = parts[0]
-                params = parts[1:] if len(parts) > 1 else []
-                
+                main_sound_name = sounds_in_step.split()[0]
                 sound_model = get_sound_model(main_sound_name)
-
-                render_args = {}
-
-                for param in params:
-                    if param.startswith("f"):
-                        render_args[RenderArgs.FREQUENCY] = float(param[1:])
-                    elif param.startswith("a"):
-                        render_args[RenderArgs.AMPLITUDE_MULTIPLIER] = float(param[1:])
-                
-                sound_node = instantiate_node(sound_model)
+                sound_node = self.instantiate_sound_node(sound_model, sounds_in_step, num_samples, **params)
                 number_of_samples_to_render = int(SAMPLE_RATE * (look_for_duration(sound_model) or 1))
-                generated_waves[sounds_in_step] = sound_node.render(number_of_samples_to_render, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS), **render_args)
+                # We were adding **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS), to the below line, cheeck if this is still needed
+                generated_waves[sounds_in_step] = sound_node.render(number_of_samples_to_render, **params)
 
         # Create a combined wave based on the sequence
         combined_wave = np.array([], dtype=np.float32)

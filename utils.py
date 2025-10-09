@@ -37,7 +37,8 @@ has_printed_visualisation = False
 def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_lines = 0):
     global has_printed_visualisation
 
-    wave = wave[0:BUFFER_SIZE]
+    if DO_ONLY_VISUALISE_ONE_BUFFER:
+        wave = wave[0:BUFFER_SIZE]
 
     # Get terminal width
     visualisation_width = shutil.get_terminal_size().columns
@@ -83,7 +84,7 @@ def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_l
                 elif maxVal >= row_value - 3:
                     line += "▂"
                 else:
-                    line += " " 
+                    line += "▁" if i == (visualisation_height_resolution_halved / 4) - 1 else  " " 
             else:
                 row_value = (1 + i - VISUALISATION_ROW_HEIGHT // 2) * -4
                 if minVal >= row_value + 4:
@@ -103,7 +104,6 @@ def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_l
     has_printed_visualisation = True
 
 
-
 def look_for_duration(model: BaseNodeModel):
         """
         Recursively looks for the duration attribute in the model or its attributes.
@@ -117,3 +117,40 @@ def look_for_duration(model: BaseNodeModel):
                     return duration
         
         return None
+
+
+def add_waves(a: np.ndarray, b: np.ndarray, b_offset: int = 0) -> np.ndarray:
+    """
+    Adds two waves together, offsetting the second wave by b_offset, increasing the length of the first wave if necessary.
+    """
+    if b_offset < 0:
+        # For negative offsets, we need to pad the beginning of 'a' and adjust the offset for 'b'
+        a = np.pad(a, (-b_offset, 0), mode='constant')
+    elif b_offset > 0:
+        # For positive offsets, we pad the beginning of 'b' with zeros
+        b = np.pad(b, (b_offset, 0), mode='constant')
+    
+    if len(a) < len(b):
+        # If 'a' is shorter than 'b', we need to pad 'a' at the end
+        a = np.pad(a, (0, len(b) - len(a)), mode='constant')
+    elif len(a) > len(b):
+        # If 'a' is longer than 'b', we need to pad 'b' at the end
+        b = np.pad(b, (0, len(a) - len(b)), mode='constant')
+    
+    # Now we can safely add the two arrays
+    return np.add(a, b, out=a, casting='unsafe')
+
+
+def multiply_waves(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """
+    Multiplies two waves together, offsetting the second wave by b_offset, increasing the length of the first wave if necessary.
+    """
+    if len(a) < len(b):
+        # If 'a' is shorter than 'b', we need to pad 'a' at the end
+        a = np.pad(a, (0, len(b) - len(a)), mode='constant', constant_values=1)
+    elif len(a) > len(b):
+        # If 'a' is longer than 'b', we need to pad 'b' at the end
+        b = np.pad(b, (0, len(a) - len(b)), mode='constant', constant_values=1)
+    
+    # Now we can safely multiply the two arrays
+    return np.multiply(a, b, out=a, casting='unsafe')

@@ -1,3 +1,32 @@
+delayed:
+  delay:
+    time: 0.1
+    feedback: 0.5
+    repeats: 4
+    signal:
+      osc:
+        type: tri
+        duration: 0.2
+        amp: 1
+        freq: 400
+        attack: 0.005
+        release: 0.2
+
+
+seq2:
+  sequencer:
+    interval: 0.3
+    repeat: 40
+    sequence:
+      - delayed
+      -
+      -
+      -
+      -
+      -
+      -
+
+
 continuous:
       osc:
         type: tri
@@ -148,6 +177,42 @@ norm:
                   duration: 0.05
                   release: 0.8
                   type: sqr
+
+
+feedback:
+  sample:
+    duration: 6
+    start: 0.354
+    # end: 0.5
+    speed: [0.1, 0.05]
+    # speed: 1
+    loop: true
+    # overlap: 0.5
+    file: samples/feedback.wav
+
+shaker:
+  sample:
+    duration: 15
+    # start: 0.354
+    start: 0.06
+    # speed: [-0.2, 0.2, 0.1]
+    speed: 1
+    loop: true
+    # overlap: 0.5
+    file: samples/shaker.wav
+
+
+paulo-sample:
+  sample:
+    duration: 4
+    start: 0.354
+    # speed: [-0.2, 0.2, 0.1]
+    speed: -1
+    end: 0.5
+    loop: false
+    overlap: 0.5
+    file: samples/paulo.wav
+
 
 paulo:
   normalise:

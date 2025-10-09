@@ -4,6 +4,7 @@ import numpy as np
 from pydantic import ConfigDict
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
+from nodes.oscillator import OSCILLATOR_RENDER_ARGS
 
 class SmoothModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')

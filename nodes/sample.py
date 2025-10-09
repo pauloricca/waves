@@ -22,11 +22,11 @@ class SampleModel(BaseNodeModel):
 
 class SampleNode(BaseNode):
     def __init__(self, model: SampleModel):
-        from nodes.node_utils.instantiate_node import instantiate_node
         super().__init__(model)
         self.model = model
         self.audio = load_wav_file(model.file)
         self.speed_node = wavable_value_node_factory(model.speed)
+        self.last_playhead_position = 0
 
     def render(self, num_samples, **params):
         super().render(num_samples)
@@ -41,53 +41,28 @@ class SampleNode(BaseNode):
         base_len = len(wave)
 
         speed = self.speed_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
-        is_modulated = isinstance(speed, np.ndarray) and len(speed) > 1
 
-        if is_modulated:
-            # Use absolute speed for rate calculation but keep sign for direction
-            abs_speed = np.abs(speed)
-            abs_speed = np.maximum(abs_speed, 1e-6)  # avoid zero speed
-            sign = np.sign(speed)
-            dt = 1.0 / SAMPLE_RATE
-            
-            # Integrate speed to get playhead position
-            playhead = np.cumsum(abs_speed * sign * dt * SAMPLE_RATE)
-            
-            if self.model.loop:
-                # Handle both forward and backward looping
-                playhead = np.mod(playhead, base_len)
-                # Negative values need to be adjusted to proper position in loop
-                playhead = np.where(playhead < 0, playhead + base_len, playhead)
-            else:
-                # Clip to valid range for non-looping
-                playhead = np.clip(playhead, 0, base_len - 1)
-            
-            wave = np.interp(playhead, np.arange(base_len), wave)
-        else:
-            speed_value = float(speed[0]) if isinstance(speed, np.ndarray) else float(speed)
-            abs_speed = abs(speed_value)
-            
-            if abs_speed < 1e-6 or np.isnan(speed_value):
-                return np.zeros(num_samples)
-            
-            # For backward playback, reverse the calculation
-            if speed_value < 0:
-                indices = np.arange(0, num_samples * abs_speed, abs_speed)
-                indices = base_len - 1 - indices  # Start from end, move backward
-            else:
-                indices = np.arange(0, num_samples * abs_speed, abs_speed)
-            
-            if self.model.loop:
-                indices = np.mod(indices, base_len)
-            else:
-                if speed_value < 0:
-                    indices = indices[indices >= 0]  # Keep only valid negative direction indices
-                else:
-                    indices = indices[indices < base_len]  # Keep only valid positive direction indices
-                
-            wave = np.interp(indices, np.arange(base_len), wave)
+        # Use absolute speed for rate calculation but keep sign for direction
+        abs_speed = np.abs(speed)
+        abs_speed = np.maximum(abs_speed, 1e-6)  # avoid zero speed
+        sign = np.sign(speed)
+        dt = 1.0 / SAMPLE_RATE
+        
+        # Integrate speed to get playhead position
+        playhead = self.last_playhead_position + np.cumsum(abs_speed * sign * dt * SAMPLE_RATE)
+        
+        if self.model.loop:
+            playhead = np.mod(playhead, base_len)
 
-        return wave[:num_samples]
+        # Negative values need to be adjusted to proper position in loop
+        playhead = np.where(playhead < 0, playhead + base_len, playhead)
+        playhead = np.clip(playhead, 0, base_len - 1)
+    
+        wave = np.interp(playhead, np.arange(base_len), wave)
+
+        self.last_playhead_position = playhead[-1]
+
+        return wave
 
         # Uncomment the following lines if you want to implement looping with overlap, but this doesn't work with variable speed
         # if self.model.loop:

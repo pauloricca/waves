@@ -40,7 +40,7 @@ class WavableValueNode(BaseNode):
         if self.wave_node:
             return self.wave_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
         elif isinstance(self.value, (float, int)):
-            return np.array([self.value])
+            return np.full(num_samples, self.value)
         if isinstance(self.value, list):
             duration = params.get(RenderArgs.DURATION, 0)
 
@@ -50,7 +50,7 @@ class WavableValueNode(BaseNode):
             if self.interpolated_values is None or len(self.interpolated_values) != int(duration * SAMPLE_RATE):
                 self.interpolated_values = interpolate_values(self.value, int(duration * SAMPLE_RATE), self.interpolation_type)
 
-            interpolated_values_section = self.interpolated_values[int(self.time_since_start * SAMPLE_RATE): int(self.time_since_start * SAMPLE_RATE + num_samples)]
+            interpolated_values_section = self.interpolated_values[self.number_of_chunks_rendered: self.number_of_chunks_rendered + num_samples]
 
             if len(interpolated_values_section) < num_samples:
                 padding = np.full(num_samples - len(interpolated_values_section), self.interpolated_values[-1])
