@@ -41,18 +41,20 @@ class MidiCCNode(BaseNode):
         self.midi_manager = MidiInputManager()
     
     def _process_midi_messages(self):
-        """Process all pending MIDI messages and update current value"""
-        messages = self.midi_manager.get_messages()
+        """Check for updated MIDI CC value"""
+        # Get the latest CC value for this channel and CC number
+        cc_value = self.midi_manager.get_cc_value(self.channel, self.cc_number)
         
-        for message in messages:
-            # Only process CC messages for our channel and CC number
-            if (hasattr(message, 'channel') and message.channel == self.channel and
-                message.type == 'control_change' and message.control == self.cc_number):
-                # Normalize CC value (0-127) to (0.0-1.0)
-                self.current_normalized_value = message.value / 127.0
+        if cc_value is not None:
+            # Normalize CC value (0-127) to (0.0-1.0)
+            new_normalized_value = cc_value / 127.0
+            
+            # Only update and log if the value changed
+            if new_normalized_value != self.current_normalized_value:
+                self.current_normalized_value = new_normalized_value
                 if MIDI_DEBUG:
                     mapped_value = self.min_value + (self.current_normalized_value * (self.max_value - self.min_value))
-                    print(f"CC {self.cc_number} on channel {self.channel}: {message.value} -> {self.current_normalized_value:.3f} -> {mapped_value:.3f}")
+                    print(f"CC {self.cc_number} on channel {self.channel}: {cc_value} -> {self.current_normalized_value:.3f} -> {mapped_value:.3f}")
     
     def render(self, num_samples=None, **params):
         super().render(num_samples)
@@ -71,8 +73,12 @@ class MidiCCNode(BaseNode):
         # Map the normalized value (0-1) to the min-max range
         target_value = self.min_value + (self.current_normalized_value * (self.max_value - self.min_value))
         
-        # Create smooth interpolation from last value to target value
-        output_wave = np.linspace(self.last_output_value, target_value, num_samples, dtype=np.float32)
+        # When rendering a single sample, return the target value directly without smoothing
+        if num_samples == 1:
+            output_wave = np.array([target_value], dtype=np.float32)
+        else:
+            # Create smooth interpolation from last value to target value
+            output_wave = np.linspace(self.last_output_value, target_value, num_samples, dtype=np.float32)
         
         # Store the last value for the next chunk
         self.last_output_value = target_value

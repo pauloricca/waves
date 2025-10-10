@@ -34,6 +34,8 @@ class MidiInputManager:
         self._initialized = True
         self._midi_input = None
         self._midi_queue = queue.Queue()
+        # Store the latest CC value for each (channel, cc_number) pair
+        self._cc_values = {}  # Key: (channel, cc_number), Value: midi value (0-127)
         self._ensure_midi_input()
     
     def _ensure_midi_input(self):
@@ -102,16 +104,54 @@ class MidiInputManager:
     
     def _midi_callback(self, message):
         """Callback for MIDI messages (runs in MIDI thread)"""
+        # Store CC values in a dict for efficient lookup
+        if message.type == 'control_change':
+            key = (message.channel, message.control)
+            self._cc_values[key] = message.value
+        # Also put in queue for backwards compatibility with nodes that want all messages
         self._midi_queue.put(message)
     
-    def get_messages(self):
-        """Get all pending MIDI messages from the queue"""
+    def get_cc_value(self, channel, cc_number):
+        """Get the current value for a specific CC on a specific channel.
+        
+        Args:
+            channel: MIDI channel (0-15)
+            cc_number: CC number (0-127)
+            
+        Returns:
+            The current CC value (0-127) or None if no value has been received yet
+        """
+        key = (channel, cc_number)
+        return self._cc_values.get(key)
+    
+    def get_messages(self, channel=None, cc_number=None):
+        """Get all pending MIDI messages from the queue, optionally filtered by channel and CC number.
+        
+        This drains the queue, so messages are only retrieved once. For CC values, prefer using
+        get_cc_value() which provides the latest value without consuming messages.
+        
+        Args:
+            channel: Optional MIDI channel to filter (0-15)
+            cc_number: Optional CC number to filter (0-127)
+        """
         messages = []
+        
+        # Get all messages from the queue
         while not self._midi_queue.empty():
             try:
-                messages.append(self._midi_queue.get_nowait())
+                msg = self._midi_queue.get_nowait()
+                
+                # Filter messages if channel/CC specified
+                if channel is not None or cc_number is not None:
+                    if hasattr(msg, 'channel') and msg.type == 'control_change':
+                        if (channel is None or msg.channel == channel) and \
+                           (cc_number is None or msg.control == cc_number):
+                            messages.append(msg)
+                else:
+                    messages.append(msg)
             except queue.Empty:
                 break
+        
         return messages
     
     @property

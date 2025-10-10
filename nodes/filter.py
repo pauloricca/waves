@@ -18,11 +18,14 @@ class FilterTypes(str, Enum):
     LP = "LOWPASS"
     HPF = "HIGHPASS"
     LPF = "LOWPASS"
+    BPF = "BANDPASS"
+    BANDPASS = "BANDPASS"
+    BAND = "BANDPASS"
 
 class FilterModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     cutoff: WavableValue  # Cutoff frequency in Hz
-    peak: float = 0.0  # A value between -1 and 1 that translates to a 0.5 to 50 Q factor
+    peak: WavableValue = 0.0  # A value between -1 and 1 that translates to a 0.5 to 50 Q factor
     type: str = "lowpass"
     signal: BaseNodeModel = None
 
@@ -32,6 +35,7 @@ class FilterNode(BaseNode):
         super().__init__(model)
         self.model = model
         self.cutoff_node = wavable_value_node_factory(model.cutoff)
+        self.peak_node = wavable_value_node_factory(model.peak)
         self.signal_node = instantiate_node(model.signal)
         
         # Filter state variables for continuity between chunks
@@ -69,12 +73,16 @@ class FilterNode(BaseNode):
     def _apply_filter(self, signal_wave, num_samples, params):
         """Apply filter to the signal wave"""
         cutoff = self.cutoff_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+        
+        # Render only a single sample from peak to get current value
+        peak_wave = self.peak_node.render(1, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+        peak = peak_wave[0] if len(peak_wave) > 0 else 0.0
 
         if len(cutoff) == 1:
             cutoff = cutoff[0]
 
         filter_type = self.model.type.lower()
-        q = normalized_to_q(self.model.peak)
+        q = normalized_to_q(peak)
 
         if np.isscalar(cutoff):
             if filter_type == "lowpass":
@@ -105,12 +113,12 @@ class FilterNode(BaseNode):
             for i in range(len(signal_wave)):
                 fc = cutoff[i]
 
-                q_val = normalized_to_q(self.model.peak)
-
                 if filter_type == "lowpass":
-                    b, a = biquad_lowpass(fc, q_val, SAMPLE_RATE)
+                    b, a = biquad_lowpass(fc, q, SAMPLE_RATE)
                 elif filter_type == "highpass":
-                    b, a = biquad_highpass(fc, q_val, SAMPLE_RATE)
+                    b, a = biquad_highpass(fc, q, SAMPLE_RATE)
+                elif filter_type == "bandpass":
+                    b, a = biquad_bandpass(fc, q, SAMPLE_RATE)
                 else:
                     raise ValueError(f"Modulated filter type not supported: {filter_type}")
 
@@ -164,6 +172,20 @@ def biquad_highpass(fc: float, q: float, fs: float):
     b0 = (1 + cos_w0) / 2
     b1 = -(1 + cos_w0)
     b2 = (1 + cos_w0) / 2
+    a0 = 1 + alpha
+    a1 = -2 * cos_w0
+    a2 = 1 - alpha
+
+    return normalize_biquad(b0, b1, b2, a0, a1, a2)
+
+def biquad_bandpass(fc: float, q: float, fs: float):
+    w0 = 2 * np.pi * fc / fs
+    alpha = np.sin(w0) / (2 * q)
+
+    cos_w0 = np.cos(w0)
+    b0 = alpha
+    b1 = 0
+    b2 = -alpha
     a0 = 1 + alpha
     a1 = -2 * cos_w0
     a2 = 1 - alpha
