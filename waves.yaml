@@ -1248,54 +1248,65 @@ test-mix-varied:
           amp: 0.3
           duration: 1.5
 
-midi-cc-test:
+
+midi-cc-filter:
   filter:
     type: lowpass
     cutoff:
       midi_cc:
         channel: 0
-        cc: 16
+        cc: 17
         min: 0
         max: 20000
         initial: 1000
     peak:
       midi_cc:
         channel: 0
-        cc: 17
+        cc: 18
         min: 0
         max: 10
         initial: 0
     signal:
-      sample:
-        # base_freq: 2000
-        # duration: 4
-        # start: 0.354
-        start:
+      osc:
+        type: saw
+        freq: 
           midi_cc:
             channel: 0
-            cc: 18
-            min: 0
-            max: 1
+            cc: 16
+            min: 20
+            max: 2000
             initial: 0
-        end:
-          midi_cc:
-            channel: 0
-            cc: 19
-            min: 0
-            max: 1
-            initial: 1
-        # end: 0.5
-        # speed: [0.1, 0.05]
-        # speed: 1
-        loop: true
-        # overlap: 0.5
-        file: samples/paulo.wav
-      # osc:
-      #   type: saw
-      #   freq: 200
-      #   amp: 0.3
-      #   attack: 0.01
-      #   release: 0.3
+        amp: 0.3
+        attack: 0.01
+        release: 0.3
+
+
+midi-cc-sample:
+  sample:
+    start:
+      midi_cc:
+        channel: 0
+        cc: 16
+        min: 0
+        max: 1
+        initial: 0
+    end:
+      midi_cc:
+        channel: 0
+        cc: 17
+        min: 0
+        max: 1
+        initial: 1
+    speed:
+      midi_cc:
+        channel: 0
+        cc: 18
+        min: -10
+        max: 10
+        initial: 1
+    loop: true
+    # overlap: 0.5
+    file: samples/paulo.wav
 
 midi-cc-simple:
   osc:
@@ -1314,5 +1325,45 @@ midi-cc-simple:
                 max: 150
                 initial: 1000
     amp: 0.3
+
+
+sample-wavable-test:
+  sample:
+    file: samples/feedback.wav
+    duration: 3
+    start: [0.0, 0.5, 0.0]
+    end: [0.5, 1.0, 0.5]
+    speed: 1.0
+    loop: false
+
+
+sample-wavable-osc-test:
+  sample:
+    file: samples/feedback.wav
+    duration: 5
+    start:
+      osc:
+        type: sin
+        freq: 0.5
+        min: 0.0
+        max: 0.5
+    end:
+      osc:
+        type: sin
+        freq: 0.5
+        min: 0.5
+        max: 1.0
+    speed: 1.0
+    loop: false
+
+
+sample-wavable-loop-test:
+  sample:
+    file: samples/feedback.wav
+    duration: 4
+    start: [0.0, 0.3]
+    end: [0.7, 1.0]
+    speed: 1.0
+    loop: true
 
 

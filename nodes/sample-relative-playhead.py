@@ -73,10 +73,6 @@ class SampleNode(BaseNode):
         start_indices = np.clip(start_vals * len(self.audio), 0, len(self.audio) - 1).astype(int)
         end_indices = np.clip(end_vals * len(self.audio), 0, len(self.audio)).astype(int)
         
-        # Initialize playhead to start position on first render
-        if self.number_of_chunks_rendered == 0 and self.last_playhead_position == 0:
-            self.last_playhead_position = float(start_indices[0])
-        
         # Check if all start/end pairs are valid
         if np.any(end_indices <= start_indices):
             # For simplicity, when ranges are invalid, return zeros for those samples
@@ -124,56 +120,46 @@ class SampleNode(BaseNode):
         window_lengths = end_indices - start_indices
         window_lengths = np.maximum(window_lengths, 1)  # Ensure at least 1 sample
         
-        # Integrate speed to get absolute playhead position in the audio buffer
-        # The playhead moves through the actual audio buffer, not relative to the window
-        playhead_delta = abs_speed * sign * dt * SAMPLE_RATE
-        playhead_absolute = self.last_playhead_position + np.cumsum(playhead_delta)
+        # Integrate speed to get playhead position (in samples within the window)
+        playhead_relative = self.last_playhead_position + np.cumsum(abs_speed * sign * dt * SAMPLE_RATE)
         
+        # Check if we've reached the end (only if not looping)
         if not self.model.loop:
-            # Non-looping: find where we exceed the window bounds
-            outside_bounds = (playhead_absolute >= end_indices) | (playhead_absolute < start_indices)
-            if np.any(outside_bounds):
-                # Find first sample that's outside bounds
-                first_outside = np.where(outside_bounds)[0][0]
-                if first_outside == 0:
-                    # Already outside on first sample, we're done
-                    return np.array([], dtype=np.float32)
-                # Truncate to just before going outside
-                num_samples = first_outside
-                playhead_absolute = playhead_absolute[:num_samples]
-                start_indices = start_indices[:num_samples]
-                end_indices = end_indices[:num_samples]
+            # Check if playhead has gone past the end of the first window
+            if self.last_playhead_position >= window_lengths[0] - 1:
+                # We're done
+                return np.array([], dtype=np.float32)
             
-            audio_indices = playhead_absolute
+            # Check if playhead exceeds end during this chunk
+            # Since window_lengths can change, we need to check against each window
+            playhead_relative = np.minimum(playhead_relative, window_lengths - 1)
+            playhead_relative = np.maximum(playhead_relative, 0)
+            
+            # Find where playhead reaches the end of its respective window
+            end_idx = np.where(playhead_relative >= window_lengths - 1)[0]
+            if len(end_idx) > 0:
+                # Return only up to the end
+                truncate_at = end_idx[0] + 1
+                playhead_relative = playhead_relative[:truncate_at]
+                start_indices = start_indices[:truncate_at]
+                end_indices = end_indices[:truncate_at]
+                window_lengths = window_lengths[:truncate_at]
+                num_samples = truncate_at
         else:
-            # Looping: wrap around when outside the window
-            # Check which samples are outside their window
-            outside_high = playhead_absolute >= end_indices
-            outside_low = playhead_absolute < start_indices
-            outside = outside_high | outside_low
-            
-            if np.any(outside):
-                # For samples outside the window, wrap them back
-                # Calculate offset from start of window
-                offset_from_start = playhead_absolute - start_indices
-                # Wrap within window length
-                wrapped_offset = np.mod(offset_from_start, window_lengths)
-                # Update playhead for wrapped samples
-                playhead_absolute = np.where(outside, start_indices + wrapped_offset, playhead_absolute)
-            
-            audio_indices = playhead_absolute
+            # For looping, wrap playhead within each window
+            playhead_relative = np.mod(playhead_relative, window_lengths)
+            # Negative values need to be adjusted to proper position in loop
+            playhead_relative = np.where(playhead_relative < 0, playhead_relative + window_lengths, playhead_relative)
+            playhead_relative = np.clip(playhead_relative, 0, window_lengths - 1)
         
-        # Handle the case where we truncated early (non-looping)
-        if num_samples == 0:
-            return np.array([], dtype=np.float32)
-        
-        # Clip to valid audio buffer range
+        # Convert relative playhead positions to actual audio buffer indices
+        audio_indices = start_indices + playhead_relative
         audio_indices = np.clip(audio_indices, 0, len(self.audio) - 1)
         
         # Interpolate from the audio buffer
         wave = np.interp(audio_indices, np.arange(len(self.audio)), self.audio)
 
-        self.last_playhead_position = playhead_absolute[-1] if len(playhead_absolute) > 0 else self.last_playhead_position
+        self.last_playhead_position = playhead_relative[-1]
         self.total_samples_rendered += len(wave)
 
         return wave
