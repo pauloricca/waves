@@ -1248,17 +1248,23 @@ test-mix-varied:
           amp: 0.3
           duration: 1.5
 
-# Test MIDI CC node - use CC 1 (modulation wheel) to control filter cutoff
 midi-cc-test:
   filter:
     type: lowpass
     cutoff:
       midi_cc:
         channel: 0
-        cc: 16  # Modulation wheel
-        min: 200
-        max: 5000
+        cc: 16
+        min: 0
+        max: 20000
         initial: 1000
+    # peak:
+    #   midi_cc:
+    #     channel: 0
+    #     cc: 17
+    #     min: -1
+    #     max: 1
+    #     initial: 0
     signal:
       osc:
         type: saw
@@ -1267,7 +1273,6 @@ midi-cc-test:
         attack: 0.01
         release: 0.3
 
-# Simple test - just output the CC value directly as a tone
 midi-cc-simple:
   osc:
     type: sin

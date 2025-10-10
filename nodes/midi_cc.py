@@ -70,8 +70,6 @@ class MidiCCNode(BaseNode):
         
         # Return an array filled with the mapped value
         output_wave = np.full(num_samples, mapped_value, dtype=np.float32)
-
-        print(f"Mapped value: {output_wave[0]} {output_wave[10]} {output_wave[20]}")
         
         return output_wave
 

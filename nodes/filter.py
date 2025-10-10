@@ -33,6 +33,15 @@ class FilterNode(BaseNode):
         self.model = model
         self.cutoff_node = wavable_value_node_factory(model.cutoff)
         self.signal_node = instantiate_node(model.signal)
+        
+        # Filter state variables for continuity between chunks
+        self.x1 = 0.0
+        self.x2 = 0.0
+        self.y1 = 0.0
+        self.y2 = 0.0
+        
+        # State for scipy.signal.lfilter (used when cutoff is constant)
+        self.zi = None  # Filter initial conditions
 
     def render(self, num_samples=None, **params):
         super().render(num_samples)
@@ -77,12 +86,21 @@ class FilterNode(BaseNode):
                 b, a = scipy.signal.iirpeak(cutoff / nyq, Q=q)
             else:
                 raise ValueError(f"Unsupported filter type: {filter_type}")
-            return scipy.signal.lfilter(b, a, signal_wave)
+            
+            # Initialize filter state if needed
+            if self.zi is None:
+                self.zi = scipy.signal.lfilter_zi(b, a)
+            
+            # Apply filter with state
+            filtered, self.zi = scipy.signal.lfilter(b, a, signal_wave, zi=self.zi)
+            return filtered
         else:
             # Modulated cutoff with Q support
             out = np.zeros_like(signal_wave)
-            x1, x2 = 0.0, 0.0
-            y1, y2 = 0.0, 0.0
+            
+            # Use instance state variables for continuity between chunks
+            x1, x2 = self.x1, self.x2
+            y1, y2 = self.y1, self.y2
 
             for i in range(len(signal_wave)):
                 fc = cutoff[i]
@@ -103,6 +121,10 @@ class FilterNode(BaseNode):
                 out[i] = y0
                 x2, x1 = x1, x0
                 y2, y1 = y1, y0
+
+            # Store state for next chunk
+            self.x1, self.x2 = x1, x2
+            self.y1, self.y2 = y1, y2
 
             return out
 
