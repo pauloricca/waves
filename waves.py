@@ -68,8 +68,9 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float):
                     
                     if DO_VISUALISE_OUTPUT:
                         visualise_wave(np.array(visualised_wave_buffer), do_normalise=False, replace_previous=True, extra_lines=1)
-                        print(render_time_text, flush=True)
-                    else:
+                        if DISPLAY_RENDER_TIME_PERCENTAGE:
+                            print(render_time_text, flush=True)
+                    elif DISPLAY_RENDER_TIME_PERCENTAGE:
                         # Clear line and print stats only (no visualization)
                         print(f"\r{render_time_text}", end='', flush=True)
                 except Exception:
@@ -77,8 +78,9 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float):
                     pass
             time.sleep(1 / VISUALISATION_FPS)  # Configurable frame rate
 
-    vis_thread = threading.Thread(target=run_visualizer_and_stats, daemon=True)
-    vis_thread.start()
+    if (DISPLAY_RENDER_TIME_PERCENTAGE or DO_VISUALISE_OUTPUT):
+        vis_thread = threading.Thread(target=run_visualizer_and_stats, daemon=True)
+        vis_thread.start()
 
     with sd.OutputStream(callback=audio_callback, blocksize=BUFFER_SIZE, samplerate=SAMPLE_RATE, channels=1): #, latency='low'
         while not should_stop:

@@ -1117,51 +1117,58 @@ midi-env:
         signal:
           mix:
             signals:
-              - sample:
-                  duration: 0.7
-                  base_freq: 850
-                  start: 0.354
-                  # end: 0.5
-                  speed: [0.1, 0.05]
-                  # speed: 1
-                  loop: true
-                  # overlap: 0.5
-                  file: samples/feedback.wav
               - envelope:
                   attack: 0.1
                   decay: 0.1
                   sustain: 0.3
                   release: 1
                   signal:
-                    osc:
-                      amp: 1
-                      partials:
-                        - osc:
-                            amp: 
-                              osc:
-                                freq: 5
-                                amp: 0.3
-                            duration: 1
-                            release: 0.2
-                            partials:
-                              - osc:
-                                  freq: 2
-                                  amp: 0.5
-                              - osc:
-                                  freq: 2.2
-                                  amp: 0.5
-                              - osc:
-                                  freq: 2.3
-                                  amp: 0.4
-                              - osc:
-                                  freq: 5
-                                  amp: 0.1
-                        - osc:
-                            freq: 1.5
-                            amp: 0.5
-                        - osc:
-                            freq: 2
-                            amp: 0.2
+                    sample:
+                      # base_freq: 2000
+                      base_freq: 200
+                      # start: 0.354
+                      start: 0.4
+                      # end: 0.5
+                      # speed: [0.1, 0.05]
+                      # speed: 1
+                      loop: true
+                      # overlap: 0.5
+                      file: samples/paulo.wav
+              # - envelope:
+              #     attack: 0.1
+              #     decay: 0.1
+              #     sustain: 0.3
+              #     release: 1
+              #     signal:
+              #       osc:
+              #         amp: 1
+              #         partials:
+              #           - osc:
+              #               amp: 
+              #                 osc:
+              #                   freq: 5
+              #                   amp: 0.3
+              #               duration: 1
+              #               release: 0.2
+              #               partials:
+              #                 - osc:
+              #                     freq: 2
+              #                     amp: 0.5
+              #                 - osc:
+              #                     freq: 2.2
+              #                     amp: 0.5
+              #                 - osc:
+              #                     freq: 2.3
+              #                     amp: 0.4
+              #                 - osc:
+              #                     freq: 5
+              #                     amp: 0.1
+              #           - osc:
+              #               freq: 1.5
+              #               amp: 0.5
+              #           - osc:
+              #               freq: 2
+              #               amp: 0.2
 
 
 # Test mix node
