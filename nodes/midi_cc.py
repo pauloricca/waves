@@ -34,6 +34,9 @@ class MidiCCNode(BaseNode):
         else:
             self.current_normalized_value = 0.5
         
+        # Track the last output value for smooth interpolation
+        self.last_output_value = self.min_value + (self.current_normalized_value * (self.max_value - self.min_value))
+        
         # Get the shared MIDI input manager
         self.midi_manager = MidiInputManager()
     
@@ -66,10 +69,13 @@ class MidiCCNode(BaseNode):
         self._process_midi_messages()
         
         # Map the normalized value (0-1) to the min-max range
-        mapped_value = self.min_value + (self.current_normalized_value * (self.max_value - self.min_value))
+        target_value = self.min_value + (self.current_normalized_value * (self.max_value - self.min_value))
         
-        # Return an array filled with the mapped value
-        output_wave = np.full(num_samples, mapped_value, dtype=np.float32)
+        # Create smooth interpolation from last value to target value
+        output_wave = np.linspace(self.last_output_value, target_value, num_samples, dtype=np.float32)
+        
+        # Store the last value for the next chunk
+        self.last_output_value = target_value
         
         return output_wave
 
