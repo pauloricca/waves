@@ -87,3 +87,4 @@ The objective of having realtime playback is to be able to connect the system to
 ### Directives for AI
 
 - Avoid saying things like "this likely happens because ...", do further checks to confirm your hypothesis.
+- When possible we should avoid code repetition, for example if we are adding a new functionality or condition that is similar to an existing one, we should try to generalise the code to avoid repetition by for example creating a new function or class that encapsulates the common behaviour, and parameterising the differences.

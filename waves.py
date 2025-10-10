@@ -54,7 +54,7 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float):
         rendering_end_time = time.time()
         last_render_time = rendering_end_time - rendering_start_time
 
-    def run_visualizer():
+    def run_visualizer_and_stats():
         # Lower priority for visualization thread to avoid interfering with audio
         try:
             os.nice(10)  # Increase niceness (lower priority) on Unix systems
@@ -64,16 +64,21 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float):
         while not should_stop:
             if len(visualised_wave_buffer) > 0:
                 try:
-                    visualise_wave(np.array(visualised_wave_buffer), do_normalise=False, replace_previous=True, extra_lines=1)
-                    print(f"Render time: {100 * last_render_time / (BUFFER_SIZE / SAMPLE_RATE):.2f}%", flush=True)
+                    render_time_text = f"Render time: {100 * last_render_time / (BUFFER_SIZE / SAMPLE_RATE):.2f}%"
+                    
+                    if DO_VISUALISE_OUTPUT:
+                        visualise_wave(np.array(visualised_wave_buffer), do_normalise=False, replace_previous=True, extra_lines=1)
+                        print(render_time_text, flush=True)
+                    else:
+                        # Clear line and print stats only (no visualization)
+                        print(f"\r{render_time_text}", end='', flush=True)
                 except Exception:
                     # Silently ignore visualization errors to avoid breaking audio
                     pass
             time.sleep(1 / VISUALISATION_FPS)  # Configurable frame rate
 
-    if DO_VISUALISE_OUTPUT:
-        vis_thread = threading.Thread(target=run_visualizer, daemon=True)
-        vis_thread.start()
+    vis_thread = threading.Thread(target=run_visualizer_and_stats, daemon=True)
+    vis_thread.start()
 
     with sd.OutputStream(callback=audio_callback, blocksize=BUFFER_SIZE, samplerate=SAMPLE_RATE, channels=1): #, latency='low'
         while not should_stop:
