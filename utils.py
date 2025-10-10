@@ -23,13 +23,23 @@ def save(wave, filename):
     print(f"Saved {filename}")
 
 
+# Cache for loaded WAV files
+_wav_file_cache = {}
+
 def load_wav_file(filename):
+    # Check if file is already in cache
+    if filename in _wav_file_cache:
+        return _wav_file_cache[filename]
+    
     filepath = os.path.join(os.path.dirname(__file__), filename)
     sample_rate, data = wavfile.read(filepath)
     if data.ndim > 1:
         # If stereo, take only one channel
         data = data[:, 0]
     data = data.astype(np.float32) / 32767.0  # Normalize to [-1, 1]
+    
+    # Store in cache before returning
+    _wav_file_cache[filename] = data
     return data
 
 
