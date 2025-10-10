@@ -1123,25 +1123,30 @@ midi-env:
                   sustain: 0.3
                   release: 1
                   signal:
-                    sample:
-                      # base_freq: 2000
-                      base_freq: 200
-                      # start: 0.354
-                      start: 0.4
-                      # end: 0.5
-                      # speed: [0.1, 0.05]
-                      # speed: 1
-                      loop: true
-                      # overlap: 0.5
-                      file: samples/paulo.wav
+                    # shuffle:
+                    #   seed: 7
+                    #   chunks: 32
+                    #   signal:
+                        sample:
+                          # base_freq: 2000
+                          # duration: 4
+                          base_freq: 200
+                          # start: 0.354
+                          start: 0
+                          # end: 0.5
+                          # speed: [0.1, 0.05]
+                          # speed: 1
+                          loop: true
+                          # overlap: 0.5
+                          file: samples/paulo.wav
               # - envelope:
               #     attack: 0.1
-              #     decay: 0.1
-              #     sustain: 0.3
+              #     decay: 0.5
+              #     sustain: 0.2
               #     release: 1
               #     signal:
               #       osc:
-              #         amp: 1
+              #         amp: 0.15
               #         partials:
               #           - osc:
               #               amp: 
@@ -1169,6 +1174,39 @@ midi-env:
               #           - osc:
               #               freq: 2
               #               amp: 0.2
+
+
+
+# MIDI with more complex sound
+midi-fm:
+      midi:
+        channel: 0
+        signal:
+          envelope:
+            attack: 0.1
+            decay: 0.5
+            sustain: 0.8
+            release: 1
+            signal:
+              osc:
+                type: sin
+                freq: [1, 2]
+                  # normalise:
+                  #   max: 10
+                  #   signal:
+                  #     sample:
+                  #       # base_freq: 2000
+                  #       # duration: 4
+                  #       # base_freq: 200
+                  #       # start: 0.354
+                  #       start: 0.1
+                  #       # end: 0.5
+                  #       # speed: [0.1, 0.05]
+                  #       # speed: 1
+                  #       loop: true
+                  #       # overlap: 0.5
+                  #       file: samples/paulo.wav
+                
 
 
 # Test mix node
@@ -1209,3 +1247,43 @@ test-mix-varied:
           freq: 440
           amp: 0.3
           duration: 1.5
+
+# Test MIDI CC node - use CC 1 (modulation wheel) to control filter cutoff
+midi-cc-test:
+  filter:
+    type: lowpass
+    cutoff:
+      midi_cc:
+        channel: 0
+        cc: 16  # Modulation wheel
+        min: 200
+        max: 5000
+        initial: 1000
+    signal:
+      osc:
+        type: saw
+        freq: 200
+        amp: 0.3
+        attack: 0.01
+        release: 0.3
+
+# Simple test - just output the CC value directly as a tone
+midi-cc-simple:
+  osc:
+    type: sin
+    freq:
+      normalise:
+        max: 1000
+        signal:
+          osc:
+            type: sin
+            freq:
+              midi_cc:
+                channel: 0
+                cc: 16
+                min: 50
+                max: 150
+                initial: 1000
+    amp: 0.3
+
+

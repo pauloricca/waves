@@ -3,6 +3,7 @@ from nodes.envelope import ENVELOPE_DEFINITION
 from nodes.filter import FILTER_DEFINITION
 from nodes.deprecated.invert import INVERT_DEFINITION
 from nodes.midi import MIDI_DEFINITION
+from nodes.midi_cc import MIDI_CC_DEFINITION
 from nodes.mix import MIX_DEFINITION
 from nodes.normalise import NORMALISE_DEFINITION
 from nodes.oscillator import OSCILLATOR_DEFINITION
@@ -23,5 +24,6 @@ NODE_REGISTRY = [
     SAMPLE_DEFINITION,
     ENVELOPE_DEFINITION,
     MIDI_DEFINITION,
+    MIDI_CC_DEFINITION,
     MIX_DEFINITION,
 ]
