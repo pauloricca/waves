@@ -29,11 +29,12 @@ class SampleNode(BaseNode):
         self.audio = load_wav_file(model.file)
         self.speed_node = wavable_value_node_factory(model.speed)
         self.last_playhead_position = 0
+        self.total_samples_rendered = 0
 
     def render(self, num_samples=None, **params):
         super().render(num_samples)
         
-        # If num_samples is None, render the entire sample
+        # If num_samples is None, resolve it from duration
         if num_samples is None:
             num_samples = self.resolve_num_samples(num_samples)
             if num_samples is None:
@@ -48,12 +49,11 @@ class SampleNode(BaseNode):
                     return np.array([])
                 
                 # For non-looping samples, length is just the sample length
-                # For looping samples, we need a duration to be specified
                 if not self.model.loop:
                     num_samples = sample_length
                     self._last_chunk_samples = num_samples
                 else:
-                    raise ValueError("Cannot render full signal: looping sample has no duration specified")
+                    raise ValueError("Cannot render full signal: looping sample requires duration to be specified")
         
         start = int(self.model.start * len(self.audio))
         end = int(self.model.end * len(self.audio))
@@ -61,6 +61,18 @@ class SampleNode(BaseNode):
         start = max(start, 0)
         if end <= start:
             return np.zeros(num_samples)
+
+        # Check if we have a duration limit and if we've exceeded it
+        if self.model.duration is not None:
+            max_total_samples = int(self.model.duration * SAMPLE_RATE)
+            if self.total_samples_rendered >= max_total_samples:
+                # Already rendered full duration
+                return np.array([], dtype=np.float32)
+            
+            # Check if this chunk would exceed the duration
+            samples_remaining = max_total_samples - self.total_samples_rendered
+            if num_samples > samples_remaining:
+                num_samples = samples_remaining
 
         wave = self.audio[start:end]
         base_len = len(wave)
@@ -111,6 +123,7 @@ class SampleNode(BaseNode):
         wave = np.interp(playhead, np.arange(base_len), wave)
 
         self.last_playhead_position = playhead[-1]
+        self.total_samples_rendered += len(wave)
 
         return wave
 
