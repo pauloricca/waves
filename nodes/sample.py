@@ -2,6 +2,7 @@ from __future__ import annotations
 import numpy as np
 from pydantic import ConfigDict
 from config import SAMPLE_RATE
+from constants import RenderArgs
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.oscillator import OSCILLATOR_RENDER_ARGS
@@ -18,6 +19,7 @@ class SampleModel(BaseNodeModel):
     overlap: float = 0.0
     speed: WavableValue = 1.0
     duration: float = None
+    base_freq: float = None
 
 
 class SampleNode(BaseNode):
@@ -64,6 +66,16 @@ class SampleNode(BaseNode):
         base_len = len(wave)
 
         speed = self.speed_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+        
+        # If base_freq is set, modulate speed by frequency parameter
+        if self.model.base_freq is not None:
+            frequency = params.get(RenderArgs.FREQUENCY, None)
+            if frequency is not None:
+                # Ensure frequency is an array
+                if np.isscalar(frequency):
+                    frequency = np.full(num_samples, frequency)
+                # Multiply speed by the frequency ratio (current_freq / base_freq)
+                speed = speed * (frequency / self.model.base_freq)
 
         # Use absolute speed for rate calculation but keep sign for direction
         abs_speed = np.abs(speed)

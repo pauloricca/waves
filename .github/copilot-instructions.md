@@ -22,6 +22,8 @@ The render method is called multiple times (potentially in real time) to generat
 
 The number of samples is optional. If not provided, the node should render the whole wave at once. This is useful for non-realtime rendering, where we want to generate the whole sound in one go. When the render function returns an empty array, it signals to the parent node that it has finished rendering and there is no more sound to be generated. This is useful for nodes that have a defined duration, such as an envelope or a sample player.
 
+The render method received a params dictionary, which contains the parameters that are passed on by parent nodes and can be used by the node to generate the wave. In order to keep these params organised, we use the RenderArgs enum (constants.py) to define the keys that can be used in the params dictionary. This way, we can avoid hardcoding strings in the code and make it easier to understand what each parameter is for.
+
 ### Waves
 
 Waves can be used as audio or as input for parameters of other nodes. In this sense, there is no destinction between audio and control (like in modular synths), they are all just waves. The objective is to create a unified representation of all types of signals and make the system very flexible.

@@ -1119,6 +1119,7 @@ midi-env:
             signals:
               - sample:
                   duration: 0.3
+                  base_freq: 1000
                   start: 0.354
                   # end: 0.5
                   speed: [0.1, 0.05]
