@@ -3,6 +3,9 @@ OUTPUT_DIR = "output"
 OSC_ENVELOPE_TYPE = "exponential"  # Options: "linear", "exponential"
 SAMPLE_RATE = 44100
 BUFFER_SIZE = 512
+
+# MIDI settings
+MIDI_INPUT_DEVICE_NAME = None  # Set to a specific device name, or None to auto-detect
 VISUALISATION_ROW_HEIGHT = 10
 RENDERED_MASTER_GAIN = 0.2
 DO_NORMALISE_EACH_SOUND = False
@@ -15,8 +18,8 @@ DO_PRE_RENDER_WHOLE_SOUND = False
 DO_PLAY_IN_REAL_TIME = True
 
 # Visualisation settings
-DO_VISUALISE_OUTPUT = True
+DO_VISUALISE_OUTPUT = False
 DO_ONLY_VISUALISE_ONE_BUFFER = False
 VISUALISATION_FPS = 25  # Lower FPS reduces CPU usage and audio interference
 
-DISABLE_GARBAGE_COLLECTION = False
+DISABLE_GARBAGE_COLLECTION = True

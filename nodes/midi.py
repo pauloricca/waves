@@ -7,7 +7,7 @@ import mido
 import threading
 import queue
 
-from config import SAMPLE_RATE
+from config import SAMPLE_RATE, MIDI_INPUT_DEVICE_NAME
 from constants import RenderArgs
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
@@ -48,14 +48,50 @@ class MidiNode(BaseNode):
         with cls._midi_lock:
             if cls._midi_input is None:
                 try:
-                    # Try to open the first available MIDI input port
                     available_ports = mido.get_input_names()
-                    if available_ports:
+                    if MIDI_DEBUG:
+                        print(f"Available MIDI ports: {available_ports}")
+                    
+                    selected_port = None
+                    
+                    # First, try to use the configured device name
+                    if MIDI_INPUT_DEVICE_NAME:
+                        if MIDI_INPUT_DEVICE_NAME in available_ports:
+                            selected_port = MIDI_INPUT_DEVICE_NAME
+                            if MIDI_DEBUG:
+                                print(f"Using configured MIDI device: {selected_port}")
+                        else:
+                            print(f"Warning: Configured MIDI device '{MIDI_INPUT_DEVICE_NAME}' not found")
+                    
+                    # If no configured device or it wasn't found, try to find an external controller
+                    if selected_port is None and available_ports:
+                        # Try to find a non-IAC driver port (external controller)
+                        for port in available_ports:
+                            if 'IAC' not in port:
+                                selected_port = port
+                                if MIDI_DEBUG:
+                                    print(f"Auto-detected external MIDI controller: {selected_port}")
+                                break
+                    
+                    # Fall back to IAC Driver if available
+                    if selected_port is None and available_ports:
+                        for port in available_ports:
+                            if 'IAC' in port:
+                                selected_port = port
+                                if MIDI_DEBUG:
+                                    print(f"Using IAC Driver: {selected_port}")
+                                break
+                    
+                    # Use first available port if still nothing selected
+                    if selected_port is None and available_ports:
+                        selected_port = available_ports[0]
                         if MIDI_DEBUG:
-                            print(f"Available MIDI ports: {available_ports}")
-                        cls._midi_input = mido.open_input(available_ports[0], callback=cls._midi_callback)
-                        if MIDI_DEBUG:
-                            print(f"Opened MIDI input: {available_ports[0]}")
+                            print(f"Using first available port: {selected_port}")
+                    
+                    # Open the selected port or create virtual port
+                    if selected_port:
+                        cls._midi_input = mido.open_input(selected_port, callback=cls._midi_callback)
+                        print(f"MIDI input opened: {selected_port}")
                     else:
                         if MIDI_DEBUG:
                             print("Warning: No MIDI input ports available")
