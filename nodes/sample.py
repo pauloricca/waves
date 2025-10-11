@@ -143,12 +143,13 @@ class SampleNode(BaseNode):
         playhead_delta = abs_speed * sign * dt * SAMPLE_RATE
         playhead_absolute = self.last_playhead_position + np.cumsum(playhead_delta)
         
-        # Apply offset (in samples)
-        playhead_absolute = playhead_absolute + offset
+        # Apply offset (in samples) - this is applied as a displacement, not accumulated
+        # Save the unmodified playhead for updating last_playhead_position
+        playhead_with_offset = playhead_absolute + offset
         
         if not self.model.loop:
             # Non-looping: find where we exceed the window bounds
-            outside_bounds = (playhead_absolute >= end_indices) | (playhead_absolute < start_indices)
+            outside_bounds = (playhead_with_offset >= end_indices) | (playhead_with_offset < start_indices)
             if np.any(outside_bounds):
                 # Find first sample that's outside bounds
                 first_outside = np.where(outside_bounds)[0][0]
@@ -157,28 +158,29 @@ class SampleNode(BaseNode):
                     return np.array([], dtype=np.float32)
                 # Truncate to just before going outside
                 num_samples = first_outside
+                playhead_with_offset = playhead_with_offset[:num_samples]
                 playhead_absolute = playhead_absolute[:num_samples]
                 start_indices = start_indices[:num_samples]
                 end_indices = end_indices[:num_samples]
             
-            audio_indices = playhead_absolute
+            audio_indices = playhead_with_offset
         else:
             # Looping: wrap around when outside the window
             # Check which samples are outside their window
-            outside_high = playhead_absolute >= end_indices
-            outside_low = playhead_absolute < start_indices
+            outside_high = playhead_with_offset >= end_indices
+            outside_low = playhead_with_offset < start_indices
             outside = outside_high | outside_low
             
             if np.any(outside):
                 # For samples outside the window, wrap them back
                 # Calculate offset from start of window
-                offset_from_start = playhead_absolute - start_indices
+                offset_from_start = playhead_with_offset - start_indices
                 # Wrap within window length
                 wrapped_offset = np.mod(offset_from_start, window_lengths)
                 # Update playhead for wrapped samples
-                playhead_absolute = np.where(outside, start_indices + wrapped_offset, playhead_absolute)
+                playhead_with_offset = np.where(outside, start_indices + wrapped_offset, playhead_with_offset)
             
-            audio_indices = playhead_absolute
+            audio_indices = playhead_with_offset
         
         # Handle the case where we truncated early (non-looping)
         if num_samples == 0:
