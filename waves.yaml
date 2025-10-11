@@ -1521,4 +1521,45 @@ sample-wavable-loop-test:
     speed: 1.0
     loop: true
 
+test-sample-offset:
+  sample:
+    file: samples/feedback.wav
+    duration: 5
+    loop: true
+    offset:
+      osc:
+        type: sin
+        freq: 5
+        range: [-200, 200]
+
+test-sample-warble:
+  sample:
+    file: samples/chord.wav
+    duration: 20
+    loop: true
+    offset:
+      osc:
+        type: sin
+        freq: 1
+        range: [-1000, 1000]
+    speed: 1.0
+
+test-sample-warble-with-speed:
+  sample:
+    file: samples/feedback.wav
+    duration: 8
+    loop: true
+    offset:
+      osc:
+        type: sin
+        freq: 4
+        range: [-150, 150]
+    speed:
+      osc:
+        type: sin
+        freq: 0.5
+        range: [0.8, 1.2]
+
+
+
 

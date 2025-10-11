@@ -89,4 +89,5 @@ The objective of having realtime playback is to be able to connect the system to
 - Avoid saying things like "this likely happens because ...", do further checks to confirm your hypothesis.
 - When possible we should avoid code repetition, for example if we are adding a new functionality or condition that is similar to an existing one, we should try to generalise the code to avoid repetition by for example creating a new function or class that encapsulates the common behaviour, and parameterising the differences.
 - We don't need to be backwards compatible when making changes to nodes, I'm the only user for now, we can just update the yaml file as needed.
-- We don't need to write detailed instructions of usage or changes in .md files, if there is anything non-trivial we can just add a comment at the top a node file.
+- We don't need to write detailed instructions of usage or changes in .md files, if there is anything non-trivial we can just add a comment on the node file, just above the node model class.
+- For neatness, we try to keep node parameters as one word, but if we can't find a good name, we can use underscores to separate words. Feel free to suggest better names for parameters if you think of any.

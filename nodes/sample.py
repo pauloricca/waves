@@ -10,16 +10,22 @@ from nodes.wavable_value import WavableValue, wavable_value_node_factory
 from utils import load_wav_file
 
 
+# Sample node with offset parameter:
+# offset allows you to shift the playhead position by a certain amount (in samples).
+# This can be used with an LFO to create warble, tape slow-down/speed-up effects, etc.
+# Positive values shift forward, negative values shift backward.
+
 class SampleModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     file: str = None
-    start: WavableValue = 0.0
-    end: WavableValue = 1.0
+    start: WavableValue = 0.0  # 0.0-1.0 (normalized position in sample)
+    end: WavableValue = 1.0  # 0.0-1.0 (normalized position in sample)
     loop: bool = False
-    overlap: float = 0.0
-    speed: WavableValue = 1.0
-    duration: float = None
-    base_freq: float = None
+    overlap: float = 0.0  # 0.0-1.0 (normalized fraction of sample length)
+    speed: WavableValue = 1.0  # playback speed multiplier (1.0 = normal speed)
+    duration: float = None  # seconds
+    base_freq: float = None  # Hz (for frequency-based speed modulation)
+    offset: WavableValue = 0.0  # samples (shift playhead position)
 
 
 class SampleNode(BaseNode):
@@ -30,6 +36,7 @@ class SampleNode(BaseNode):
         self.speed_node = wavable_value_node_factory(model.speed)
         self.start_node = wavable_value_node_factory(model.start)
         self.end_node = wavable_value_node_factory(model.end)
+        self.offset_node = wavable_value_node_factory(model.offset)
         self.last_playhead_position = 0
         self.total_samples_rendered = 0
 
@@ -114,6 +121,13 @@ class SampleNode(BaseNode):
                 # Multiply speed by the frequency ratio (current_freq / base_freq)
                 speed = speed * (frequency / self.model.base_freq)
 
+        # Render offset
+        offset = self.offset_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+        
+        # Ensure offset is an array
+        if np.isscalar(offset):
+            offset = np.full(num_samples, offset)
+
         # Use absolute speed for rate calculation but keep sign for direction
         abs_speed = np.abs(speed)
         abs_speed = np.maximum(abs_speed, 1e-6)  # avoid zero speed
@@ -128,6 +142,9 @@ class SampleNode(BaseNode):
         # The playhead moves through the actual audio buffer, not relative to the window
         playhead_delta = abs_speed * sign * dt * SAMPLE_RATE
         playhead_absolute = self.last_playhead_position + np.cumsum(playhead_delta)
+        
+        # Apply offset (in samples)
+        playhead_absolute = playhead_absolute + offset
         
         if not self.model.loop:
             # Non-looping: find where we exceed the window bounds
