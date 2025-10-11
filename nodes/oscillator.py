@@ -40,6 +40,7 @@ class OscillatorModel(BaseNodeModel):
     freq_interpolation: InterpolationTypes = InterpolationTypes.LINEAR
     amp: WavableValue = 1.0
     amp_interpolation: InterpolationTypes = InterpolationTypes.LINEAR
+    phase: Optional[WavableValue] = None # Phase modulation (for FM synthesis)
     attack: float = 0 # Attack time in seconds
     release: float = 0 # Release time in seconds
     partials: List[OscillatorModel] = []
@@ -65,6 +66,7 @@ class OscillatorNode(BaseNode):
         self.model = model
         self.freq = wavable_value_node_factory(model.freq, model.freq_interpolation) if model.freq else None
         self.amp = wavable_value_node_factory(model.amp, model.amp_interpolation)
+        self.phase_mod = wavable_value_node_factory(model.phase) if model.phase else None
         self.partials = [instantiate_node(partial) for partial in model.partials]
         self.seed = self.model.seed or random.randint(0, 10000)
         self.phase_acc = 0  # Phase accumulator to maintain continuity between render calls
@@ -125,6 +127,14 @@ class OscillatorNode(BaseNode):
         frequency *= frequency_multiplier
 
         amplitude = self.amp.render(num_samples, **params_for_children) * amplitude_multiplier
+        
+        # Render phase modulation if provided
+        phase_modulation = None
+        if self.phase_mod:
+            phase_modulation = self.phase_mod.render(num_samples, **params_for_children)
+            if len(phase_modulation) == 1:
+                phase_modulation = phase_modulation[0]
+        
         osc_type = self.model.type
 
         if osc_type == OscillatorTypes.NOISE:
@@ -138,48 +148,79 @@ class OscillatorNode(BaseNode):
                 phase_increments = 2 * np.pi * frequency * dt
                 # Calculate cumulative phase
                 phase = self.phase_acc + np.cumsum(phase_increments)
+                # Add phase modulation if provided
+                if phase_modulation is not None:
+                    phase = phase + phase_modulation
                 total_wave = amplitude * wave_function(phase[:len(total_wave)])
                 # Save the last phase for next render
-                self.phase_acc = phase[-1]
+                self.phase_acc = phase[-1] if phase_modulation is None else (phase[-1] - (phase_modulation[-1] if isinstance(phase_modulation, np.ndarray) else phase_modulation))
             else:
                 # Calculate phase with accumulated phase offset
                 phase = self.phase_acc + 2 * np.pi * frequency * t
+                # Add phase modulation if provided
+                if phase_modulation is not None:
+                    phase = phase + phase_modulation
                 total_wave = amplitude * wave_function(phase)
                 # Update phase accumulator for next render
-                self.phase_acc = (self.phase_acc + 2 * np.pi * frequency * chunk_duration_seconds) % (2 * np.pi)
+                phase_without_mod = self.phase_acc + 2 * np.pi * frequency * chunk_duration_seconds
+                self.phase_acc = phase_without_mod % (2 * np.pi)
         elif osc_type == OscillatorTypes.SQR:
             if isinstance(frequency, np.ndarray):
                 dt = 1 / SAMPLE_RATE
                 phase_increments = 2 * np.pi * frequency * dt
                 phase = self.phase_acc + np.cumsum(phase_increments)
+                # Add phase modulation if provided
+                if phase_modulation is not None:
+                    phase = phase + phase_modulation
                 total_wave = amplitude * np.sign(np.sin(phase[:len(total_wave)]))
-                self.phase_acc = phase[-1]
+                self.phase_acc = phase[-1] if phase_modulation is None else (phase[-1] - (phase_modulation[-1] if isinstance(phase_modulation, np.ndarray) else phase_modulation))
             else:
                 phase = self.phase_acc + 2 * np.pi * frequency * t
+                # Add phase modulation if provided
+                if phase_modulation is not None:
+                    phase = phase + phase_modulation
                 total_wave = amplitude * np.sign(np.sin(phase))
-                self.phase_acc = (self.phase_acc + 2 * np.pi * frequency * chunk_duration_seconds) % (2 * np.pi)
+                # Update phase accumulator for next render
+                phase_without_mod = self.phase_acc + 2 * np.pi * frequency * chunk_duration_seconds
+                self.phase_acc = phase_without_mod % (2 * np.pi)
         elif osc_type == OscillatorTypes.TRI:
             if isinstance(frequency, np.ndarray):
                 dt = 1 / SAMPLE_RATE
                 phase_increments = 2 * np.pi * frequency * dt
                 phase = self.phase_acc + np.cumsum(phase_increments)
+                # Add phase modulation if provided
+                if phase_modulation is not None:
+                    phase = phase + phase_modulation
                 total_wave = amplitude * (2 / np.pi) * np.arcsin(np.sin(phase[:len(total_wave)]))
-                self.phase_acc = phase[-1]
+                self.phase_acc = phase[-1] if phase_modulation is None else (phase[-1] - (phase_modulation[-1] if isinstance(phase_modulation, np.ndarray) else phase_modulation))
             else:
                 phase = self.phase_acc + 2 * np.pi * frequency * t
+                # Add phase modulation if provided
+                if phase_modulation is not None:
+                    phase = phase + phase_modulation
                 total_wave = amplitude * (2 / np.pi) * np.arcsin(np.sin(phase))
-                self.phase_acc = (self.phase_acc + 2 * np.pi * frequency * chunk_duration_seconds) % (2 * np.pi)
+                # Update phase accumulator for next render
+                phase_without_mod = self.phase_acc + 2 * np.pi * frequency * chunk_duration_seconds
+                self.phase_acc = phase_without_mod % (2 * np.pi)
         elif osc_type == OscillatorTypes.SAW:
             if isinstance(frequency, np.ndarray):
                 dt = 1 / SAMPLE_RATE
                 phase_increments = 2 * np.pi * frequency * dt
                 phase = self.phase_acc + np.cumsum(phase_increments)
+                # Add phase modulation if provided
+                if phase_modulation is not None:
+                    phase = phase + phase_modulation
                 total_wave = amplitude * (2 / np.pi) * np.arctan(np.tan(phase[:len(total_wave)] / 2))
-                self.phase_acc = phase[-1]
+                self.phase_acc = phase[-1] if phase_modulation is None else (phase[-1] - (phase_modulation[-1] if isinstance(phase_modulation, np.ndarray) else phase_modulation))
             else:
                 phase = self.phase_acc + np.pi * frequency * t
+                # Add phase modulation if provided
+                if phase_modulation is not None:
+                    phase = phase + phase_modulation
                 total_wave = amplitude * (2 / np.pi) * np.arctan(np.tan(phase))
-                self.phase_acc = (self.phase_acc + np.pi * frequency * chunk_duration_seconds) % np.pi
+                # Update phase accumulator for next render
+                phase_without_mod = self.phase_acc + np.pi * frequency * chunk_duration_seconds
+                self.phase_acc = phase_without_mod % np.pi
         elif osc_type == OscillatorTypes.PERLIN:
             continuous_t = t + self.phase_acc
             self.phase_acc = continuous_t[-1]

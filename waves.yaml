@@ -1306,25 +1306,123 @@ midi-cc-sample:
         initial: 1
     loop: true
     # overlap: 0.5
-    file: samples/paulo.wav
+    file: samples/waves.wav
 
-midi-cc-simple:
-  osc:
-    type: sin
-    freq:
-      normalise:
-        max: 1000
-        signal:
-          osc:
-            type: sin
-            freq:
-              midi_cc:
-                channel: 0
-                cc: 16
-                min: 50
-                max: 150
-                initial: 1000
-    amp: 0.3
+fm:
+  mix:
+    signals:
+      - osc:
+          type: sin
+          freq:
+            midi_cc:
+              channel: 0
+              cc: 16
+              min: 0
+              max: 500
+              initial: 250
+          amp:
+            midi_cc:
+              channel: 0
+              cc: 0
+              initial: 0.5
+          phase:
+            osc:
+              type: sin
+              freq:
+                midi_cc:
+                  channel: 0
+                  cc: 17
+                  min: 0
+                  max: 500
+                  initial: 250
+              amp:
+                midi_cc:
+                  channel: 0
+                  cc: 1
+                  initial: 0.5
+              phase:
+                osc:
+                  type: sin
+                  freq:
+                    midi_cc:
+                      channel: 0
+                      cc: 18
+                      min: 0
+                      max: 500
+                      initial: 250
+                  amp:
+                    midi_cc:
+                      channel: 0
+                      cc: 2
+                      initial: 0.5
+      - osc:
+          type: sin
+          freq:
+            midi_cc:
+              channel: 0
+              cc: 19
+              min: 0
+              max: 500
+              initial: 250
+          amp:
+            midi_cc:
+              channel: 0
+              cc: 3
+              initial: 0.5
+          phase:
+            osc:
+              type: sin
+              freq:
+                midi_cc:
+                  channel: 0
+                  cc: 20
+                  min: 0
+                  max: 500
+                  initial: 250
+              amp:
+                midi_cc:
+                  channel: 0
+                  cc: 4
+                  initial: 0.5
+              phase:
+                osc:
+                  type: sin
+                  freq:
+                    midi_cc:
+                      channel: 0
+                      cc: 21
+                      min: 0
+                      max: 500
+                      initial: 250
+                  amp:
+                    midi_cc:
+                      channel: 0
+                      cc: 5
+                      initial: 0.5
+      - osc:
+          type: sin
+          freq:
+            midi_cc:
+              channel: 0
+              cc: 22
+              min: 0
+              max: 500
+              initial: 250
+          amp:
+            midi_cc:
+              channel: 0
+              cc: 6
+              initial: 0.5
+          phase:
+            sample:
+              file: samples/feedback.wav
+              speed: 
+                midi_cc:
+                  channel: 0
+                  cc: 23
+                  max: 5
+                  initial: 1
+              loop: true
 
 
 sample-wavable-test:
