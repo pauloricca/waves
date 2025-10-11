@@ -1,7 +1,7 @@
 from __future__ import annotations
 from enum import Enum
 import random
-from typing import List, Optional
+from typing import List, Optional, Tuple
 import numpy as np
 from pydantic import ConfigDict, field_validator
 
@@ -46,8 +46,7 @@ class OscillatorModel(BaseNodeModel):
     partials: List[OscillatorModel] = []
     scale: float = 1.0 # Perlin noise scale
     seed: Optional[float] = None # Perlin noise seed
-    min: Optional[float] = None # normalized min value
-    max: Optional[float] = None # normalized max value
+    range: Optional[Tuple[float, float]] = None # Output range [min, max]
     
     @field_validator("type", mode="before")
     @classmethod
@@ -57,6 +56,21 @@ class OscillatorModel(BaseNodeModel):
         if isinstance(v, str):
             return v.upper()
         return v
+    
+    @field_validator('range', mode='before')
+    @classmethod
+    def validate_range(cls, v):
+        """Convert various input formats to a 2-element tuple"""
+        if v is None:
+            return None
+        
+        # If it's already a tuple or list, validate it has exactly 2 elements
+        if isinstance(v, (list, tuple)):
+            if len(v) != 2:
+                raise ValueError(f"range must have exactly 2 values, got {len(v)}")
+            return tuple(v)  # Convert to tuple for consistency
+        
+        raise ValueError(f"range must be a list or tuple with exactly 2 values")
 
 
 class OscillatorNode(BaseNode):
@@ -284,11 +298,11 @@ class OscillatorNode(BaseNode):
             total_wave = np.clip(total_wave, -1, 1)  # Ensure wave is in the range [-1, 1]
             total_wave = total_wave.astype(np.float32)  # Convert to float32 for sounddevice
 
-        # Convert from [-1, 1] to [min, max] (or [-max, max] if min is None)
-        if self.model.max is not None:
-            min_range = self.model.min if self.model.min is not None else -self.model.max
-            total_wave = (total_wave + 1) / 2
-            total_wave = total_wave * (self.model.max - min_range) + min_range
+        # Convert from [-1, 1] to [min, max] using range parameter
+        if self.model.range is not None:
+            min_val, max_val = self.model.range
+            total_wave = (total_wave + 1) / 2  # Convert from [-1, 1] to [0, 1]
+            total_wave = total_wave * (max_val - min_val) + min_val  # Scale to [min, max]
 
         return total_wave
     

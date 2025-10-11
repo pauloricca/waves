@@ -1,7 +1,8 @@
 from __future__ import annotations
 import math
+from typing import Tuple
 import numpy as np
-from pydantic import ConfigDict
+from pydantic import ConfigDict, field_validator
 
 from constants import RenderArgs
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
@@ -13,10 +14,24 @@ class MidiCCModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     channel: int = 0  # MIDI channel to listen to (0-15)
     cc: int  # CC number to listen to (0-127)
-    initial: float = 0.5  # Initial value in the min-max range
-    min: float = 0.0  # Minimum output value
-    max: float = 1.0  # Maximum output value
+    initial: float = 0.5  # Initial value in the range
+    range: Tuple[float, float] = (0.0, 1.0)  # Output range [min, max]
     duration: float = math.inf  # MIDI CC nodes run indefinitely
+    
+    @field_validator('range', mode='before')
+    @classmethod
+    def validate_range(cls, v):
+        """Convert various input formats to a 2-element tuple"""
+        if v is None:
+            return (0.0, 1.0)
+        
+        # If it's already a tuple or list, validate it has exactly 2 elements
+        if isinstance(v, (list, tuple)):
+            if len(v) != 2:
+                raise ValueError(f"range must have exactly 2 values, got {len(v)}")
+            return tuple(v)  # Convert to tuple for consistency
+        
+        raise ValueError(f"range must be a list or tuple with exactly 2 values")
 
 
 class MidiCCNode(BaseNode):
@@ -24,8 +39,7 @@ class MidiCCNode(BaseNode):
         super().__init__(model)
         self.channel = model.channel
         self.cc_number = model.cc
-        self.min_value = model.min
-        self.max_value = model.max
+        self.min_value, self.max_value = model.range
         
         # Convert initial value from min-max range to normalized (0-1)
         value_range = self.max_value - self.min_value
