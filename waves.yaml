@@ -1605,30 +1605,59 @@ flanger:
 echo:
   mix:
     signals:
-      - sample:
-          id: paulo
-          file: samples/paulo.wav
-          loop: true
-          start: 0.5
-          offset:
-            midi_cc:
-              channel: 0
-              cc: 23
-              range: [-1, 1]
-              initial: 0
-          speed:
-            midi_cc:
-              channel: 0
-              cc: 7
-              range: [-2, 2]
-              initial: 0
       - map:
           from: [-1, 1]
-          to: [-0.5, 0.5]
+          to: 
+            - midi_cc:
+                channel: 0
+                cc: 5
+                range: [0, -1]
+                initial: 1
+            - midi_cc:
+                channel: 0
+                cc: 5
+                range: [0, 1]
+                initial: 1
+          signal:
+            sample:
+              id: paulo
+              file: samples/paulo.wav
+              loop: true
+              start: 0.5
+              offset:
+                midi_cc:
+                  channel: 0
+                  cc: 23
+                  range: [-1, 1]
+                  initial: 0
+              speed:
+                midi_cc:
+                  channel: 0
+                  cc: 7
+                  range: [-2, 2]
+                  initial: 0
+      - map:
+          from: [-1, 1]
+          to: 
+            - midi_cc:
+                channel: 0
+                cc: 6
+                range: [0, -1]
+                initial: 0
+            - midi_cc:
+                channel: 0
+                cc: 6
+                range: [0, 1]
+                initial: 0
           signal:
             delay: 
               id: echo
-              time: 0.3
+              time: 
+                midi_cc:
+                  channel: 0
+                  cc: 22
+                  range: [0, 5]
+                  initial: 1
               signal:
                 mix:
                   signals:
@@ -1636,7 +1665,17 @@ echo:
                         ref: paulo
                     - map:
                         from: [-1, 1]
-                        to: [-0.5, 0.5]
+                        to: 
+                          - midi_cc:
+                              channel: 0
+                              cc: 6
+                              range: [0, -1]
+                              initial: 0
+                          - midi_cc:
+                              channel: 0
+                              cc: 6
+                              range: [0, 1]
+                              initial: 0
                         signal:
                           reference:
                             ref: echo
@@ -1657,7 +1696,7 @@ echo2:
           signal:
             delay: 
               id: echo
-              time: 1
+              time: 0.2
               signal:
                 mix:
                   signals:

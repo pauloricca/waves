@@ -24,8 +24,10 @@ class DelayNode(BaseNode):
         # We allocate enough space for the maximum delay time we might need
         # Using 10 seconds as a reasonable maximum
         max_delay_samples = int(10 * SAMPLE_RATE)
-        self.buffer = np.zeros(max_delay_samples, dtype=np.float32)
         self.buffer_size = max_delay_samples
+        
+        # Single buffer and write position (like a physical delay unit)
+        self.buffer = np.zeros(self.buffer_size, dtype=np.float32)
         self.write_position = 0
 
     def _do_render(self, num_samples=None, context=None, **params):
@@ -43,7 +45,17 @@ class DelayNode(BaseNode):
                 delay_times = self.time_node.render(num_samples, context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
                 return self._apply_delay(signal_wave, delay_times, num_samples)
         
+        # CRITICAL: Snapshot buffer state BEFORE rendering input signal
+        # This ensures all recursion depths see the same initial buffer state
+        buffer_snapshot = self.buffer.copy()
+        write_position_snapshot = self.write_position
+        
+        # Now render the input signal (which may trigger recursive calls)
         signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))
+        
+        # Restore buffer state for our read/write operations
+        self.buffer = buffer_snapshot
+        self.write_position = write_position_snapshot
         
         # If signal is done, we're done (no tail for pure delay)
         if len(signal_wave) == 0:
@@ -60,35 +72,29 @@ class DelayNode(BaseNode):
         
         # Handle both constant and time-varying delay times
         if len(delay_times) == 1:
-            # Constant delay time - can be optimized with vectorized operations
+            # Constant delay time - vectorized operations
             delay_samples = int(delay_times[0] * SAMPLE_RATE)
             delay_samples = np.clip(delay_samples, 0, self.buffer_size - 1)
             
-            # Calculate all write positions at once
+            # Calculate all positions at once
             write_positions = (self.write_position + np.arange(num_samples)) % self.buffer_size
-            
-            # Write all input samples to buffer
-            self.buffer[write_positions] = signal_wave
-            
-            # Calculate all read positions at once
             read_positions = (write_positions - delay_samples) % self.buffer_size
             
-            # Read all output samples from buffer
+            # CRITICAL: Read BEFORE write (like physical hardware)
             output = self.buffer[read_positions].copy()
+            
+            # Now write the input
+            self.buffer[write_positions] = signal_wave
             
             # Update write position for next render
             self.write_position = (self.write_position + num_samples) % self.buffer_size
         else:
-            # Time-varying delay - requires interpolation, still vectorizable
-            # Calculate delay in samples for all time steps
+            # Time-varying delay - requires interpolation
             delay_samples_array = delay_times * SAMPLE_RATE
             delay_samples_array = np.clip(delay_samples_array, 0, self.buffer_size - 1)
             
-            # Calculate all write positions
+            # Calculate write positions
             write_positions = (self.write_position + np.arange(num_samples)) % self.buffer_size
-            
-            # Write all input samples to buffer
-            self.buffer[write_positions] = signal_wave
             
             # For fractional delays, use linear interpolation
             delay_samples_int = delay_samples_array.astype(int)
@@ -98,10 +104,13 @@ class DelayNode(BaseNode):
             read_positions_1 = (write_positions - delay_samples_int) % self.buffer_size
             read_positions_2 = (write_positions - delay_samples_int - 1) % self.buffer_size
             
-            # Linear interpolation between the two samples (vectorized)
+            # CRITICAL: Read BEFORE write
             sample_1 = self.buffer[read_positions_1]
             sample_2 = self.buffer[read_positions_2]
             output = sample_1 * (1 - delay_samples_frac) + sample_2 * delay_samples_frac
+            
+            # Now write the input
+            self.buffer[write_positions] = signal_wave
             
             # Update write position for next render
             self.write_position = (self.write_position + num_samples) % self.buffer_size
