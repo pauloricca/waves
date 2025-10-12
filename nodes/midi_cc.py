@@ -70,9 +70,7 @@ class MidiCCNode(BaseNode):
                     mapped_value = self.min_value + (self.current_normalized_value * (self.max_value - self.min_value))
                     print(f"CC {self.cc_number} on channel {self.channel}: {cc_value} -> {self.current_normalized_value:.3f} -> {mapped_value:.3f}")
     
-    def render(self, num_samples=None, **params):
-        super().render(num_samples)
-        
+    def _do_render(self, num_samples=None, context=None, **params):
         # MIDI CC node never finishes, so if num_samples is None, use a default buffer size
         if num_samples is None:
             from config import BUFFER_SIZE

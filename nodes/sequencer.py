@@ -106,9 +106,7 @@ class SequencerNode(BaseNode):
         total_duration = total_sequence_duration * self.repeat
         return int(total_duration * SAMPLE_RATE)
 
-    def render(self, num_samples=None, **params):
-        super().render(num_samples)
-        
+    def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, render the entire sequence
         if num_samples is None:
             num_samples = self.resolve_num_samples(num_samples)
@@ -227,7 +225,7 @@ class SequencerNode(BaseNode):
                 merged_params.update(render_args)
                 
                 # Render from current position
-                sound_chunk = sound_node.render(samples_to_render_from_sound, **merged_params)
+                sound_chunk = sound_node.render(samples_to_render_from_sound, context, **merged_params)
                 
                 # If the sound returns empty array, it's done - mark for removal
                 if len(sound_chunk) == 0:

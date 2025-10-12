@@ -17,22 +17,20 @@ class SmoothNode(BaseNode):
         self.model = model
         self.signal_node = instantiate_node(model.signal)
 
-    def render(self, num_samples=None, **params):
-        super().render(num_samples)
-        
+    def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, get the full child signal
         if num_samples is None:
             num_samples = self.resolve_num_samples(num_samples)
             if num_samples is None:
                 # Need to get full signal from child
-                signal_wave = self.render_full_child_signal(self.signal_node, **self.get_params_for_children(params))
+                signal_wave = self.render_full_child_signal(self.signal_node, context, **self.get_params_for_children(params))
                 if len(signal_wave) == 0:
                     return np.array([])
                 
                 # Apply smoothing to the full signal
                 return self._apply_smoothing(signal_wave)
         
-        signal_wave = self.signal_node.render(num_samples, **self.get_params_for_children(params))
+        signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))
         
         # If signal is done, we're done
         if len(signal_wave) == 0:

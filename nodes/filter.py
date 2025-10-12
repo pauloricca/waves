@@ -47,35 +47,33 @@ class FilterNode(BaseNode):
         # State for scipy.signal.lfilter (used when cutoff is constant)
         self.zi = None  # Filter initial conditions
 
-    def render(self, num_samples=None, **params):
-        super().render(num_samples)
-        
+    def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, get the full child signal
         if num_samples is None:
             num_samples = self.resolve_num_samples(num_samples)
             if num_samples is None:
                 # Need to get full signal from child
-                signal_wave = self.render_full_child_signal(self.signal_node, **self.get_params_for_children(params))
+                signal_wave = self.render_full_child_signal(self.signal_node, context, **self.get_params_for_children(params))
                 if len(signal_wave) == 0:
                     return np.array([])
                 
                 num_samples = len(signal_wave)
-                return self._apply_filter(signal_wave, num_samples, params)
+                return self._apply_filter(signal_wave, num_samples, context, params)
         
-        signal_wave = self.signal_node.render(num_samples, **self.get_params_for_children(params))
+        signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))
         
         # If signal is done, we're done
         if len(signal_wave) == 0:
             return np.array([], dtype=np.float32)
         
-        return self._apply_filter(signal_wave, num_samples, params)
+        return self._apply_filter(signal_wave, num_samples, context, params)
     
-    def _apply_filter(self, signal_wave, num_samples, params):
+    def _apply_filter(self, signal_wave, num_samples, context, params):
         """Apply filter to the signal wave"""
-        cutoff = self.cutoff_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+        cutoff = self.cutoff_node.render(num_samples, context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
         
         # Render only a single sample from peak to get current value
-        peak_wave = self.peak_node.render(1, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+        peak_wave = self.peak_node.render(1, context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
         peak = peak_wave[0] if len(peak_wave) > 0 else 0.0
 
         if len(cutoff) == 1:

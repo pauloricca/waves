@@ -100,9 +100,7 @@ class MidiNode(BaseNode):
                     if MIDI_DEBUG:
                         print(f"Note OFF: {note_number} (id: {note_id}, starting release)")
     
-    def render(self, num_samples=None, **params):
-        super().render(num_samples)
-        
+    def _do_render(self, num_samples=None, context=None, **params):
         # MIDI node never finishes, so if num_samples is None, use a default buffer size
         if num_samples is None:
             from config import BUFFER_SIZE
@@ -135,7 +133,7 @@ class MidiNode(BaseNode):
             
             # Render the note
             try:
-                note_chunk = sound_node.render(num_samples, **merged_params)
+                note_chunk = sound_node.render(num_samples, context, **merged_params)
                 
                 # If the sound returns empty, the note is finished (e.g., envelope release complete)
                 if len(note_chunk) == 0:

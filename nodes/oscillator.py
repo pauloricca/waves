@@ -87,9 +87,7 @@ class OscillatorNode(BaseNode):
         self.fase_in_multiplier: np.ndarray = None
         self.fase_out_multiplier: np.ndarray = None
 
-    def render(self, num_samples=None, **params):
-        super().render(num_samples)
-        
+    def _do_render(self, num_samples=None, context=None, **params):
         # Resolve num_samples from duration if None
         num_samples = self.resolve_num_samples(num_samples)
         if num_samples is None:
@@ -132,7 +130,7 @@ class OscillatorNode(BaseNode):
         if frequency_override:
             frequency = frequency_override
         elif self.freq:
-            frequency = self.freq.render(num_samples, **params_for_children)
+            frequency = self.freq.render(num_samples, context, **params_for_children)
             if len(frequency) == 1:
                 frequency = frequency[0]
         else:
@@ -140,12 +138,12 @@ class OscillatorNode(BaseNode):
         
         frequency *= frequency_multiplier
 
-        amplitude = self.amp.render(num_samples, **params_for_children) * amplitude_multiplier
+        amplitude = self.amp.render(num_samples, context, **params_for_children) * amplitude_multiplier
         
         # Render phase modulation if provided
         phase_modulation = None
         if self.phase_mod:
-            phase_modulation = self.phase_mod.render(num_samples, **params_for_children)
+            phase_modulation = self.phase_mod.render(num_samples, context, **params_for_children)
             if len(phase_modulation) == 1:
                 phase_modulation = phase_modulation[0]
         
@@ -247,7 +245,7 @@ class OscillatorNode(BaseNode):
             partials_args = {RenderArgs.FREQUENCY_MULTIPLIER: frequency, RenderArgs.AMPLITUDE_MULTIPLIER: amplitude}
             for partial in self.partials:
                 # Pass params_for_children first, then partials_args to override with our local values
-                partial_wave = partial.render(num_samples, **params_for_children, **partials_args)
+                partial_wave = partial.render(num_samples, context, **params_for_children, **partials_args)
                 total_wave = add_waves(total_wave, partial_wave)
 
 

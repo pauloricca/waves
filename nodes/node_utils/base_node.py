@@ -12,6 +12,7 @@ from constants import RenderArgs
 
 class BaseNodeModel(BaseModel):
     duration: Optional[float] = None
+    id: Optional[str] = None  # Unique identifier for this node to enable referencing
     pass
 
 
@@ -21,29 +22,110 @@ class BaseNode:
         self.time_since_start = 0
         self.number_of_chunks_rendered = 0
         self._last_chunk_samples = 0
+        self.node_id = model.id if hasattr(model, 'id') else None  # Store node id for caching
 
 
-    def render(self, num_samples: int = None, **params) -> np.ndarray:
+    def render(self, num_samples: int = None, context = None, **params) -> np.ndarray:
         """
-        Renders the node for a given number of samples.
+        Main render method that handles caching, recursion tracking, and timing.
+        Delegates actual rendering to _do_render() which subclasses implement.
         
         Args:
             num_samples: Number of samples to render. If None, render the entire duration
                         of the node (based on self.duration or until the node is exhausted).
-                        This enables efficient full-signal rendering for nodes like shuffle
-                        that need to process the complete signal at once.
+            context: RenderContext for managing shared state, caching, and recursion tracking.
+            **params: Parameters to forward to child nodes.
         
-        Any params passed to this function should be forwarded to the node's children,
-        The node can use consume_params to consume and remove some of the params, if needed,
-        or get_params_for_children othewise before passing them on to the children, 
-        e.g. an oscillator node might want to consume frequency multiplier and amplitude
-        multiplier params but we don't want to pass them to the child oscillator nodes.
+        This method:
+        1. Creates a default context if none provided (backwards compatibility)
+        2. Handles caching and recursion for nodes with an id
+        3. Updates timing information
+        4. Calls _do_render() for the actual rendering logic
+        """
+        # Create default context if none provided
+        if context is None:
+            from nodes.node_utils.render_context import RenderContext
+            context = RenderContext()
+        
+        # If this node has an id, handle caching and recursion
+        if self.node_id:
+            recursion_depth = context.get_recursion_depth(self.node_id)
+            
+            # Check if we've hit max recursion (feedback loop break)
+            if recursion_depth >= context.max_recursion:
+                # Return zeros to break feedback loop
+                if num_samples is None:
+                    return np.array([], dtype=np.float32)
+                return np.zeros(num_samples, dtype=np.float32)
+            
+            # If not in recursion and we have a cached output, use it
+            if recursion_depth == 0:
+                cached = context.get_output(self.node_id)
+                if cached is not None:
+                    # Return cached output (trim/pad as needed)
+                    return self._adjust_output_length(cached.copy(), num_samples)
+            
+            # Increment recursion, render, decrement, cache (if top level)
+            context.increment_recursion(self.node_id)
+            try:
+                wave = self._render_with_timing(num_samples, context, **params)
+                if recursion_depth == 0:  # Only cache at top level
+                    context.store_output(self.node_id, wave)
+                return wave
+            finally:
+                context.decrement_recursion(self.node_id)
+        
+        # No id, just render normally with timing
+        return self._render_with_timing(num_samples, context, **params)
+    
+    
+    def _render_with_timing(self, num_samples: int, context, **params) -> np.ndarray:
+        """
+        Updates timing info and calls _do_render().
+        This keeps timing logic separate from rendering logic.
         """
         self.number_of_chunks_rendered += self._last_chunk_samples
         self.time_since_start = self.number_of_chunks_rendered / SAMPLE_RATE
         if num_samples is not None:
             self._last_chunk_samples = num_samples
         # If num_samples is None, _last_chunk_samples will be updated by the implementing node
+        
+        return self._do_render(num_samples, context, **params)
+    
+    
+    def _do_render(self, num_samples: int, context, **params) -> np.ndarray:
+        """
+        Subclasses override this to implement their rendering logic.
+        This method focuses purely on rendering without worrying about caching,
+        recursion, or timing - those are handled by render().
+        
+        Args:
+            num_samples: Number of samples to render
+            context: RenderContext for accessing cached outputs and passing to children
+            **params: Parameters forwarded from parent nodes
+            
+        Returns:
+            Rendered wave as numpy array
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} must implement _do_render()")
+    
+    
+    def _adjust_output_length(self, wave: np.ndarray, num_samples: Optional[int]) -> np.ndarray:
+        """
+        Helper to adjust wave length to match requested num_samples.
+        Used when returning cached outputs.
+        """
+        if num_samples is None or len(wave) == 0:
+            return wave
+        
+        if len(wave) < num_samples:
+            # Pad with zeros
+            padding = np.zeros(num_samples - len(wave), dtype=np.float32)
+            return np.concatenate([wave, padding])
+        elif len(wave) > num_samples:
+            return wave[:num_samples]
+        
+        return wave
     
 
     def get_params_for_children(self, params: dict, args_to_remove: list[str] = []) -> dict:
@@ -97,7 +179,7 @@ class BaseNode:
         return num_samples
     
     
-    def render_full_child_signal(self, child_node, **params) -> np.ndarray:
+    def render_full_child_signal(self, child_node, context=None, **params) -> np.ndarray:
         """
         Helper method to render the full signal from a child node.
         This is useful when the node needs the complete child signal to process
@@ -105,12 +187,13 @@ class BaseNode:
         
         Args:
             child_node: The child node to render
+            context: RenderContext to pass to child
             **params: Parameters to pass to the child
             
         Returns:
             The full signal from the child node
         """
-        signal = child_node.render(**params)
+        signal = child_node.render(context=context, **params)
         if len(signal) > 0:
             self._last_chunk_samples = len(signal)
         return signal

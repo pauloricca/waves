@@ -33,19 +33,18 @@ class WavableValueNode(BaseNode):
         self.wave_node = instantiate_node(model.value) if isinstance(model.value, BaseNodeModel) else None
         self.interpolated_values = None
 
-    def render(self, num_samples=None, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         from nodes.oscillator import OSCILLATOR_RENDER_ARGS
-        super().render(num_samples)
 
         if self.wave_node:
             # If num_samples is None, pass it through to child
             if num_samples is None:
-                wave = self.wave_node.render(**self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+                wave = self.wave_node.render(context=context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
                 if len(wave) > 0:
                     self._last_chunk_samples = len(wave)
                 return wave
             else:
-                wave = self.wave_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+                wave = self.wave_node.render(num_samples, context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
                 # If the wave node returns fewer samples than requested, pad with the last value
                 if len(wave) > 0 and len(wave) < num_samples:
                     last_value = wave[-1] if len(wave) > 0 else 0

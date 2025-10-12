@@ -18,11 +18,37 @@ A Node has a render method which takes in a number of samples to render and a se
 
 #### The render method
 
+The render method is the main public interface for generating audio. It handles cross-cutting concerns like caching, recursion tracking, and timing, then delegates to the `_do_render()` method for the actual rendering logic.
+
+**Architecture:**
+- `render(num_samples, context, **params)` - Public method in BaseNode that:
+  1. Creates a RenderContext if none provided (backwards compatibility)
+  2. Handles caching for nodes with an `id` field
+  3. Tracks recursion depth to prevent infinite feedback loops
+  4. Updates timing information
+  5. Delegates to `_do_render()` for actual rendering
+  
+- `_do_render(num_samples, context, **params)` - Protected method that subclasses override:
+  - Contains the pure rendering logic specific to each node type
+  - Should not handle caching, recursion, or timing (BaseNode handles that)
+  - Must pass `context` to all child `render()` calls
+  - Pass `context` as second positional parameter: `child.render(num_samples, context, **params)`
+
 The render method is called multiple times (potentially in real time) to generate the final output wave. Each time it is called, it generates a chunk of samples (the size of which is defined by the num_samples parameter). We should take this into consideration when writing its implementation, we should take measures to ensure that this method is efficient and does not introduce artifacts in the output wave, for example as a result of value jumps between one chunk and the next. We might need to keep some internal state (or sometimes a buffer) in the node to ensure continuity between chunks.
 
 The number of samples is optional. If not provided, the node should render the whole wave at once. This is useful for non-realtime rendering, where we want to generate the whole sound in one go. When the render function returns an empty array, it signals to the parent node that it has finished rendering and there is no more sound to be generated. This is useful for nodes that have a defined duration, such as an envelope or a sample player.
 
-The render method received a params dictionary, which contains the parameters that are passed on by parent nodes and can be used by the node to generate the wave. In order to keep these params organised, we use the RenderArgs enum (constants.py) to define the keys that can be used in the params dictionary. This way, we can avoid hardcoding strings in the code and make it easier to understand what each parameter is for.
+The render method receives a params dictionary, which contains the parameters that are passed on by parent nodes and can be used by the node to generate the wave. In order to keep these params organised, we use the RenderArgs enum (constants.py) to define the keys that can be used in the params dictionary. This way, we can avoid hardcoding strings in the code and make it easier to understand what each parameter is for.
+
+### RenderContext
+
+The RenderContext (nodes/node_utils/render_context.py) manages shared state during rendering:
+- **Node output caching**: Stores outputs of nodes with an `id` field so they can be referenced by other nodes
+- **Recursion tracking**: Prevents infinite loops by tracking recursion depth per node ID
+- **Feedback loop control**: When recursion depth exceeds `MAX_RECURSION_DEPTH` (config.py), returns zeros to break the loop
+- **Realtime chunk management**: In realtime mode, the context persists across chunks but clears cached outputs after each chunk
+
+The context is passed through all render calls and enables advanced routing patterns like fan-out (one LFO modulating multiple oscillators) and feedback loops.
 
 ### Waves
 
@@ -49,6 +75,62 @@ sound_identifier:
     (...)
 ```
 
+### Node References and Advanced Routing
+
+Nodes can now be given an `id` and referenced by other nodes, enabling flexible routing beyond simple tree structures:
+
+**Defining a reusable node:**
+```yaml
+my_sound:
+  osc:
+    id: my_lfo  # Give this node an ID
+    type: sin
+    freq: 2
+    range: [0, 1]
+```
+
+**Referencing a node:**
+```yaml
+my_sound:
+  mix:
+    signals:
+      # Define an LFO with an id
+      - osc:
+          id: shared_lfo
+          type: sin
+          freq: 2
+          range: [200, 800]
+      
+      # Use it to modulate frequency of multiple oscillators
+      - osc:
+          type: sin
+          freq:
+            reference:
+              ref: shared_lfo
+      
+      - osc:
+          type: tri
+          freq:
+            reference:
+              ref: shared_lfo
+```
+
+**Feedback loops:**
+Nodes can reference themselves or create circular dependencies. The system automatically detects and controls feedback loops using recursion depth tracking:
+
+```yaml
+feedback_delay:
+  delay:
+    id: feedback
+    time: 0.3
+    feedback: 0.5
+    signal:
+      reference:
+        ref: feedback  # References itself - creates feedback loop
+```
+
+When recursion depth exceeds `MAX_RECURSION_DEPTH` (default 10), the system returns zeros to break the loop.
+
 ## Running the code
 
 To run the code we use the main waves.py file, followed by one parameter, which should match one of the root level keys in the yaml file. For example:
@@ -70,7 +152,13 @@ To create a new type of node, we create a new file with the node name in the nod
 
 Then we need to add the new node to the NODE_REGISTRY in nodes/node_utils/node_registry.py.
 
-One thing we need to be careful about is to ensure that the render method of the node works correctly in both realtime and non-realtime modes. This means that we need the node to work as expected when rendering the whole sound at once (non-realtime) and also when rendering in chunks (realtime).
+**Important implementation details:**
+- Override `_do_render(self, num_samples=None, context=None, **params)` not `render()`
+- The `render()` method in BaseNode handles caching, recursion, and timing automatically
+- Always pass `context` as the second positional parameter when calling child `render()` methods
+- Ensure the node works correctly in both realtime and non-realtime modes
+- In realtime mode, the node renders in chunks; in non-realtime, it may render the entire signal at once
+- When `num_samples` is None, render the full signal (or raise an error if the node needs explicit duration)
 
 ## Configuration
 
@@ -78,11 +166,21 @@ In config.py we can set some global parameters for the project, such as the samp
 
 ## Past and Future Work
 
-In the earlier stages of the project, we only supported non-realtime playback and then slowly we started converting nodes to support realtime rendering. The goal is to eventually support all nodes in realtime mode, which will allow for more interactive sound design. The nodes that haven't been converted yet are in the nodes/non_real_time directory.
+In the earlier stages of the project, we only supported non-realtime playback and then slowly we started converting nodes to support realtime rendering. The goal is to have as many nodes supporting both realtime and non-realtime modes as possible. The nodes that don't support realtime rendering are in the nodes/non_realtime directory.
 
-One challenge at the moment is that some nodes generate artifacts or problems when rendered in chunks, for example the normalise node, when a source min isn't supplied in the model, calculates the peak of the input wave and then scales the wave to fit within a given range. When rendering in chunks, the first chunk is used to calculate the peak, which can lead to clipping or distortion in subsequent chunks if they have higher peaks.
+The objective of having realtime playback is to be able to use a MIDI controller or other input device and play the sounds live, as well as being able to tweak parameters in real time and hear the results immediately. Currently we do this with the midi and midi_cc nodes.
 
-The objective of having realtime playback is to be able to connect the system to a MIDI controller or other input device and play the sounds live, as well as to potentially be able to tweak parameters in real time and hear the results immediately, but neither of these features are implemented yet.
+### Ideas for future work
+
+When adding new features we should consider the following ideas for future work when making architectural decisions:
+
+- Adding support for stereo sound. Currently everything is mono. One way we can implement stereo sound is to have nodes that can output stereo waves (2D numpy arrays) and nodes that can take stereo waves as input. We can also have nodes that can convert mono waves to stereo and vice versa. We can also have nodes that take in two mono waves and mix them into a stereo signal. We can also have nodes that can pan mono waves to stereo.
+- More reallistic feedback loops with slight configurable delays to avoid infinite stacking of waves.
+- Support for MIDI clock input and output, to be able to sync the playback with other devices.
+- Support for MIDI note and cc output, to be able to control other devices with the midi node.
+- Add a live audio input node, to be able to process live audio input from a microphone or line input.
+- Being able to create new nodes or "macros" or "sub-patches" with parameters that can be reused in the yaml file.
+- Being able to use expressions in the yaml file, for example to set the frequency of an oscillator to be a function of time or other parameters.
 
 ### Directives for AI
 
@@ -91,3 +189,4 @@ The objective of having realtime playback is to be able to connect the system to
 - We don't need to be backwards compatible when making changes to nodes, I'm the only user for now, we can just update the yaml file as needed.
 - We don't need to write detailed instructions of usage or changes in .md files, if there is anything non-trivial we can just add a comment on the node file, just above the node model class.
 - For neatness, we try to keep node parameters as one word, but if we can't find a good name, we can use underscores to separate words. Feel free to suggest better names for parameters if you think of any.
+- When passing positional arguments to functions or methods and the arguments have the same name as the variables, we should just pass them without specifying the name to avoid "name=name" argument passing.

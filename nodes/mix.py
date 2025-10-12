@@ -50,9 +50,7 @@ class MixNode(BaseNode):
         self.model = model
         self.signal_nodes = [instantiate_node(signal) for signal in model.signals]
 
-    def render(self, num_samples=None, **params):
-        super().render(num_samples)
-        
+    def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, we need to render the full signal
         if num_samples is None:
             num_samples = self.resolve_num_samples(num_samples)
@@ -61,7 +59,7 @@ class MixNode(BaseNode):
                 mixed_wave = np.array([], dtype=np.float32)
                 
                 for signal_node in self.signal_nodes:
-                    child_signal = self.render_full_child_signal(signal_node, **self.get_params_for_children(params))
+                    child_signal = self.render_full_child_signal(signal_node, context, **self.get_params_for_children(params))
                     if len(child_signal) > 0:
                         mixed_wave = add_waves(mixed_wave, child_signal)
                 
@@ -73,7 +71,7 @@ class MixNode(BaseNode):
         any_signal_active = False
         
         for signal_node in self.signal_nodes:
-            signal_wave = signal_node.render(num_samples, **self.get_params_for_children(params))
+            signal_wave = signal_node.render(num_samples, context, **self.get_params_for_children(params))
             if len(signal_wave) > 0:
                 any_signal_active = True
                 # Add this signal to the mix

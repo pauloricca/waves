@@ -26,12 +26,10 @@ class ShuffleNode(BaseNode):
         self._total_samples_rendered = 0
         self._is_pre_rendered = False
 
-    def render(self, num_samples=None, **params):
-        super().render(num_samples)
-        
+    def _do_render(self, num_samples=None, context=None, **params):
         # If we haven't pre-rendered the full signal yet, do it now
         if not self._is_pre_rendered:
-            self._pre_render_full_signal(**params)
+            self._pre_render_full_signal(context, **params)
         
         # If num_samples is None, return the entire shuffled buffer
         if num_samples is None:
@@ -58,10 +56,10 @@ class ShuffleNode(BaseNode):
         
         return result
     
-    def _pre_render_full_signal(self, **params):
+    def _pre_render_full_signal(self, context, **params):
         """Pre-render the entire signal from the child node and shuffle it"""
         # Request the child to render its entire duration by not specifying num_samples
-        signal_wave = self.signal_node.render(**self.get_params_for_children(params))
+        signal_wave = self.signal_node.render(context=context, **self.get_params_for_children(params))
         
         # Handle empty signal
         if len(signal_wave) == 0:

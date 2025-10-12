@@ -131,38 +131,36 @@ class MapNode(BaseNode):
             self.clip_min = None
             self.clip_max = None
 
-    def render(self, num_samples=None, **params):
-        super().render(num_samples)
-        
+    def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, get the full child signal
         if num_samples is None:
             num_samples = self.resolve_num_samples(num_samples)
             if num_samples is None:
                 # For map nodes, we need the full child signal to calculate proper mapping
-                signal_wave = self.render_full_child_signal(self.signal_node, **self.get_params_for_children(params))
+                signal_wave = self.render_full_child_signal(self.signal_node, context, **self.get_params_for_children(params))
                 if len(signal_wave) == 0:
                     return np.array([])
                 
                 num_samples = len(signal_wave)
-                return self._apply_mapping(signal_wave, num_samples, params)
+                return self._apply_mapping(signal_wave, num_samples, context, params)
         
-        signal_wave = self.signal_node.render(num_samples, **self.get_params_for_children(params))
+        signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))
         
         # If signal is done, we're done
         if len(signal_wave) == 0:
             return np.array([], dtype=np.float32)
         
-        return self._apply_mapping(signal_wave, num_samples, params)
+        return self._apply_mapping(signal_wave, num_samples, context, params)
     
-    def _apply_mapping(self, signal_wave, num_samples, params):
+    def _apply_mapping(self, signal_wave, num_samples, context, params):
         """Apply mapping to the signal wave"""
         # Pass all params to children (not just OSCILLATOR_RENDER_ARGS) to support interpolated values
         child_params = self.get_params_for_children(params)
         
-        from_min_wave = self.from_min.render(num_samples, **child_params)
-        from_max_wave = self.from_max.render(num_samples, **child_params)
-        to_min_wave = self.to_min.render(num_samples, **child_params)
-        to_max_wave = self.to_max.render(num_samples, **child_params)
+        from_min_wave = self.from_min.render(num_samples, context, **child_params)
+        from_max_wave = self.from_max.render(num_samples, context, **child_params)
+        to_min_wave = self.to_min.render(num_samples, context, **child_params)
+        to_max_wave = self.to_max.render(num_samples, context, **child_params)
         
         # Ensure all waves have the same length as signal_wave
         for wave_name, wave in [('from_min', from_min_wave), ('from_max', from_max_wave), 

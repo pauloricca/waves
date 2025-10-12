@@ -1,3 +1,23 @@
+test-reference:
+  mix:
+    signals:
+      - map:
+          from: [200, 400]
+          to: [0, 0]
+          signal:
+            osc:
+              id: test_lfo
+              type: sin
+              freq: 2
+              range: [200, 400]
+              duration: 2
+      - osc:
+          type: sin
+          freq:
+            reference:
+              ref: test_lfo
+          duration: 2
+
 test-map:
   map:
     signal:
@@ -70,18 +90,6 @@ test-osc-range:
     freq: 440
     duration: 1
     range: [-0.5, 0.5]
-
-# Note: Interpolated values in map parameters are not supported in realtime mode
-# because they require knowing the total duration upfront, which isn't available
-# when rendering in chunks. Use oscillator nodes instead for dynamic ranges.
-# test-map-interpolated:
-#   map:
-#     signal:
-#       osc:
-#         type: sin
-#         freq: 440
-#         duration: 2
-#     to: [[0, 0.1], [-1, 0.9]]
 
 delayed:
   delay:
@@ -1482,6 +1490,27 @@ fm:
                   range: [0, 5.0]
                   initial: 1
               loop: true
+
+
+
+
+sample-control:
+  sample:
+    file: samples/paulo.wav
+    loop: true
+    start: 0.5
+    offset:
+      midi_cc:
+        channel: 0
+        cc: 23
+        range: [-1, 1]
+        initial: 0
+    speed:
+      midi_cc:
+        channel: 0
+        cc: 7
+        range: [-2, 2]
+        initial: 0
 
 
 sample-wavable-test:

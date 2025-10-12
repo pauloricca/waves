@@ -31,9 +31,7 @@ class EnvelopeNode(BaseNode):
         self.release_started = False
         self.current_amplitude = 0.0  # Track actual current amplitude for smooth release
 
-    def render(self, num_samples, **params):
-        super().render(num_samples)
-        
+    def _do_render(self, num_samples, context=None, **params):
         # Check if we should start the release phase
         is_in_sustain = params.get(RenderArgs.IS_IN_SUSTAIN, True)
         
@@ -53,7 +51,7 @@ class EnvelopeNode(BaseNode):
             return np.array([])
         
         # Get the signal from the child node
-        signal_wave = self.signal_node.render(num_samples, **self.get_params_for_children(params))
+        signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))
         
         # If the signal is exhausted and we haven't started release yet, return empty
         if len(signal_wave) == 0 and not self.is_in_release_phase:

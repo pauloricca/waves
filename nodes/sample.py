@@ -25,7 +25,7 @@ class SampleModel(BaseNodeModel):
     speed: WavableValue = 1.0  # playback speed multiplier (1.0 = normal speed)
     duration: float = None  # seconds
     base_freq: float = None  # Hz (for frequency-based speed modulation)
-    offset: WavableValue = 0.0  # samples (shift playhead position)
+    offset: WavableValue = 0.0  # seconds (shift playhead position)
 
 
 class SampleNode(BaseNode):
@@ -40,16 +40,14 @@ class SampleNode(BaseNode):
         self.last_playhead_position = 0
         self.total_samples_rendered = 0
 
-    def render(self, num_samples=None, **params):
-        super().render(num_samples)
-        
+    def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, resolve it from duration
         if num_samples is None:
             num_samples = self.resolve_num_samples(num_samples)
             if num_samples is None:
                 # Render start/end for a single sample to get their initial values
-                start_vals = self.start_node.render(1, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
-                end_vals = self.end_node.render(1, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+                start_vals = self.start_node.render(1, context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+                end_vals = self.end_node.render(1, context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
                 start = int(start_vals[0] * len(self.audio))
                 end = int(end_vals[0] * len(self.audio))
                 end = min(end, len(self.audio))
@@ -67,8 +65,8 @@ class SampleNode(BaseNode):
                     raise ValueError("Cannot render full signal: looping sample requires duration to be specified")
         
         # Render start and end values for this chunk
-        start_vals = self.start_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
-        end_vals = self.end_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+        start_vals = self.start_node.render(num_samples, context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+        end_vals = self.end_node.render(num_samples, context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
         
         # Ensure they are arrays
         if np.isscalar(start_vals):
@@ -105,7 +103,7 @@ class SampleNode(BaseNode):
                 start_indices = start_indices[:num_samples]
                 end_indices = end_indices[:num_samples]
 
-        speed = self.speed_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+        speed = self.speed_node.render(num_samples, context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
         
         # Ensure speed is an array
         if np.isscalar(speed):
@@ -122,11 +120,14 @@ class SampleNode(BaseNode):
                 speed = speed * (frequency / self.model.base_freq)
 
         # Render offset
-        offset = self.offset_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+        offset = self.offset_node.render(num_samples, context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
         
         # Ensure offset is an array
         if np.isscalar(offset):
             offset = np.full(num_samples, offset)
+        
+        # Convert offset from seconds to samples
+        offset_samples = offset * SAMPLE_RATE
 
         # Use absolute speed for rate calculation but keep sign for direction
         abs_speed = np.abs(speed)
@@ -145,7 +146,7 @@ class SampleNode(BaseNode):
         
         # Apply offset (in samples) - this is applied as a displacement, not accumulated
         # Save the unmodified playhead for updating last_playhead_position
-        playhead_with_offset = playhead_absolute + offset
+        playhead_with_offset = playhead_absolute + offset_samples
         
         if not self.model.loop:
             # Non-looping: find where we exceed the window bounds

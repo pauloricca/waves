@@ -14,6 +14,7 @@ from config import *
 from sound_library import get_sound_model, load_sound_library
 from nodes.node_utils.base_node import BaseNode
 from nodes.node_utils.instantiate_node import instantiate_node
+from nodes.node_utils.render_context import RenderContext
 from utils import look_for_duration, play, save, visualise_wave
 
 rendered_sounds: dict[np.ndarray] = {}
@@ -23,12 +24,16 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float):
     should_stop = False
     start_time = time.time()
     last_render_time = 0
+    
+    # Create render context that persists across chunks
+    render_context = RenderContext()
+    render_context.is_realtime = True
 
     def audio_callback(outdata, frames, sdtime, status):
         nonlocal should_stop, last_render_time
         rendering_start_time = time.time()
 
-        audio_data = sound_node.render(frames) 
+        audio_data = sound_node.render(frames, context=render_context) 
 
         if len(audio_data) == 0:
             should_stop = True
@@ -54,6 +59,9 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float):
 
         rendering_end_time = time.time()
         last_render_time = rendering_end_time - rendering_start_time
+        
+        # Clear chunk data for next render (important for realtime mode)
+        render_context.clear_chunk()
 
     def run_visualizer_and_stats():
         # Lower priority for visualization thread to avoid interfering with audio
@@ -113,18 +121,24 @@ def main():
         # Non-realtime mode requires a duration
         if not sound_duration:
             sound_duration = DEFAULT_PLAYBACK_TIME  # Fallback for nodes without explicit duration
+        
+        # Create render context for non-realtime mode
+        render_context = RenderContext()
+        render_context.is_realtime = False
             
         rendering_start_time = time.time()
         
         if DO_PRE_RENDER_WHOLE_SOUND:
-            rendered_sound = sound_node_to_play.render(int(SAMPLE_RATE * sound_duration))
+            rendered_sound = sound_node_to_play.render(int(SAMPLE_RATE * sound_duration), context=render_context)
         else:
             # Render in chunks
             rendered_sound: np.ndarray = []
             rendered_buffer: np.ndarray = None
             while (rendered_buffer is None or len(rendered_buffer) != 0) and len(rendered_sound) < sound_duration * SAMPLE_RATE:
-                rendered_buffer = sound_node_to_play.render(BUFFER_SIZE)
+                rendered_buffer = sound_node_to_play.render(BUFFER_SIZE, context=render_context)
                 rendered_sound = np.concatenate((rendered_sound, rendered_buffer))
+                # Clear chunk for next iteration
+                render_context.clear_chunk()
 
         rendering_end_time = time.time()
 

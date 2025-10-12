@@ -22,15 +22,13 @@ class DelayNode(BaseNode):
         self.signal_node = instantiate_node(model.signal)
         self.carry_over: np.ndarray = []
 
-    def render(self, num_samples=None, **params):
-        super().render(num_samples)
-        
+    def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, we need to render the full signal
         if num_samples is None:
             num_samples = self.resolve_num_samples(num_samples)
             if num_samples is None:
                 # For delay nodes, we need to get the full child signal first
-                child_signal = self.render_full_child_signal(self.signal_node, **self.get_params_for_children(params))
+                child_signal = self.render_full_child_signal(self.signal_node, context, **self.get_params_for_children(params))
                 if len(child_signal) == 0:
                     return np.array([])
                 
@@ -45,7 +43,7 @@ class DelayNode(BaseNode):
                     delayed_wave[i * n_delay_time_samples : i * n_delay_time_samples + len(child_signal)] += child_signal * (self.model.feedback ** i)
                 return delayed_wave
         
-        signal_wave = self.signal_node.render(num_samples, **self.get_params_for_children(params))
+        signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))
         
         # If signal is done and we have no carry over, we're done
         if len(signal_wave) == 0 and len(self.carry_over) == 0:
