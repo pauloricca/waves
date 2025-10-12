@@ -16,7 +16,7 @@ Example usage in YAML:
               type: sin
               freq: 550
               amp: 0.5
-          - delay:
+          - retrigger:
               time: 0.1
               repeats: 3
               signal:

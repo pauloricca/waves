@@ -7,15 +7,15 @@ from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from utils import add_waves
 
-class DelayModel(BaseNodeModel):
+class RetriggerModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     time: float = 0.1
     repeats: int = 3
     feedback: float = 0.3
     signal: BaseNodeModel = None
 
-class DelayNode(BaseNode):
-    def __init__(self, model: DelayModel):
+class RetriggerNode(BaseNode):
+    def __init__(self, model: RetriggerModel):
         from nodes.node_utils.instantiate_node import instantiate_node
         super().__init__(model)
         self.model = model
@@ -27,12 +27,12 @@ class DelayNode(BaseNode):
         if num_samples is None:
             num_samples = self.resolve_num_samples(num_samples)
             if num_samples is None:
-                # For delay nodes, we need to get the full child signal first
+                # For retrigger nodes, we need to get the full child signal first
                 child_signal = self.render_full_child_signal(self.signal_node, context, **self.get_params_for_children(params))
                 if len(child_signal) == 0:
                     return np.array([])
                 
-                # Calculate total delay time and set num_samples accordingly
+                # Calculate total retrigger time and set num_samples accordingly
                 n_delay_time_samples = int(SAMPLE_RATE * self.model.time)
                 total_length = len(child_signal) + n_delay_time_samples * self.model.repeats
                 self._last_chunk_samples = total_length
@@ -67,4 +67,4 @@ class DelayNode(BaseNode):
         
         return part_to_return
 
-DELAY_DEFINITION = NodeDefinition("delay", DelayNode, DelayModel)
+RETRIGGER_DEFINITION = NodeDefinition("retrigger", RetriggerNode, RetriggerModel)
