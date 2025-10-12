@@ -49,6 +49,9 @@ class BaseNode:
         
         # If this node has an id, handle caching and recursion
         if self.node_id:
+            # Register this node instance in the context so it can be referenced
+            context.store_node(self.node_id, self)
+            
             recursion_depth = context.get_recursion_depth(self.node_id)
             
             # Check if we've hit max recursion (feedback loop break)

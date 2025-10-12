@@ -91,7 +91,7 @@ test-osc-range:
     duration: 1
     range: [-0.5, 0.5]
 
-delayed:
+retrig:
   retrigger:
     time: 0.1
     feedback: 0.5
@@ -111,7 +111,7 @@ seq2:
     interval: 0.3
     repeat: 40
     sequence:
-      - delayed
+      - retrig
       -
       -
       -
@@ -1589,6 +1589,83 @@ test-sample-warble-with-speed:
         freq: 0.5
         range: [0.8, 1.2]
 
+flanger:
+  delay:
+    time:
+      osc:
+        type: sin
+        freq: 0.5
+        range: [0.001, 0.01]  # Varies from 1ms to 10ms
+    signal:
+      osc:
+        type: sin
+        freq: 440
+
+
+echo:
+  mix:
+    signals:
+      - sample:
+          id: paulo
+          file: samples/paulo.wav
+          loop: true
+          start: 0.5
+          offset:
+            midi_cc:
+              channel: 0
+              cc: 23
+              range: [-1, 1]
+              initial: 0
+          speed:
+            midi_cc:
+              channel: 0
+              cc: 7
+              range: [-2, 2]
+              initial: 0
+      - map:
+          from: [-1, 1]
+          to: [-0.5, 0.5]
+          signal:
+            delay: 
+              id: echo
+              time: 0.3
+              signal:
+                mix:
+                  signals:
+                    - reference:
+                        ref: paulo
+                    - map:
+                        from: [-1, 1]
+                        to: [-0.5, 0.5]
+                        signal:
+                          reference:
+                            ref: echo
 
 
 
+echo2:
+  mix:
+    signals:
+      - osc:
+          id: paulo
+          type: sin
+          freq: 440
+          duration: 0.1
+      - map:
+          from: [-1, 1]
+          to: [-0.5, 0.5]
+          signal:
+            delay: 
+              id: echo
+              time: 2
+              signal:
+                mix:
+                  signals:
+                    - reference:
+                        ref: paulo
+                    - map:
+                        from: [-1, 1]
+                        to: [-0.5, 0.5]
+                        signal:
+                          reference:
+                            ref: echo

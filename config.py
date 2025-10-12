@@ -5,7 +5,7 @@ SAMPLE_RATE = 44100
 BUFFER_SIZE = 2048
 
 # Node reference settings
-MAX_RECURSION_DEPTH = 10  # Maximum recursion depth for feedback loops
+MAX_RECURSION_DEPTH = 3  # Maximum recursion depth for feedback loops
 
 # MIDI settings
 MIDI_INPUT_DEVICE_NAME = None  # Set to a specific device name, or None to auto-detect

@@ -20,23 +20,17 @@ class ReferenceNode(BaseNode):
         if context is None:
             raise ValueError(f"ReferenceNode '{self.ref_id}' requires a render context")
         
-        # Get the cached output from the referenced node
-        wave = context.get_output(self.ref_id)
+        # Get the referenced node instance
+        referenced_node = context.get_node(self.ref_id)
         
-        if wave is None:
-            # Referenced node hasn't been rendered yet
-            # Could be a topological issue or the node is defined later
-            raise ValueError(f"Referenced node '{self.ref_id}' has not been rendered yet. "
+        if referenced_node is None:
+            # Node hasn't been registered yet - topological error
+            raise ValueError(f"Referenced node '{self.ref_id}' has not been defined yet. "
                            f"Ensure nodes with id='{self.ref_id}' are defined before they are referenced.")
         
-        # Adjust output length to match requested samples
-        if num_samples is not None and len(wave) > 0:
-            if len(wave) < num_samples:
-                # Pad with zeros
-                padding = np.zeros(num_samples - len(wave), dtype=np.float32)
-                wave = np.concatenate([wave, padding])
-            elif len(wave) > num_samples:
-                wave = wave[:num_samples]
+        # Call render on the referenced node - this will handle recursion tracking
+        # and return zeros if max recursion depth is reached
+        wave = referenced_node.render(num_samples, context, **params)
         
         return wave.copy()  # Return a copy to avoid mutations
 
