@@ -190,3 +190,4 @@ When adding new features we should consider the following ideas for future work 
 - We don't need to write detailed instructions of usage or changes in .md files, if there is anything non-trivial we can just add a comment on the node file, just above the node model class.
 - For neatness, we try to keep node parameters as one word, but if we can't find a good name, we can use underscores to separate words. Feel free to suggest better names for parameters if you think of any.
 - When passing positional arguments to functions or methods and the arguments have the same name as the variables, we should just pass them without specifying the name to avoid "name=name" argument passing.
+- Use vectorised numpy operations when possible, avoid for loops over numpy arrays because this is a realtime application dealing with very large arrays.

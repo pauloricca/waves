@@ -1653,11 +1653,11 @@ echo2:
           duration: 0.1
       - map:
           from: [-1, 1]
-          to: [-0.5, 0.5]
+          to: [-0.7, 0.7]
           signal:
             delay: 
               id: echo
-              time: 2
+              time: 1
               signal:
                 mix:
                   signals:
@@ -1665,7 +1665,7 @@ echo2:
                         ref: paulo
                     - map:
                         from: [-1, 1]
-                        to: [-0.5, 0.5]
+                        to: [-0.7, 0.7]
                         signal:
                           reference:
                             ref: echo

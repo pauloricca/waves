@@ -60,45 +60,51 @@ class DelayNode(BaseNode):
         
         # Handle both constant and time-varying delay times
         if len(delay_times) == 1:
-            # Constant delay time
+            # Constant delay time - can be optimized with vectorized operations
             delay_samples = int(delay_times[0] * SAMPLE_RATE)
             delay_samples = np.clip(delay_samples, 0, self.buffer_size - 1)
             
-            for i in range(num_samples):
-                # Write current input to buffer
-                self.buffer[self.write_position] = signal_wave[i]
-                
-                # Read from buffer at the delayed position
-                read_position = (self.write_position - delay_samples) % self.buffer_size
-                output[i] = self.buffer[read_position]
-                
-                # Advance write position
-                self.write_position = (self.write_position + 1) % self.buffer_size
+            # Calculate all write positions at once
+            write_positions = (self.write_position + np.arange(num_samples)) % self.buffer_size
+            
+            # Write all input samples to buffer
+            self.buffer[write_positions] = signal_wave
+            
+            # Calculate all read positions at once
+            read_positions = (write_positions - delay_samples) % self.buffer_size
+            
+            # Read all output samples from buffer
+            output = self.buffer[read_positions].copy()
+            
+            # Update write position for next render
+            self.write_position = (self.write_position + num_samples) % self.buffer_size
         else:
-            # Time-varying delay
-            for i in range(num_samples):
-                # Write current input to buffer
-                self.buffer[self.write_position] = signal_wave[i]
-                
-                # Calculate delay in samples for this time step
-                delay_time = delay_times[i] if i < len(delay_times) else delay_times[-1]
-                delay_samples = delay_time * SAMPLE_RATE
-                delay_samples = np.clip(delay_samples, 0, self.buffer_size - 1)
-                
-                # For fractional delays, use linear interpolation
-                delay_samples_int = int(delay_samples)
-                delay_samples_frac = delay_samples - delay_samples_int
-                
-                read_position_1 = (self.write_position - delay_samples_int) % self.buffer_size
-                read_position_2 = (self.write_position - delay_samples_int - 1) % self.buffer_size
-                
-                # Linear interpolation between the two samples
-                sample_1 = self.buffer[read_position_1]
-                sample_2 = self.buffer[read_position_2]
-                output[i] = sample_1 * (1 - delay_samples_frac) + sample_2 * delay_samples_frac
-                
-                # Advance write position
-                self.write_position = (self.write_position + 1) % self.buffer_size
+            # Time-varying delay - requires interpolation, still vectorizable
+            # Calculate delay in samples for all time steps
+            delay_samples_array = delay_times * SAMPLE_RATE
+            delay_samples_array = np.clip(delay_samples_array, 0, self.buffer_size - 1)
+            
+            # Calculate all write positions
+            write_positions = (self.write_position + np.arange(num_samples)) % self.buffer_size
+            
+            # Write all input samples to buffer
+            self.buffer[write_positions] = signal_wave
+            
+            # For fractional delays, use linear interpolation
+            delay_samples_int = delay_samples_array.astype(int)
+            delay_samples_frac = delay_samples_array - delay_samples_int
+            
+            # Calculate read positions for interpolation
+            read_positions_1 = (write_positions - delay_samples_int) % self.buffer_size
+            read_positions_2 = (write_positions - delay_samples_int - 1) % self.buffer_size
+            
+            # Linear interpolation between the two samples (vectorized)
+            sample_1 = self.buffer[read_positions_1]
+            sample_2 = self.buffer[read_positions_2]
+            output = sample_1 * (1 - delay_samples_frac) + sample_2 * delay_samples_frac
+            
+            # Update write position for next render
+            self.write_position = (self.write_position + num_samples) % self.buffer_size
         
         return output
 
