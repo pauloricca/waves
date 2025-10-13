@@ -200,3 +200,38 @@ class BaseNode:
         if len(signal) > 0:
             self._last_chunk_samples = len(signal)
         return signal
+    
+    
+    def eval_scalar(self, value, context, **render_params):
+        """
+        Evaluate a scalar parameter that might be a number or expression string.
+        Always returns a single float value (not an array).
+        
+        Args:
+            value: The value to evaluate (number or expression string)
+            context: RenderContext (not used currently but kept for consistency)
+            **render_params: Render parameters to make available in expressions
+            
+        Returns:
+            A float value
+        """
+        if isinstance(value, str):
+            # It's an expression
+            from nodes.expression_globals import get_expression_context
+            eval_context = get_expression_context(render_params, self.time_since_start, 1)
+            
+            # Evaluate
+            try:
+                compiled = compile(value, '<expression>', 'eval')
+                result = eval(compiled, {"__builtins__": {}}, eval_context)
+                
+                # Extract scalar from result
+                if isinstance(result, np.ndarray):
+                    return float(result[0] if len(result) > 0 else 0)
+                else:
+                    return float(result)
+            except Exception as e:
+                raise ValueError(f"Error evaluating scalar expression '{value}': {e}")
+        else:
+            # Already a scalar
+            return float(value)

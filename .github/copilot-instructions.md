@@ -56,8 +56,73 @@ Waves can be used as audio or as input for parameters of other nodes. In this se
 
 ### WavableValues
 
-Some parameters of nodes can be fixed scalar values or waves – dynamic values that change over time. We call this a WavableValue (nodes/wavable_value.py). Waves are typically the output of a Node's render function but they can also be interpolated values, and in this case the parameter is a list of values to be used for interpolation. Each value can be a scalar or a list or two values, the first one is the value and the second one is the time it takes to get to that value, proportionally to the total time of the envelope. For example:
-freq: [10000, [500, 0.01], [60, 0.02]] means that the frequency starts at 10000 Hz, then goes to 500 Hz in 1% of the total time of the envelope, then goes to 60 Hz in 2% of the total time of the envelope, and then stays at 60 Hz for the rest of the time. The first and last values can have their positions ommited (assumed to be  0 and 1 respectively).
+Some parameters of nodes can be fixed scalar values or waves – dynamic values that change over time. We call this a WavableValue (nodes/wavable_value.py). Waves are typically the output of a Node's render function but they can also be:
+
+1. **Interpolated values**: A list of values to be used for interpolation. Each value can be a scalar or a list of two values, the first one is the value and the second one is the time it takes to get to that value, proportionally to the total time of the envelope. For example:
+   `freq: [10000, [500, 0.01], [60, 0.02]]` means that the frequency starts at 10000 Hz, then goes to 500 Hz in 1% of the total time of the envelope, then goes to 60 Hz in 2% of the total time of the envelope, and then stays at 60 Hz for the rest of the time. The first and last values can have their positions omitted (assumed to be 0 and 1 respectively).
+
+2. **Expression strings**: Any string value is treated as a Python expression that is evaluated at render time. Expressions have access to global constants, user-defined variables, render parameters, and NumPy functions. For example:
+   `freq: "440 * 2"` evaluates to 880
+   `freq: "root_note * frequency_multiplier"` uses a user variable and render parameter
+
+### Expression System
+
+The expression system (nodes/expression_globals.py, nodes/expression.py) allows dynamic evaluation of Python expressions in YAML node definitions. This enables flexible, mathematical sound design with variables, functions, and array operations.
+
+**Key features:**
+- Any string value in YAML is treated as an expression (no special prefix needed)
+- All evaluation happens at render time (fully dynamic, supports realtime parameter changes)
+- Expressions are compiled once at node initialization for performance
+- Works with both scalar values and NumPy arrays seamlessly
+- NumPy operations are vectorized and work on entire audio buffers
+
+**Available in expressions:**
+- **Global constants**: `pi`, `tau`, `e`, `sr` (sample rate), `sample_rate`
+- **Runtime variables**: `time` or `t` (time since start), `samples` or `n` (number of samples in chunk)
+- **Render parameters**: `frequency`, `amplitude_multiplier`, `duration`, `is_in_sustain`, etc.
+- **User variables**: Defined in `vars:` section at the top of YAML file
+- **NumPy functions**: `sin`, `cos`, `tan`, `abs`, `sqrt`, `exp`, `log`, `clip`, `max`, `min`, `floor`, `ceil`, `round`, `sign`, `zeros`, `ones`, `linspace`, `arange`, `sum`, `mean`, `std`, and full `np` module
+
+**Expression node:**
+The `expression` node type allows arbitrary multi-input operations with named arguments:
+```yaml
+my_sound:
+  expression:
+    exp: "carrier * (1 + mod * 0.3)"  # FM synthesis
+    duration: 1
+    carrier:  # Named argument becomes variable in expression
+      osc:
+        type: sin
+        freq: 440
+    mod:  # Another named argument
+      osc:
+        type: sin
+        freq: 220
+```
+
+**Expression examples:**
+- Scalar: `attack: "60 / bpm * 0.05"` (uses user variable)
+- WavableValue: `freq: "440 * 2"` (simple math)
+- With render params: `freq: "root_note * frequency_multiplier"`
+- Array operations: `exp: "clip(signal * 2, -1, 1)"` (distortion)
+- Time-based: `exp: "sin(t * tau * 440) * 0.5"` (synthesize from scratch)
+
+**User variables:**
+Define global variables at the top of waves.yaml:
+```yaml
+vars:
+  bpm: 140
+  root_note: 261.63
+  attack_time: 0.02
+```
+
+These variables are then available in all expressions throughout the file.
+
+**Implementation notes:**
+- Expressions use Python's `eval()` with restricted builtins (`{"__builtins__": {}}`) for safety
+- For scalar parameters that support expressions, use `self.eval_scalar(value, context, **params)` in node code
+- WavableValue automatically handles expression strings when the value type is detected as 'expression'
+- Expression node uses `ConfigDict(extra='allow')` to accept arbitrary named parameters, stored in `__pydantic_extra__`
 
 ## The YAML file
 
@@ -74,6 +139,8 @@ sound_identifier:
   node_name_3:
     (...)
 ```
+
+The structure of the yaml file as is, at the moment, always with the sound identifiers as root notes, then a root node name, then its parameters, some of which can be other nodes, and so on recursively. In the future we might think of adding some syntax sugar and relax this rule.
 
 ### Node References and Advanced Routing
 
@@ -180,7 +247,9 @@ When adding new features we should consider the following ideas for future work 
 - Support for MIDI note and cc output, to be able to control other devices with the midi node.
 - Add a live audio input node, to be able to process live audio input from a microphone or line input.
 - Being able to create new nodes or "macros" or "sub-patches" with parameters that can be reused in the yaml file.
-- Being able to use expressions in the yaml file, for example to set the frequency of an oscillator to be a function of time or other parameters.
+- ✅ **IMPLEMENTED**: Expression system for dynamic evaluation of Python expressions in YAML (can set parameters as functions of time, variables, or other parameters)
+- Musical note name constants (A4, C#5, etc.) and interval helpers (semitone, fifth, octave as frequency multipliers) for the expression system
+- Beat/time division constants (beat, bar, eighth, sixteenth) based on BPM for the expression system
 
 ### Directives for AI
 

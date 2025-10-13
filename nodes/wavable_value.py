@@ -16,7 +16,7 @@ class InterpolationTypes(str, Enum):
     STEP = "STEP"
 
 
-WavableValue = Union[float, List[Union[float, List[float]]], BaseNodeModel]
+WavableValue = Union[float, List[Union[float, List[float]]], BaseNodeModel, str]
 
 class WavableValueModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
@@ -30,14 +30,32 @@ class WavableValueNode(BaseNode):
         super().__init__(model)
         self.value = model.value
         self.interpolation_type = model.interpolation
-        self.wave_node = instantiate_node(model.value) if isinstance(model.value, BaseNodeModel) else None
         self.interpolated_values = None
+        
+        # Determine value type
+        if isinstance(model.value, BaseNodeModel):
+            self.wave_node = instantiate_node(model.value)
+            self.value_type = 'node'
+        elif isinstance(model.value, str):
+            # String = expression
+            self.compiled_expr = compile(model.value, '<expression>', 'eval')
+            self.value_type = 'expression'
+        elif isinstance(model.value, (float, int)):
+            self.wave_node = None
+            self.value_type = 'scalar'
+        elif isinstance(model.value, list):
+            self.wave_node = None
+            self.value_type = 'interpolated'
+        else:
+            self.wave_node = None
+            self.value_type = 'unknown'
 
     def _do_render(self, num_samples=None, context=None, **params):
         from nodes.oscillator import OSCILLATOR_RENDER_ARGS
-
-        if self.wave_node:
-            # If num_samples is None, pass it through to child
+        from nodes.expression_globals import get_expression_context
+        
+        if self.value_type == 'node':
+            # Existing node rendering logic
             if num_samples is None:
                 wave = self.wave_node.render(context=context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
                 if len(wave) > 0:
@@ -54,7 +72,35 @@ class WavableValueNode(BaseNode):
                 elif len(wave) == 0:
                     return np.array([], dtype=np.float32)
                 return wave
-        elif isinstance(self.value, (float, int)):
+        
+        elif self.value_type == 'expression':
+            # Expression evaluation
+            if num_samples is None:
+                duration = params.get(RenderArgs.DURATION, 0)
+                if duration == 0:
+                    raise ValueError("Duration required for expression")
+                num_samples = int(duration * SAMPLE_RATE)
+                self._last_chunk_samples = num_samples
+            
+            eval_context = get_expression_context(params, self.time_since_start, num_samples)
+            result = eval(self.compiled_expr, {"__builtins__": {}}, eval_context)
+            
+            # Handle result type
+            if isinstance(result, np.ndarray):
+                if len(result) != num_samples:
+                    if len(result) == 1:
+                        return np.full(num_samples, result[0], dtype=np.float32)
+                    elif len(result) < num_samples:
+                        padding = np.full(num_samples - len(result), result[-1])
+                        return np.concatenate([result, padding]).astype(np.float32)
+                    else:
+                        return result[:num_samples].astype(np.float32)
+                return result.astype(np.float32)
+            else:
+                return np.full(num_samples, float(result), dtype=np.float32)
+        
+        elif self.value_type == 'scalar':
+            # Scalar values
             if num_samples is None:
                 # For scalar values, we need a duration to know how many samples to generate
                 duration = params.get(RenderArgs.DURATION, 0)
@@ -62,8 +108,10 @@ class WavableValueNode(BaseNode):
                     raise ValueError("Duration must be set for scalar wavable values when rendering full signal.")
                 num_samples = int(duration * SAMPLE_RATE)
                 self._last_chunk_samples = num_samples
-            return np.full(num_samples, self.value)
-        if isinstance(self.value, list):
+            return np.full(num_samples, self.value, dtype=np.float32)
+        
+        elif self.value_type == 'interpolated':
+            # Interpolated values
             duration = params.get(RenderArgs.DURATION, 0)
 
             if duration == 0:

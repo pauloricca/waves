@@ -1,6 +1,7 @@
 from nodes.delay import DELAY_DEFINITION
 from nodes.retrigger import RETRIGGER_DEFINITION
 from nodes.envelope import ENVELOPE_DEFINITION
+from nodes.expression import EXPRESSION_DEFINITION
 from nodes.filter import FILTER_DEFINITION
 from nodes.non_realtime.invert import INVERT_DEFINITION
 from nodes.map import MAP_DEFINITION
@@ -26,6 +27,7 @@ NODE_REGISTRY = [
     INVERT_DEFINITION,
     SAMPLE_DEFINITION,
     ENVELOPE_DEFINITION,
+    EXPRESSION_DEFINITION,
     MIDI_DEFINITION,
     MIDI_CC_DEFINITION,
     MIX_DEFINITION,

@@ -53,6 +53,13 @@ def load_sound_library(file_path: str) -> SoundLibraryModel:
     global sound_library
     with open(file_path) as file:
         raw_data = yaml.safe_load(file)
+    
+    # Extract and set user variables if present
+    user_vars = raw_data.pop('vars', None)
+    if user_vars:
+        from nodes.expression_globals import set_user_variables
+        set_user_variables(user_vars)
+    
     try:
         sound_library = SoundLibraryModel.model_validate(raw_data)
     except Exception as e:

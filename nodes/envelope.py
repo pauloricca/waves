@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Union
 import numpy as np
 from config import SAMPLE_RATE, OSC_ENVELOPE_TYPE
 from constants import RenderArgs
@@ -7,10 +8,10 @@ from nodes.node_utils.node_definition_type import NodeDefinition
 
 
 class EnvelopeModel(BaseNodeModel):
-    attack: float = 0 # length of attack in seconds
-    decay: float = 0 # length of decay in seconds
-    sustain: float = 1.0 # sustain level (0 to 1)
-    release: float = 0 # length of release in seconds
+    attack: Union[float, str] = 0 # length of attack in seconds (or expression)
+    decay: Union[float, str] = 0 # length of decay in seconds (or expression)
+    sustain: Union[float, str] = 1.0 # sustain level (0 to 1) (or expression)
+    release: Union[float, str] = 0 # length of release in seconds (or expression)
     signal: BaseNodeModel = None
 
 
@@ -32,6 +33,12 @@ class EnvelopeNode(BaseNode):
         self.current_amplitude = 0.0  # Track actual current amplitude for smooth release
 
     def _do_render(self, num_samples, context=None, **params):
+        # Evaluate expression parameters
+        attack = self.eval_scalar(self.model.attack, context, **params)
+        decay = self.eval_scalar(self.model.decay, context, **params)
+        sustain = self.eval_scalar(self.model.sustain, context, **params)
+        release = self.eval_scalar(self.model.release, context, **params)
+        
         # Check if we should start the release phase
         is_in_sustain = params.get(RenderArgs.IS_IN_SUSTAIN, True)
         
@@ -41,7 +48,7 @@ class EnvelopeNode(BaseNode):
             self.release_started = True
         
         # Optimization: If release is complete, don't render the signal at all
-        release_len = int(self.model.release * SAMPLE_RATE)
+        release_len = int(release * SAMPLE_RATE)
         if self.is_in_release_phase and release_len > 0:
             if self.fade_out_multiplier is not None and len(self.fade_out_multiplier) == 0:
                 # Release is complete, return empty array immediately
@@ -61,7 +68,7 @@ class EnvelopeNode(BaseNode):
         processed_samples = 0
         
         # Apply attack envelope
-        attack_len = int(self.model.attack * SAMPLE_RATE)
+        attack_len = int(attack * SAMPLE_RATE)
         if attack_len > 0:
             if self.fade_in_multiplier is None:
                 # Create the attack envelope (0 to 1)
@@ -91,17 +98,17 @@ class EnvelopeNode(BaseNode):
             self.current_amplitude = 1.0
         
         # Apply decay envelope
-        decay_len = int(self.model.decay * SAMPLE_RATE)
+        decay_len = int(decay * SAMPLE_RATE)
         if decay_len > 0 and self.is_in_decay_phase and not self.is_in_sustain_phase and not self.is_in_release_phase:
             if self.decay_multiplier is None:
                 # Create the decay envelope (1 to sustain level)
                 if OSC_ENVELOPE_TYPE == "linear":
-                    self.decay_multiplier = np.linspace(1, self.model.sustain, decay_len)
+                    self.decay_multiplier = np.linspace(1, sustain, decay_len)
                 else:
                     # Exponential decay from 1 to sustain level
                     decay_curve = np.exp(-np.linspace(0, 5, decay_len))
                     # Scale from [1, ~0] to [1, sustain]
-                    self.decay_multiplier = self.model.sustain + (1 - self.model.sustain) * decay_curve
+                    self.decay_multiplier = sustain + (1 - sustain) * decay_curve
             
             # Apply decay to the current chunk
             if len(self.decay_multiplier) > 0 and len(signal_wave) > processed_samples:
@@ -117,19 +124,19 @@ class EnvelopeNode(BaseNode):
                 # If decay is complete, move to sustain phase
                 if len(self.decay_multiplier) == 0:
                     self.is_in_sustain_phase = True
-                    self.current_amplitude = self.model.sustain
+                    self.current_amplitude = sustain
         elif self.is_in_decay_phase and not self.is_in_release_phase:
             # No decay time or decay complete, move to sustain
             self.is_in_sustain_phase = True
-            self.current_amplitude = self.model.sustain
+            self.current_amplitude = sustain
         
         # Apply sustain level to remaining unprocessed samples
         if self.is_in_sustain_phase and not self.is_in_release_phase and processed_samples < len(signal_wave):
-            signal_wave[processed_samples:] *= self.model.sustain
+            signal_wave[processed_samples:] *= sustain
             # Current amplitude stays at sustain level
         
         # Apply release envelope
-        release_len = int(self.model.release * SAMPLE_RATE)
+        release_len = int(release * SAMPLE_RATE)
         if release_len > 0 and self.is_in_release_phase:
             if self.fade_out_multiplier is None and self.release_started:
                 # Create the release envelope starting from CURRENT amplitude (not sustain)
