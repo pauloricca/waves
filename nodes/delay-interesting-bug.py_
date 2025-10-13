@@ -69,8 +69,6 @@ class DelayNode(BaseNode):
         # This ensures all recursion depths see the same initial buffer state
         buffer_snapshot = self.buffer.copy()
         write_position_snapshot = self.write_position
-        read_position_snapshot = self.read_position
-        previous_delay_time_snapshot = self.previous_delay_time
         
         # Now render the input signal (which may trigger recursive calls)
         signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))
@@ -78,8 +76,6 @@ class DelayNode(BaseNode):
         # Restore buffer state for our read/write operations
         self.buffer = buffer_snapshot
         self.write_position = write_position_snapshot
-        self.read_position = read_position_snapshot
-        self.previous_delay_time = previous_delay_time_snapshot
         
         # If signal is done, we're done (no tail for pure delay)
         if len(signal_wave) == 0:
@@ -150,67 +146,47 @@ class DelayNode(BaseNode):
         return output
     
     def _apply_tape_delay(self, signal_wave, delay_times, num_samples):
-        """Tape delay mode - simulates changing tape speed, affecting both read and write
+        """Tape delay mode - delay time changes cause pitch shifting like a tape speed change"""
+        output = np.zeros(num_samples, dtype=np.float32)
         
-        In a real tape delay:
-        - The physical distance between record and playback heads is FIXED
-        - Changing the delay time means changing the TAPE SPEED
-        - Both read and write happen at the same speed (they're on the same tape)
-        - Slower tape = longer delay, lower pitch
-        - Faster tape = shorter delay, higher pitch
-        """
-        
-        # Get the target delay time
+        # Get the target delay time (use first/average if varying)
         target_delay_time = delay_times[0] if len(delay_times) == 1 else np.mean(delay_times)
-        target_delay_samples = np.clip(target_delay_time * SAMPLE_RATE, 1, self.buffer_size - 1)
         
-        # Initialize if first call
+        # Initialize read position if this is the first call
         if self.previous_delay_time is None:
             self.previous_delay_time = target_delay_time
-            # Fixed "physical" distance between heads (in samples)
-            # This represents the actual physical distance on the tape
-            self.tape_head_distance = target_delay_samples
-            self.read_position = float((self.write_position - self.tape_head_distance) % self.buffer_size)
+            self.read_position = float(self.write_position - int(target_delay_time * SAMPLE_RATE))
         
-        # Calculate tape speed based on delay time change
-        # If delay increases, tape must slow down (speed < 1.0)
-        # If delay decreases, tape must speed up (speed > 1.0)
-        # The relationship: delay_time = head_distance / tape_speed
-        # Therefore: tape_speed = head_distance / delay_time
-        tape_speed = self.tape_head_distance / target_delay_samples
+        # Calculate the target read position based on current delay time
+        target_delay_samples = target_delay_time * SAMPLE_RATE
+        target_read_position = float(self.write_position - target_delay_samples)
         
-        # No clamping - allow extreme values for experimental effects
+        # Calculate read speed adjustment to smoothly transition to new delay time
+        # This creates the tape speed up/slow down effect
+        position_difference = target_read_position - self.read_position
+        read_speed = 1.0 + (position_difference / num_samples)
         
-        # BOTH read and write at the tape speed
-        # Generate positions for reading
-        read_increments = np.full(num_samples, tape_speed)
-        read_positions = self.read_position + np.concatenate([[0], np.cumsum(read_increments[:-1])])
+        # Generate read positions with variable speed (can be fractional)
+        read_positions = self.read_position + np.arange(num_samples) * read_speed
         
-        # Wrap and interpolate for reading
+        # Wrap positions and split into integer and fractional parts for interpolation
         read_positions_wrapped = read_positions % self.buffer_size
         read_positions_int = read_positions_wrapped.astype(int)
         read_positions_frac = read_positions_wrapped - read_positions_int
         
+        # Linear interpolation for smooth playback
         next_positions = (read_positions_int + 1) % self.buffer_size
         sample_1 = self.buffer[read_positions_int]
         sample_2 = self.buffer[next_positions]
         output = sample_1 * (1 - read_positions_frac) + sample_2 * read_positions_frac
         
-        # Write at the same tape speed
-        # When tape is slow (speed < 1), we write fewer samples to the buffer
-        # When tape is fast (speed > 1), we write more samples (with interpolation)
-        write_increments = np.full(num_samples, tape_speed)
-        write_positions = self.write_position + np.concatenate([[0], np.cumsum(write_increments[:-1])])
-        write_positions_wrapped = write_positions % self.buffer_size
-        write_positions_int = write_positions_wrapped.astype(int)
-        
-        # Write input signal to buffer at tape speed
-        self.buffer[write_positions_int] = signal_wave
+        # Write input to buffer
+        write_positions = (self.write_position + np.arange(num_samples)) % self.buffer_size
+        self.buffer[write_positions] = signal_wave
         
         # Update positions for next render
-        total_tape_advance = num_samples * tape_speed
-        self.write_position = (self.write_position + total_tape_advance) % self.buffer_size
-        self.read_position = (self.read_position + total_tape_advance) % self.buffer_size
+        self.write_position = (self.write_position + num_samples) % self.buffer_size
+        self.read_position = (read_positions[-1] + read_speed) % self.buffer_size
         self.previous_delay_time = target_delay_time
         
         return output

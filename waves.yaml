@@ -1601,11 +1601,17 @@ flanger:
         type: sin
         freq: 440
 
-
+# CC 21 wet amp
+# CC 22 delay time
+# CC 23 sample offset
+# CC 5  dry amp
+# CC 6  feedback amp
+# CC 7  sample speed
 echo:
   mix:
     signals:
       - map:
+          id: paulo
           from: [-1, 1]
           to: 
             - midi_cc:
@@ -1620,8 +1626,7 @@ echo:
                 initial: 1
           signal:
             sample:
-              id: paulo
-              file: samples/paulo.wav
+              file: samples/waves.wav
               loop: true
               start: 0.5
               offset:
@@ -1641,17 +1646,18 @@ echo:
           to: 
             - midi_cc:
                 channel: 0
-                cc: 6
+                cc: 21
                 range: [0, -1]
                 initial: 0
             - midi_cc:
                 channel: 0
-                cc: 6
+                cc: 21
                 range: [0, 1]
                 initial: 0
           signal:
             delay: 
               id: echo
+              mode: tape
               time: 
                 midi_cc:
                   channel: 0
