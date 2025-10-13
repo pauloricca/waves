@@ -10,7 +10,7 @@ MAX_RECURSION_DEPTH = 2  # Maximum recursion depth for feedback loops
 # MIDI settings
 MIDI_INPUT_DEVICE_NAME = None  # Set to a specific device name, or None to auto-detect
 VISUALISATION_ROW_HEIGHT = 10
-RENDERED_MASTER_GAIN = 0.2
+RENDERED_MASTER_GAIN = 0.6
 DO_NORMALISE_EACH_SOUND = False
 DEFAULT_PLAYBACK_TIME = 4  # seconds, for nodes without explicit duration
 

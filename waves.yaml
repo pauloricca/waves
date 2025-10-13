@@ -1604,6 +1604,7 @@ flanger:
 # CC 21 wet amp
 # CC 22 delay time
 # CC 23 sample offset
+# CC 4  dry to wet amp
 # CC 5  dry amp
 # CC 6  feedback amp
 # CC 7  sample speed
@@ -1611,14 +1612,13 @@ echo:
   mix:
     signals:
       - map:
-          id: paulo
           from: [-1, 1]
           to: 
             - midi_cc:
                 channel: 0
                 cc: 5
                 range: [0, -1]
-                initial: 1
+                initial: -1
             - midi_cc:
                 channel: 0
                 cc: 5
@@ -1626,6 +1626,7 @@ echo:
                 initial: 1
           signal:
             sample:
+              id: paulo
               file: samples/waves.wav
               loop: true
               start: 0.5
@@ -1640,7 +1641,7 @@ echo:
                   channel: 0
                   cc: 7
                   range: [-2, 2]
-                  initial: 0
+                  initial: 1
       - map:
           from: [-1, 1]
           to: 
@@ -1667,8 +1668,22 @@ echo:
               signal:
                 mix:
                   signals:
-                    - reference:
-                        ref: paulo
+                    - map:
+                        from: [-1, 1]
+                        to: 
+                          - midi_cc:
+                              channel: 0
+                              cc: 4
+                              range: [0, -1]
+                              initial: 0
+                          - midi_cc:
+                              channel: 0
+                              cc: 4
+                              range: [0, 1]
+                              initial: 0
+                        signal:
+                          reference:
+                            ref: paulo
                     - map:
                         from: [-1, 1]
                         to: 
