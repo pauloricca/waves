@@ -16,7 +16,7 @@ class SequencerModel(BaseNodeModel):
     interval: float = 0
     repeat: int = 1
     sequence: Optional[List[Union[BaseNodeModel, str, List[Union[str, BaseNodeModel]], None]]] = None
-    chain: Optional[List[str]] = None
+    chain: Optional[List[Union[str, BaseNodeModel]]] = None
 
 
 class SequencerNode(BaseNode):
@@ -93,13 +93,27 @@ class SequencerNode(BaseNode):
         total_sequence_duration = 0
         for item in sequence:
             if isinstance(item, str):
-                # String items don't have duration, use default
-                total_sequence_duration += 1.0
-            elif isinstance(item, dict):
-                total_sequence_duration += item.get('duration', 1.0)
+                # String reference - look up the sound model
+                sound_model = get_sound_model(item.split()[0])
+                item_duration = look_for_duration(sound_model) or 1.0
+                total_sequence_duration += item_duration
+            elif isinstance(item, BaseNodeModel):
+                # Inline node model
+                item_duration = look_for_duration(item) or 1.0
+                total_sequence_duration += item_duration
             elif isinstance(item, list):
-                # List items (like [lead f80, thump a0.2]) use default duration
-                total_sequence_duration += 1.0
+                # List items (like [lead f80, thump a0.2]) - find longest duration
+                max_duration = 0
+                for subitem in item:
+                    if isinstance(subitem, str):
+                        sound_model = get_sound_model(subitem.split()[0])
+                        subitem_duration = look_for_duration(sound_model) or 1.0
+                    elif isinstance(subitem, BaseNodeModel):
+                        subitem_duration = look_for_duration(subitem) or 1.0
+                    else:
+                        subitem_duration = 1.0
+                    max_duration = max(max_duration, subitem_duration)
+                total_sequence_duration += max_duration if max_duration > 0 else 1.0
             else:
                 total_sequence_duration += 1.0
         
@@ -164,9 +178,11 @@ class SequencerNode(BaseNode):
                         continue
                 # Note: we don't skip rendering here - we fall through to render active sounds during the gap
             
+            # Define step_key for tracking
+            step_key = (self.current_repeat, self.current_step)
+            
             # Check if we need to trigger new sounds for the current step (only if not complete)
             if not self.sequence_complete:
-                step_key = (self.current_repeat, self.current_step)
                 if step_key not in self.step_triggered:
                     # Trigger sounds for this step
                     new_sounds = self.create_sound_nodes_for_step(self.current_step, **params)
@@ -251,13 +267,25 @@ class SequencerNode(BaseNode):
             for i in reversed(sounds_to_remove):
                 self.all_active_sounds.pop(i)
             
+            # For chain mode: check if we should advance to next step immediately
+            # This prevents gaps between chain items
+            if self.chain and not self.sequence_complete:
+                current_step_sounds = [s for s in self.all_active_sounds if s[4] == self.current_step]
+                if len(current_step_sounds) == 0 and step_key in self.step_triggered:
+                    # Current step has finished, move to next
+                    self.current_step += 1
+                    self.time_in_current_step = 0
+                    # Don't continue the loop - we want to trigger the next step in the same chunk
+                    # if there are still samples to render
+            
             # Add to output
             output_wave[samples_written:samples_written + samples_to_render] = step_wave
             samples_written += samples_to_render
             self.time_in_current_step += samples_to_render / SAMPLE_RATE
             
-            # Check if we should advance to next step (only if sequence is not complete)
+            # Check if we should advance to next step for sequence mode
             if self.sequence and not self.sequence_complete and self.time_in_current_step >= self.interval:
+                # For sequence mode: advance based on interval timing
                 self.current_step += 1
                 self.time_in_current_step = 0
         

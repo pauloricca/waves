@@ -1,3 +1,4 @@
+from nodes.context import CONTEXT_DEFINITION
 from nodes.delay import DELAY_DEFINITION
 from nodes.retrigger import RETRIGGER_DEFINITION
 from nodes.envelope import ENVELOPE_DEFINITION
@@ -14,6 +15,8 @@ from nodes.sample import SAMPLE_DEFINITION
 from nodes.sequencer import SEQUENCER_DEFINITION
 from nodes.shuffle import SHUFFLE_DEFINITION
 from nodes.smooth import SMOOTH_DEFINITION
+from nodes.snap import SNAP_DEFINITION
+from nodes.tempo import TEMPO_DEFINITION
 
 NODE_REGISTRY = [
     OSCILLATOR_DEFINITION,
@@ -24,10 +27,13 @@ NODE_REGISTRY = [
     SHUFFLE_DEFINITION,
     MAP_DEFINITION,
     SMOOTH_DEFINITION,
+    SNAP_DEFINITION,
+    TEMPO_DEFINITION,
     INVERT_DEFINITION,
     SAMPLE_DEFINITION,
     ENVELOPE_DEFINITION,
     EXPRESSION_DEFINITION,
+    CONTEXT_DEFINITION,
     MIDI_DEFINITION,
     MIDI_CC_DEFINITION,
     MIX_DEFINITION,

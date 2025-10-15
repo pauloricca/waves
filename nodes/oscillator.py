@@ -30,6 +30,7 @@ class OscillatorTypes(str, Enum):
     SAW = "SAW"
     NOISE = "NOISE"
     PERLIN = "PERLIN"
+    WANDER = "WANDER"  # Fast random walk LFO
     NONE = "NONE"
 
 
@@ -44,8 +45,8 @@ class OscillatorModel(BaseNodeModel):
     attack: float = 0 # Attack time in seconds
     release: float = 0 # Release time in seconds
     partials: List[OscillatorModel] = []
-    scale: float = 1.0 # Perlin noise scale
-    seed: Optional[float] = None # Perlin noise seed
+    scale: float = 1.0 # Perlin/wander variation rate (higher = faster changes)
+    seed: Optional[float] = None # Perlin/wander noise seed
     range: Optional[Tuple[float, float]] = None # Output range [min, max]
     
     @field_validator("type", mode="before")
@@ -84,6 +85,9 @@ class OscillatorNode(BaseNode):
         self.partials = [instantiate_node(partial) for partial in model.partials]
         self.seed = self.model.seed or random.randint(0, 10000)
         self.phase_acc = 0  # Phase accumulator to maintain continuity between render calls
+        self.wander_position = 0.0  # Current position for wander oscillator
+        self.wander_velocity = 0.0  # Current velocity for wander oscillator
+        self.wander_rng = None  # Random number generator for wander (initialized on first use)
         self.fase_in_multiplier: np.ndarray = None
         self.fase_out_multiplier: np.ndarray = None
 
@@ -239,6 +243,35 @@ class OscillatorNode(BaseNode):
             noise_function = Noise(self.seed).noise1
             perlin_noise = np.array(noise_function(continuous_t * self.model.scale))
             total_wave = amplitude * perlin_noise
+        elif osc_type == OscillatorTypes.WANDER:
+            # Fast random walk LFO - smooth wandering motion
+            # scale controls variation rate: higher = faster/more erratic changes (like Perlin)
+            if self.wander_rng is None:
+                self.wander_rng = np.random.RandomState(int(self.seed))
+            
+            # Generate wander wave using smooth random walk
+            wander_wave = np.zeros(num_samples, dtype=np.float32)
+            
+            # Variation rate - higher scale = faster changes (matches Perlin behavior)
+            variation_rate = max(0.001, self.model.scale)
+            
+            for i in range(num_samples):
+                # Add random acceleration (changes velocity)
+                acceleration = self.wander_rng.randn() * variation_rate
+                self.wander_velocity += acceleration
+                
+                # Apply damping to velocity to keep it bounded
+                damping = 0.95
+                self.wander_velocity *= damping
+                
+                # Update position
+                self.wander_position += self.wander_velocity / SAMPLE_RATE
+                
+                # Soft bounds to keep the output roughly in [-1, 1]
+                # Using tanh for smooth bouncing at boundaries
+                wander_wave[i] = np.tanh(self.wander_position)
+            
+            total_wave = amplitude * wander_wave
 
         # Render and add partials
         if len(self.partials) > 0:
