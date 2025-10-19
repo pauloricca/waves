@@ -1,10 +1,9 @@
 from __future__ import annotations
 from typing import List, Optional, Union
+import re
 import numpy as np
 from pydantic import ConfigDict
 from config import SAMPLE_RATE
-from constants import RenderArgs
-from nodes.oscillator import OSCILLATOR_RENDER_ARGS
 from sound_library import get_sound_model
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
@@ -40,11 +39,17 @@ class SequencerNode(BaseNode):
         parts = sound_name_with_params.split()
         render_args = {}
 
+        # Parse parameters by separating text from numeric parts
+        # e.g., "f440" -> param_name="f", value=440
+        #       "amp0.5" -> param_name="amp", value=0.5
+        #       "t2" -> param_name="t", value=2
         for param in parts[1:]:
-            if param.startswith("f"):
-                render_args[RenderArgs.FREQUENCY] = float(param[1:])
-            elif param.startswith("a"):
-                render_args[RenderArgs.AMPLITUDE_MULTIPLIER] = float(param[1:])
+            # Use regex to separate alphabetic prefix from numeric suffix
+            match = re.match(r'^([a-zA-Z_]+)([-+]?[0-9]*\.?[0-9]+)$', param)
+            if match:
+                param_name = match.group(1)
+                param_value = float(match.group(2))
+                render_args[param_name] = param_value
         
         return instantiate_node(sound_model), render_args
 
@@ -236,8 +241,8 @@ class SequencerNode(BaseNode):
                 if samples_to_render_from_sound <= 0:
                     continue
                 
-                # Merge render_args with params
-                merged_params = self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS)
+                # Merge render_args with params - pass all params through
+                merged_params = params.copy()
                 merged_params.update(render_args)
                 
                 # Render from current position

@@ -2,7 +2,6 @@ from __future__ import annotations
 import numpy as np
 from pydantic import ConfigDict
 from config import SAMPLE_RATE
-from constants import RenderArgs
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.oscillator import OSCILLATOR_RENDER_ARGS
@@ -24,7 +23,8 @@ class SampleModel(BaseNodeModel):
     overlap: float = 0.0  # 0.0-1.0 (normalized fraction of sample length)
     speed: WavableValue = 1.0  # playback speed multiplier (1.0 = normal speed)
     duration: float = None  # seconds
-    base_freq: float = None  # Hz (for frequency-based speed modulation)
+    base_freq: float = None  # Hz (base frequency for freq parameter)
+    freq: WavableValue = None  # Hz (target frequency - modulates speed based on base_freq)
     offset: WavableValue = 0.0  # seconds (shift playhead position)
 
 
@@ -34,6 +34,7 @@ class SampleNode(BaseNode):
         self.model = model
         self.audio = load_wav_file(model.file)
         self.speed_node = wavable_value_node_factory(model.speed)
+        self.freq_node = wavable_value_node_factory(model.freq) if model.freq is not None else None
         self.start_node = wavable_value_node_factory(model.start)
         self.end_node = wavable_value_node_factory(model.end)
         self.offset_node = wavable_value_node_factory(model.offset)
@@ -109,15 +110,14 @@ class SampleNode(BaseNode):
         if np.isscalar(speed):
             speed = np.full(num_samples, speed)
         
-        # If base_freq is set, modulate speed by frequency parameter
-        if self.model.base_freq is not None:
-            frequency = params.get(RenderArgs.FREQUENCY, None)
-            if frequency is not None:
-                # Ensure frequency is an array
-                if np.isscalar(frequency):
-                    frequency = np.full(num_samples, frequency)
-                # Multiply speed by the frequency ratio (current_freq / base_freq)
-                speed = speed * (frequency / self.model.base_freq)
+        # If freq is set and base_freq is set, modulate speed by frequency ratio
+        if self.freq_node is not None and self.model.base_freq is not None:
+            freq = self.freq_node.render(num_samples, context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+            # Ensure freq is an array
+            if np.isscalar(freq):
+                freq = np.full(num_samples, freq)
+            # Multiply speed by the frequency ratio (current_freq / base_freq)
+            speed = speed * (freq / self.model.base_freq)
 
         # Render offset
         offset = self.offset_node.render(num_samples, context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))

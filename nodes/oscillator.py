@@ -1,25 +1,17 @@
 from __future__ import annotations
 from enum import Enum
 import random
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 import numpy as np
 from pydantic import ConfigDict, field_validator
 
 from config import DO_NORMALISE_EACH_SOUND, OSC_ENVELOPE_TYPE, SAMPLE_RATE
-from constants import RenderArgs
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import InterpolationTypes, WavableValue, wavable_value_node_factory
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from vnoise import Noise
 
-from utils import add_waves, multiply_waves
-
-
-OSCILLATOR_RENDER_ARGS = [
-    RenderArgs.FREQUENCY_MULTIPLIER,
-    RenderArgs.AMPLITUDE_MULTIPLIER,
-    RenderArgs.FREQUENCY,
-]
+from utils import multiply_waves
 
 
 class OscillatorTypes(str, Enum):
@@ -44,7 +36,6 @@ class OscillatorModel(BaseNodeModel):
     phase: Optional[WavableValue] = None # Phase modulation (for FM synthesis)
     attack: float = 0 # Attack time in seconds
     release: float = 0 # Release time in seconds
-    partials: List[OscillatorModel] = []
     scale: float = 1.0 # Perlin/wander variation rate (higher = faster changes)
     seed: Optional[float] = None # Perlin/wander noise seed
     range: Optional[Tuple[float, float]] = None # Output range [min, max]
@@ -76,13 +67,11 @@ class OscillatorModel(BaseNodeModel):
 
 class OscillatorNode(BaseNode):
     def __init__(self, model: OscillatorModel):
-        from nodes.node_utils.instantiate_node import instantiate_node
         super().__init__(model)
         self.model = model
         self.freq = wavable_value_node_factory(model.freq, model.freq_interpolation) if model.freq else None
         self.amp = wavable_value_node_factory(model.amp, model.amp_interpolation)
         self.phase_mod = wavable_value_node_factory(model.phase) if model.phase else None
-        self.partials = [instantiate_node(partial) for partial in model.partials]
         self.seed = self.model.seed or random.randint(0, 10000)
         self.phase_acc = 0  # Phase accumulator to maintain continuity between render calls
         self.wander_position = 0.0  # Current position for wander oscillator
@@ -113,41 +102,25 @@ class OscillatorNode(BaseNode):
                 # This is the last chunk, render only what's needed
                 num_samples = samples_remaining
         
-        frequency_multiplier, amplitude_multiplier, frequency_override, params_for_children = self.consume_params(
-            params, {RenderArgs.FREQUENCY_MULTIPLIER: 1, RenderArgs.AMPLITUDE_MULTIPLIER: 1, RenderArgs.FREQUENCY: None})
-
-        # If we adjusted num_samples, we need to truncate any array parameters
-        if num_samples < original_num_samples:
-            if isinstance(frequency_multiplier, np.ndarray):
-                frequency_multiplier = frequency_multiplier[:num_samples]
-            if isinstance(amplitude_multiplier, np.ndarray):
-                amplitude_multiplier = amplitude_multiplier[:num_samples]
-            if isinstance(frequency_override, np.ndarray):
-                frequency_override = frequency_override[:num_samples]
-        
         # These need to be calculated AFTER num_samples is potentially adjusted
         chunk_duration_seconds = num_samples / SAMPLE_RATE
         t = np.linspace(0, chunk_duration_seconds, num_samples, endpoint=False)
 
         total_wave = np.zeros(num_samples)
 
-        if frequency_override:
-            frequency = frequency_override
-        elif self.freq:
-            frequency = self.freq.render(num_samples, context, **params_for_children)
+        if self.freq:
+            frequency = self.freq.render(num_samples, context, **params)
             if len(frequency) == 1:
                 frequency = frequency[0]
         else:
             frequency = 1
-        
-        frequency *= frequency_multiplier
 
-        amplitude = self.amp.render(num_samples, context, **params_for_children) * amplitude_multiplier
+        amplitude = self.amp.render(num_samples, context, **params)
         
         # Render phase modulation if provided
         phase_modulation = None
         if self.phase_mod:
-            phase_modulation = self.phase_mod.render(num_samples, context, **params_for_children)
+            phase_modulation = self.phase_mod.render(num_samples, context, **params)
             if len(phase_modulation) == 1:
                 phase_modulation = phase_modulation[0]
         
@@ -272,15 +245,6 @@ class OscillatorNode(BaseNode):
                 wander_wave[i] = np.tanh(self.wander_position)
             
             total_wave = amplitude * wander_wave
-
-        # Render and add partials
-        if len(self.partials) > 0:
-            partials_args = {RenderArgs.FREQUENCY_MULTIPLIER: frequency, RenderArgs.AMPLITUDE_MULTIPLIER: amplitude}
-            for partial in self.partials:
-                # Pass params_for_children first, then partials_args to override with our local values
-                partial_wave = partial.render(num_samples, context, **params_for_children, **partials_args)
-                total_wave = add_waves(total_wave, partial_wave)
-
 
         attack_number_of_samples = int(self.model.attack * SAMPLE_RATE)
 

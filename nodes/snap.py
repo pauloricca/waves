@@ -200,43 +200,66 @@ class SnapNode(BaseNode):
         
         Glide is specified in seconds - the time it takes to traverse the maximum
         possible range between snap values.
-        """
-        glided = np.copy(signal)
         
+        Optimized implementation using change-point detection and vectorized interpolation.
+        This is much faster than sample-by-sample processing, especially when the signal
+        has long constant segments (typical for MIDI CC input).
+        """
         # Calculate max range between snap values
         max_range = float(np.max(snap_values) - np.min(snap_values))
         
         # Convert glide time (seconds) to change per sample
-        # If glide = 1 second, we want to traverse max_range in 1 second
-        # At SAMPLE_RATE samples per second, that's max_range / (glide * SAMPLE_RATE) per sample
-        if glide_time > 0 and max_range > 0:
-            glide_per_sample = max_range / (glide_time * SAMPLE_RATE)
-        else:
-            # No glide or invalid range - snap instantly
+        if glide_time <= 0 or max_range <= 0:
             return signal
+        
+        glide_per_sample = max_range / (glide_time * SAMPLE_RATE)
         
         # Initialize with last output from previous chunk, or first value
         if self.last_output is not None:
-            current = self.last_output
+            current_value = self.last_output
         else:
-            current = signal[0]
+            current_value = signal[0]
         
-        # Apply glide sample by sample
-        for i in range(len(glided)):
-            target = signal[i]
-            diff = target - current
+        # Find indices where the signal changes value
+        # This allows us to process constant segments efficiently
+        changes = np.concatenate([[0], np.where(np.diff(signal) != 0)[0] + 1, [len(signal)]])
+        
+        glided = np.empty_like(signal, dtype=np.float32)
+        
+        # Process each constant segment
+        for i in range(len(changes) - 1):
+            start_idx = changes[i]
+            end_idx = changes[i + 1]
+            target_value = signal[start_idx]
             
-            if abs(diff) > glide_per_sample:
-                # Move towards target by glide amount
-                current += np.sign(diff) * glide_per_sample
+            # Calculate how many samples needed to reach target from current value
+            distance = abs(target_value - current_value)
+            samples_needed = int(np.ceil(distance / glide_per_sample))
+            
+            if samples_needed == 0:
+                # Already at target - fill segment with target value
+                glided[start_idx:end_idx] = target_value
+                current_value = target_value
             else:
-                # Close enough, snap to target
-                current = target
-            
-            glided[i] = current
+                segment_len = end_idx - start_idx
+                
+                if samples_needed < segment_len:
+                    # Will reach target before segment ends
+                    # Create linear ramp to target, then hold
+                    ramp = np.linspace(current_value, target_value, samples_needed + 1, dtype=np.float32)[1:]
+                    glided[start_idx:start_idx + samples_needed] = ramp
+                    glided[start_idx + samples_needed:end_idx] = target_value
+                    current_value = target_value
+                else:
+                    # Still gliding at end of segment
+                    # Create ramp that moves toward target by glide_per_sample each sample
+                    direction = np.sign(target_value - current_value)
+                    ramp = current_value + direction * glide_per_sample * np.arange(1, segment_len + 1, dtype=np.float32)
+                    glided[start_idx:end_idx] = ramp
+                    current_value = ramp[-1]
         
         # Store last output for next chunk
-        self.last_output = glided[-1]
+        self.last_output = current_value
         
         return glided
 

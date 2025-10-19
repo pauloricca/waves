@@ -31,7 +31,7 @@ class ExpressionNode(BaseNode):
                     self.args[field_name] = field_value
     
     def _do_render(self, num_samples=None, context=None, **params):
-        from nodes.expression_globals import get_expression_context, evaluate_expression
+        from expression_globals import get_expression_context, evaluate_expression
         
         num_samples = self.resolve_num_samples(num_samples)
         if num_samples is None:

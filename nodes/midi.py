@@ -5,7 +5,6 @@ import numpy as np
 from pydantic import ConfigDict
 
 from config import SAMPLE_RATE
-from constants import RenderArgs
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.node_utils.midi_utils import (
@@ -21,6 +20,7 @@ class MidiModel(BaseNodeModel):
     channel: int = 0  # MIDI channel to listen to (0-15)
     signal: BaseNodeModel  # The sound/signal to play when a note is triggered
     duration: float = math.inf  # MIDI nodes run indefinitely
+    voices: int = 16  # Maximum number of simultaneous voices (polyphony limit)
 
 
 class MidiNode(BaseNode):
@@ -28,6 +28,7 @@ class MidiNode(BaseNode):
         super().__init__(model)
         self.channel = model.channel
         self.signal_model = model.signal
+        self.max_voices = model.voices
         
         # Track active notes: dict of {unique_id: (note_number, sound_node, render_args, samples_rendered, is_in_sustain)}
         self.active_notes = {}
@@ -59,14 +60,36 @@ class MidiNode(BaseNode):
         
         # Convert MIDI note number to frequency
         frequency = midi_note_to_frequency(note_number)
+        amplitude = midi_velocity_to_amplitude(velocity)
+        
+        # Voice stealing: if we've reached max voices, remove the oldest note
+        if len(self.active_notes) >= self.max_voices:
+            # Find the oldest note (lowest note_id)
+            oldest_note_id = min(self.active_notes.keys())
+            oldest_note_data = self.active_notes[oldest_note_id]
+            oldest_note_number = oldest_note_data['note_number']
+            
+            # Remove it
+            del self.active_notes[oldest_note_id]
+            
+            # Clean up note_number_to_ids mapping
+            if oldest_note_number in self.note_number_to_ids:
+                self.note_number_to_ids[oldest_note_number].discard(oldest_note_id)
+                if not self.note_number_to_ids[oldest_note_number]:
+                    del self.note_number_to_ids[oldest_note_number]
+            
+            if MIDI_DEBUG:
+                print(f"Voice stealing: removed note {oldest_note_number} (id {oldest_note_id}) to make room")
         
         # Create a new instance of the signal node for this note
         sound_node = instantiate_node(self.signal_model)
         
-        # Setup render args with frequency
+        # Setup render args - pass frequency and amplitude with aliases
         render_args = {
-            RenderArgs.FREQUENCY: frequency,
-            RenderArgs.AMPLITUDE_MULTIPLIER: midi_velocity_to_amplitude(velocity)
+            'freq': frequency,
+            'f': frequency,  # Alias
+            'amp': amplitude,
+            'a': amplitude,  # Alias
         }
         
         # Generate unique ID for this note instance
@@ -128,14 +151,14 @@ class MidiNode(BaseNode):
             merged_params = self.get_params_for_children(params)
             merged_params.update(render_args)
             
-            # Add sustain state to params
-            merged_params[RenderArgs.IS_IN_SUSTAIN] = is_in_sustain
+            # Add gate signal (1.0 if sustaining, 0.0 if released)
+            merged_params['gate'] = 1.0 if is_in_sustain else 0.0
             
             # Render the note
             try:
                 note_chunk = sound_node.render(num_samples, context, **merged_params)
                 
-                # If the sound returns empty, the note is finished (e.g., envelope release complete)
+                # If the note returns an empty array, it has finished (e.g., envelope end=True)
                 if len(note_chunk) == 0:
                     notes_to_remove.append((note_id, note_number))
                     continue

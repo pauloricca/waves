@@ -57,7 +57,7 @@ def load_sound_library(file_path: str) -> SoundLibraryModel:
     # Extract and set user variables if present
     user_vars = raw_data.pop('vars', None)
     if user_vars:
-        from nodes.expression_globals import set_user_variables
+        from expression_globals import set_user_variables
         set_user_variables(user_vars)
     
     try:

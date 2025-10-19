@@ -4,7 +4,6 @@ from typing import Tuple
 import numpy as np
 from pydantic import ConfigDict, field_validator
 
-from constants import RenderArgs
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.node_utils.midi_utils import MidiInputManager, MIDI_DEBUG

@@ -1,1189 +1,79 @@
-test-reference:
-  mix:
-    signals:
-      - map:
-          from: [200, 400]
-          to: [0, 0]
-          signal:
-            osc:
-              id: test_lfo
-              type: sin
-              freq: 2
-              range: [200, 400]
-              duration: 2
-      - osc:
-          type: sin
-          freq:
-            reference:
-              ref: test_lfo
-          duration: 2
-
-test-map:
-  map:
-    signal:
-      osc:
-        type: sin
-        freq: 440
-        duration: 1
-    to: [-1, 1]
-
-test-map-bracket-syntax:
-  map:
-    signal:
-      osc:
-        type: sin
-        freq: 440
-        duration: 1
-    to: [-0.5, 0.5]
-
-test-map-list-syntax:
-  map:
-    signal:
-      osc:
-        type: sin
-        freq: 440
-        duration: 1
-    to:
-      - -0.3
-      - 0.3
-
-test-map-with-from:
-  map:
-    signal:
-      osc:
-        type: sin
-        freq: 440
-        duration: 1
-    from: [-1, 1]
-    to: [0, 1]
-
-test-map-with-clip:
-  map:
-    signal:
-      osc:
-        type: sin
-        freq: 440
-        duration: 1
-    to: [-2, 2]
-    clip: [-0.5, 0.5]
-
-test-map-dynamic-range:
-  map:
-    signal:
-      osc:
-        type: sin
-        freq: 440
-        duration: 2
-    to:
-      - osc:
-          type: sin
-          freq: 0.5
-          range: [-1, -0.5]
-      - osc:
-          type: sin
-          freq: 0.5
-          range: [0.5, 1]
-
-test-osc-range:
-  osc:
-    type: sin
-    freq: 440
-    duration: 1
-    range: [-0.5, 0.5]
-
-retrig:
-  retrigger:
-    time: 0.1
-    feedback: 0.5
-    repeats: 4
-    signal:
-      osc:
-        type: tri
-        duration: 0.2
-        amp: 1
-        freq: 400
-        attack: 0.005
-        release: 0.2
-
-
-seq2:
-  sequencer:
-    interval: 0.3
-    repeat: 40
-    sequence:
-      - retrig
-      -
-      -
-      -
-      -
-      -
-      -
-
-
-continuous:
-  osc:
-    type: tri
-    duration: 4
-    amp: 5
-    attack: 0.2
-    release: 1
-    freq: 200
-
-
-continuous-partial:
-      osc:
-        type: none
-        duration: 4
-        amp: 5
-        freq: 200
-        partials:
-          - osc:
-              type: tri
-              freq: [1, 3, 1]
-      # osc:
-      #   duration: 4
-      #   freq: 200
-      #   type: none
-          # osc:
-          #   type: perlin
-          #   freq: 3
-          #   scale: 2
-          #   min: 50
-          #   max: 90
-        # partials:
-        #   - osc:
-        #       type: tri
-        #       amp: 5
-        #       freq: [1, 3, 1]
-          # - osc:
-          #     type: sin
-          #     amp: 0.1
-          #     freq: 
-          #       osc:
-          #         type: sin
-          #         min: 1
-          #         max: 3
-          #         freq: 0.2
-
-
-continuous-2:
-  map:
-    to:
-      - osc:
-          type: sin
-          freq: 
-            osc:
-              type: perlin
-              freq: 3
-              scale: 2
-              range: [0.1, 10]
-          scale: 13
-          range: [0, -0.6]
-          seed: 1
-      - osc:
-          type: perlin
-          freq: 3
-          scale: 1
-          range: [0, 0.9]
-          seed: 1
-    signal:
-      osc:
-        duration: 4
-        freq: 200
-        partials:
-          - osc:
-              type: sin
-              amp: 
-                osc:
-                  type: tri
-                  amp: 0.8
-                  freq: [1, 15, 1]
-              freq: 
-                osc:
-                  type: sin
-                  range: [1, 3]
-                  freq: [1, -3, 1]
-
-seq:
-  sequencer:
-    interval: 0.1
-    sequence:
-    - phoom
-    - tick
-    - tick
-    - 
-    - tick
-    -
-    -
-    - phoom
-    - [tick, phoom]
-    -
-    - tick
-    -
-    - tick
-    -
-    -
-    -
-
-norm:
-  envelope:
-    duration: 1
-    attack: 0.2
-    release: 0.1
-    signal:
-      map:
-        to:
-          - osc:
-              freq: [30, 1]
-              range: [0, -2]
-          - osc:
-              freq: [30, 1]
-              range: [0, 4]
-        clip: [-1, 1]
-        signal:
-          osc:
-            freq: 60
-            # release: 0.9
-            partials:
-              - osc:
-                  freq: 1.1666
-                  amp: 0.2
-              - osc:
-                  freq: 1.5
-                  amp: 0.2
-              - osc:
-                  freq: 2
-                  amp: 0.1
-                  duration: 0.3
-                  release: 0.8
-                  type: sqr
-              - osc:
-                  freq: 8
-                  amp: 0.2
-                  duration: 0.05
-                  release: 0.8
-                  type: sqr
-
-
-feedback:
-  sample:
-    duration: 6
-    start: 0.354
-    # end: 0.5
-    speed: [0.1, 0.05]
-    # speed: 1
-    loop: true
-    # overlap: 0.5
-    file: samples/feedback.wav
-
-shaker:
-  sample:
-    duration: 15
-    # start: 0.354
-    start: 0.06
-    # speed: [-0.2, 0.2, 0.1]
-    speed: 1
-    loop: true
-    # overlap: 0.5
-    file: samples/shaker.wav
-
-part-a-shuffled:
-  sequencer:
-    sequence:
-      - [lead f80, thump a0.2]
-      - shuffle:
-          seed: 7
-          chunks: 32
-          signal:
-            sequencer:
-              sequence:
-                - part-a
-
-paulo2:
-  shuffle:
-    seed: 7
-    chunks: 12
-    signal:
-      sample:
-        file: samples/paulo.wav
-
-
-paulo:
-  map:
-    from: [-0.5, 0.5]
-    to: [-0.8, 0.8]
-    signal:
-      envelope:
-        attack: 0.04
-        release: 0.04
-        signal:
-          retrigger:
-            time: 0.8
-            repeats: 5
-            signal:
-              # shuffle:
-              #   chunks: 16
-              #   signal:
-                  # filter:
-                  #   cutoff: [200, [2000, 0.2], [2000, 0.8], 200]
-                  #   peak: 0.1
-                  #   signal:
-                      map:
-                        to: [-1, 1]
-                        signal:
-                          sample:
-                            duration: 8
-                            start: 0.354
-                            speed: [-0.2, 0.2, 0.1]
-                            # speed:
-                            #   osc:
-                            #     type: perlin
-                            #     min: 0.1
-                            #     max: 3
-                            #     scale: 5
-                            end: 0.5
-                            loop: true
-                            overlap: 0.5
-                            file: samples/paulo.wav
-
-fx:
-  # filter:
-  #   duration: 4
-  #   # cutoff: [0, [400, 0.2], [4000, 0.4], 0]
-  #   cutoff: [0, 3000, 0]
-  #   signal:
-      map:
-        to: [-1, 1]
-        duration: 14
-        signal:
-          sample:
-            start: 0.6
-            speed: 0.01
-            end: 0.63
-            loop: true
-            overlap: 0.2
-            file: samples/fx.wav
-
-gregor:
-  filter:
-    duration: 4
-    cutoff: [0, [600, 0.3], [0, 1]]
-    signal:
-      map:
-        to: [-1, 1]
-        signal:
-          sample:
-            duration: 4
-            start: 0.6
-            end: 0.63
-            loop: true
-            overlap: 0.2
-            file: samples/gregor.wav
-
-sample-seq-rumble:
-  map:
-    to: [-1, 1]
-    signal:
-      invert:
-        signal:
-          retrigger:
-            feedback: 0.5
-            time: 0.2
-            signal:
-              shuffle:
-                signal:
-                  sequencer:
-                    interval: 0.1
-                    sequence:
-                      - fx
-                      - tick
-                      -
-                      - tick f18000
-                      - tick
-                      - tick
-                      - 
-                      - tick f10000
-                      - 
-                      - tick
-                      - tick
-                      - thump
-                      - tick
-                      -
-                      -
-                      - 
-                      - thump
-                      - tick
-                      -
-                      - tick
-                      -
-                      -
-                      - tick
-                      -
-                      -
-
-test3:
-  map:
-    to: [-1, 1]
-    signal:
-      smooth:
-        step: 0.01
-        signal:
-          retrigger:
-            time: 0.5
-            repeats: 3
-            feedback: 0.5
-            signal:
-              retrigger:
-                time: 1.5
-                repeats: 5
-                feedback: 0.3
-                signal:
-                  filter:
-                    duration: 3
-                    cutoff: 200
-                    signal:
-                      smooth:
-                        step: 0.02
-                        signal:
-                          shuffle:
-                            invert: 0.5
-                            size: 0.3
-                            signal:
-                              osc:
-                                attack: 0.01
-                                release: 0.1
-                                freq:
-                                  osc:
-                                    type: perlin
-                                    scale: 6
-                                    seed: 1
-                                    range: [20, 200]
-                                amp:
-                                  osc:
-                                    type: sqr
-                                    freq: 5
-                                    range: [0.7, 1]
-                                    partials:
-                                      - osc:
-                                          amp: 0.5
-                                partials:
-                                  - osc:
-                                      type: tri
-                                      freq: 2
-                                      amp: 0.5
-                                  - osc:
-                                      type: sqr
-                                      freq: 0.5
-                                      amp: 0.2
-
-test2:
-  osc:
-    freq: [10, 600]
-    duration: 4
-    attack: 0.3
-    release: 0.3
-    partials:
-      - osc:
-          type: saw
-          amp: 0.5
-      - osc:
-          type: tri
-          amp: 0.8
-          freq:
-            osc: 
-              type: perlin
-              scale: 2
-              seed: 2
-              range: [0.99, 1.21]
-      - osc:
-          type: sqr
-          amp: 0.8
-          freq:
-            osc:
-              type: perlin
-              scale: 7
-              seed: 3
-              range: [0.95, 1.01]
-      - osc:
-          type: saw
-          amp: 0.5
-          freq:
-            osc: 
-              type: perlin
-              scale: 2
-              seed: 4
-              range: [0.99, 1.01]
-      - osc: 
-          type: saw
-          amp: 0.5
-          freq:
-            osc:
-              type: perlin
-              scale: 2
-              seed: 5
-              range: [0.9, 1.1]
-    amp:
-      osc:
-        type: perlin
-        scale: 3
-        range: [0.3, 0.8]
-
-test:
-  osc:
-    freq: [300, [100, 0.1]]
-    amp: 1
-    type: saw
-    duration: 1
-    partials:
-      - osc:
-          freq: 2
-          amp: 0.5
-          type: saw
-      - osc:
-          freq: 6
-          amp: 0.3
-          type: sqr
-      - osc:
-          type: noise
-          amp: 2
-          duration: 0.05
-          release: 1
-    attack: 0.02
-    release: 0.8
-
-phoom:
-  osc:
-    freq: 190
-    amp: 0.4
-    duration: 1.4
-    attack: 0.2
-    release: 0.8
-    partials:
-      - osc:
-          amp: 0.4
-          duration: 0.01
-          partials:
-            - osc:
-                freq: 2
-                amp: 0.5
-            - osc:
-                freq: 2.2
-                amp: 0.5
-            - osc:
-                freq: 2.3
-                amp: 0.5
-            - osc:
-                freq: 5
-                amp: 0.5
-      - osc:
-          freq: 1.5
-          amp: 0.5
-      - osc:
-          freq: 2
-          amp: 0.5
-
-thump:
-  osc:
-    freq: [10000, [500, 0.01], [60, 0.02]]
-    duration: 0.6
-    attack: 0.01
-    release: 1
-    partials:
-      - osc:
-          amp: 0.1
-          duration: 0.05
-          attack: 0.1
-          release: 1
-          partials:
-            - osc:
-                freq: 5
-                amp: 1
-            - osc:
-                freq: 7.2
-                amp: 0.8
-            - osc:
-                freq: 8.2
-                amp: 0.6
-            - osc:
-                freq: 10
-                amp: 0.4
-            - osc:
-                freq: 12
-                amp: 0.2
-
-charge:
-  osc:
-    freq: [10000, [500, 0.01], [60, 0.02]]
-    amp: [0, [1, 0.08], [0.4, 0.2], [0.8, 0.3], [0.6, 0.4], 0]
-    duration: 8
-    release: 0.5
-    partials:
-      - osc:
-          freq: 2
-          amp: [0.5, 0]
-      - osc:
-          type: noise
-          amp: [0, 0.002, 0.01]
-      - osc:
-          freq: [[5, 0], [50, 0.3]]
-          amp: [0.02, 0.001, 0]
-          type: saw
-
-ding:
-  osc:
-    freq: 800
-    amp:
-      osc:
-        freq: 5000
-        range: [0, 1]
-    duration: 1
-    release: 1
-    partials:
-      - osc: 
-          type: noise
-          amp: [0.04, 0]
-
 synth:
-  osc:
-    freq: 240
-    type: none
-    amp: 
-      osc:
-        freq: 200
-        range: [-0.7, 0.7]
-    attack: 0.02
-    release: 0.8
-    duration: 3
-    partials:
-      - osc:
-          freq: [5, [1, 0.01]]
-          partials:
-            - osc:
-                freq: 1
-                type: saw
-                amp: [0.3, [0, 0.8]]
-            - osc:
-                freq: 1.0015
-                type: saw
-                amp: [0.3, [0, 0.8]]
-            - osc:
-                freq: 0.9985
-                type: saw
-                amp: [0.3, [0, 0.8]]
+  context:
+    freq: 200
+  signal:
+    mix:
+      signals:
+        - osc:
+            freq: freq
+        - osc:
+            freq: freq
 
-lead:
-  osc:
-    freq: 80
-    duration: 2
-    attack: 0.01
-    release: 1
-    partials:
-      - osc:
-          duration: 0.0015
-          attack: 0.001
-          release: 0.3
-          partials:
-            - osc:
-                freq: 5
-                amp: 0.5
-            - osc:
-                freq: 7.2
-                amp: 0.5
-            - osc:
-                freq: 8.3
-                amp: 0.5
-            - osc:
-                freq: 10
-                amp: 0.5
-            - osc:
-                freq: 12
-                amp: 0.5
-      - osc:
-          attack: 0.001
-          release: 0.3
-          freq: 2
-          amp: 0.3
-      - osc:
-          attack: 0.001
-          release: 0.3
-          freq: 4
-          amp: 0.05
-
-
-tick:
-  osc:
-    freq: 4400
-    duration: 0.0002
-    amp: 0.2
-    partials:
-      - osc:
-          freq: 2
-          amp: 0.5
-      - osc:
-          freq: 0.5
-          amp: 0.2
-
-beep:
-  osc:
-    freq: 8800
-    amp: 0.4
-    duration: 0.07
-    attack: 1
-    partials:
-      - osc:
-          freq: 2
-          amp: 0.5
-      - osc:
-          freq: 0.5
-          amp: 0.2
-
-part-a-inverted:
-  invert:
-    signal:
-      sequencer:
-        interval: 0.1
-        sequence:
-          -
-          - tick
-          -
-          -
-          - tick
-          - beep f13000
-          - lead f120
-          - tick f18000
-          - 
-          - phoom f15000
-          - tick f10000
-          -
-          - tick
-          -
-          -
-          - tick
-          - tick
-          -
-          -
-          -
-          - tick
-          -
-          -
-          -
-
-part-a-shuffled:
-  sequencer:
-    sequence:
-      - [lead f80, thump a0.2]
-      - shuffle:
-          seed: 7
-          chunks: 32
-          signal:
-            sequencer:
-              sequence:
-                - part-a
-
-part-b-shuffled:
-  sequencer:
-    sequence:
-      - [lead f69, thump a0.2]
-      - shuffle:
-          seed: 7
-          chunks: 32
-          signal:
-            sequencer:
-              sequence:
-                - part-b
-
-part-c-shuffled:
-  sequencer:
-    sequence:
-      - [lead f60, thump a0.2]
-      - shuffle:
-          seed: 7
-          chunks: 32
-          signal:
-            sequencer:
-              sequence:
-                - part-c
-
-part-d-shuffled:
-  sequencer:
-    sequence:
-      - [lead f70, thump a0.2]
-      - shuffle:
-          seed: 10
-          chunks: 35
-          signal:
-            sequencer:
-              sequence:
-                - part-d
-
-main-sequence-shuffled:
-  sequencer:
-    chain:
-      - part-a-inverted
-      - part-a-shuffled
-      - part-b-shuffled
-      - part-c-shuffled
-      - part-d-shuffled
-      # - part-e-shuffled
-      # - part-f-shuffled
-      # - part-g-shuffled
-      # - part-h-shuffled
-
-
-part-a:
-  sequencer:
-    interval: 0.1
-    sequence:
-      - [lead f80, tick]
-      -
-      - tick
-      -
-      - [phoom, tick]
-      -
-      - 
-      - beep f13000
-      - lead f120
-      - tick f18000
-      - 
-      - phoom f15000
-      - tick f10000
-      -
-      - tick
-      -
-      -
-      - tick
-      - tick
-      -
-      -
-      -
-      - tick
-      -
-      -
-      -
-
-part-b:
-  sequencer:
-    interval: 0.1
-    sequence:
-      - [lead f69, tick]
-      -
-      - tick
-      -
-      - [lead f190 a0.3, tick]
-      -
-      - tick
-      -
-      - [lead f107, tick]
-      - tick f18000
-      - tick
-      - phoom f15000
-      - tick f10000
-      -
-      -
-      - tick
-      -
-      -
-      - tick
-      - tick
-      -
-      -
-      -
-      -
-      -
-      -
-
-
-part-c:
-  sequencer:
-    interval: 0.1
-    sequence:
-      - [lead f60, tick]
-      -
-      - tick
-      -
-      - [phoom f192 a0.7, tick]
-      - beep f12000
-      - tick
-      -
-      - [lead f90, tick]
-      - tick f18000
-      - tick
-      - phoom f15000
-      - tick f10000
-      - tick
-      -
-      - tick
-      -
-      -
-      -
-      -
-      -
-      -
-      -
-      - tick
-      -
-      -
-
-part-d:
-  sequencer:
-    interval: 0.1
-    sequence:
-      - [lead f70, tick]
-      -
-      - tick
-      -
-      - [phoom, tick]
-      -
-      - tick
-      -
-      - [lead f105, tick]
-      - [tick f18000, beep f11000]
-      - tick
-      - phoom f15000
-      - tick f10000
-      -
-      - tick
-      -
-      - tick
-      -
-      -
-      - tick
-      -
-      -
-      -
-      -
-      - tick
-      -
-      -
-      -
-      -
-      -
-      -
-      -
-      -
-      -
-
-part-e:
-  sequencer:
-    interval: 0.1
-    sequence:
-      - [lead f121.5, tick]
-      -
-      - tick
-      -
-      - [phoom, tick]
-      -
-      - tick
-      -
-      - [lead f94, tick]
-      - tick f18000
-      - tick
-      - phoom f15000
-      - tick f10000
-      -
-      -
-      - tick
-      -
-      -
-      -
-      -
-      -
-      -
-      -
-      -
-      - tick
-      -
-
-part-f:
-  sequencer:
-    interval: 0.1
-    sequence:
-      - [lead f110, tick]
-      -
-      - tick
-      -
-      - [phoom, tick]
-      -
-      - tick
-      -
-      - [lead f72, tick]
-      - tick f18000
-      - tick
-      - phoom f15000
-      - tick f10000
-      - tick
-      -
-      -
-      -
-      - tick
-      -
-      - tick
-      -
-      -
-      -
-      -
-      -
-      -
-      -
-
-part-g:
-  sequencer:
-    interval: 0.1
-    sequence:
-      - [lead f95, tick]
-      -
-      - tick
-      -
-      - [phoom, tick]
-      -
-      - tick
-      -
-      - [lead f60, tick]
-      - tick f18000
-      - tick
-      - phoom f15000
-      - tick f10000
-      - tick
-      -
-      -
-      - tick
-      -
-      -
-      - tick
-      -
-      - tick
-      -
-      -
-      -
-      -
-      -
-
-part-h:
-  sequencer:
-    interval: 0.1
-    sequence:
-      - [lead f90, tick]
-      -
-      - tick
-      -
-      - [phoom, tick]
-      -
-      - tick
-      -
-      - [lead f105, tick]
-      - tick f18000
-      - tick
-      - phoom f15000
-      - tick f10000
-      - tick
-      -
-      -
-      -
-      - tick
-      -
-      - tick
-      -
-      -
-      -
-      -
-      -
-      -
-      -
-      - tick
-      -
-      -
-      -
-      -
-
-sequence-sound-test:
-  sequencer:
-    interval: 0.3
-    sequence:
-      - [lead f200, tick]
-      - lead f220
-      - phoom f15000
-      - tick f280
-      -
-      - [phoom f290, tick]
-      - beep f13000
-      -
-      - ding
-      - beep f279
-      - [lead f278, tick]
-      - lead f284
-      - tick
-      - phoom f15000
-      - lead f285
-      -
-      - tick
-      -
-      -
-      - tick
-
-main-sequence:
-  sequencer:
-    chain:
-      - part-a-inverted
-      - part-a
-      - part-b
-      - part-c
-      - part-d
-      - part-e
-      - part-f
-      - part-g
-      - part-h
 
 # MIDI Example - Play sounds via MIDI input
 midi-test:
   midi:
     channel: 0  # MIDI channel (0-15)
     signal:
-      osc:
-        type: SIN
-        duration: 1.0
-        amp: 0.5
+      envelope:
         attack: 0.01
         release: 0.3
+        end: true  # Signal completion when release is done
+        signal:
+          osc:
+            type: SIN
+            amp: 0.5
 
 # MIDI with more complex sound
 midi-synth:
   midi:
     channel: 0
     signal:
-      osc:
-        amp: 1
+      envelope:
         duration: 1
         attack: 0.2
         release: 0.8
-        partials:
-          - osc:
-              amp: 0.4
-              duration: 0.01
-              partials:
-                - osc:
-                    freq: 2
-                    amp: 0.5
-                    attack: 0.2
-                - osc:
-                    freq: 2.2
-                    amp: 0.5
-                    attack: 0.2
-                - osc:
-                    freq: 2.3
-                    amp: 0.5
-                    attack: 0.2
-                - osc:
-                    freq: 5
-                    amp: 0.5
-                    attack: 0.2
-          - osc:
-              freq: 1.5
-              amp: 0.5
-              attack: 0.2
-          - osc:
-              freq: 2
-              amp: 0.5
-              attack: 0.2
+        signal:
+          expression:
+            exp: "signal * 1"
+            signal:
+              mix:
+                signals:
+                  - envelope:
+                      duration: 0.01
+                      signal:
+                        expression:
+                          exp: "signal * 0.4"
+                          signal:
+                            mix:
+                              signals:
+                                - osc:
+                                    freq: f
+                                    attack: 0.2
+                                - osc:
+                                    freq: "f * 2"
+                                    amp: 0.5
+                                    attack: 0.2
+                                - osc:
+                                    freq: "f * 2.2"
+                                    amp: 0.5
+                                    attack: 0.2
+                                - osc:
+                                    freq: "f * 2.3"
+                                    amp: 0.5
+                                    attack: 0.2
+                                - osc:
+                                    freq: "f * 5"
+                                    amp: 0.5
+                                    attack: 0.2
+                  - osc:
+                      freq: "f * 1.5"
+                      amp: 0.5
+                      attack: 0.2
+                  - osc:
+                      freq: "f * 2"
+                      amp: 0.5
+                      attack: 0.2
 
 # MIDI with more complex sound
 midi-env:
@@ -1287,46 +177,6 @@ midi-fm:
                   #       # overlap: 0.5
                   #       file: samples/paulo.wav
                 
-
-
-# Test mix node
-test-mix:
-  mix:
-    duration: 1
-    signals:
-      - osc:
-          type: sin
-          freq: 440
-          amp: 0.5
-      - osc:
-          type: sin
-          freq: 550
-          amp: 0.5
-      - osc:
-          type: sin
-          freq: 660
-          amp: 0.5
-
-
-# Test mix with different durations
-test-mix-varied:
-  mix:
-    signals:
-      - osc:
-          type: sin
-          freq: 220
-          amp: 0.3
-          duration: 0.5
-      - osc:
-          type: sin
-          freq: 330
-          amp: 0.3
-          duration: 1.0
-      - osc:
-          type: sin
-          freq: 440
-          amp: 0.3
-          duration: 1.5
 
 
 midi-cc-filter:
@@ -1513,82 +363,6 @@ sample-control:
         initial: 0
 
 
-sample-wavable-test:
-  sample:
-    file: samples/feedback.wav
-    duration: 3
-    start: [0.0, 0.5, 0.0]
-    end: [0.5, 1.0, 0.5]
-    speed: 1.0
-    loop: false
-
-
-sample-wavable-osc-test:
-  sample:
-    file: samples/feedback.wav
-    duration: 5
-    start:
-      osc:
-        type: sin
-        freq: 0.5
-        range: [0.0, 0.5]
-    end:
-      osc:
-        type: sin
-        freq: 0.5
-        range: [0.5, 1.0]
-    speed: 1.0
-    loop: false
-
-
-sample-wavable-loop-test:
-  sample:
-    file: samples/feedback.wav
-    duration: 4
-    start: [0.0, 0.3]
-    end: [0.7, 1.0]
-    speed: 1.0
-    loop: true
-
-test-sample-offset:
-  sample:
-    file: samples/feedback.wav
-    duration: 5
-    loop: true
-    offset:
-      osc:
-        type: sin
-        freq: 5
-        range: [-200, 200]
-
-test-sample-warble:
-  sample:
-    file: samples/chord.wav
-    duration: 20
-    loop: true
-    offset:
-      osc:
-        type: sin
-        freq: 1
-        range: [-1000, 1000]
-    speed: 1.0
-
-test-sample-warble-with-speed:
-  sample:
-    file: samples/feedback.wav
-    duration: 8
-    loop: true
-    offset:
-      osc:
-        type: sin
-        freq: 4
-        range: [-150, 150]
-    speed:
-      osc:
-        type: sin
-        freq: 0.5
-        range: [0.8, 1.2]
-
 flanger:
   delay:
     time:
@@ -1627,7 +401,7 @@ echo:
           signal:
             sample:
               id: paulo
-              file: samples/waves.wav
+              file: samples/satanic.wav
               loop: true
               start: 0.5
               offset:
@@ -1702,6 +476,96 @@ echo:
                             ref: echo
 
 
+# CC 21 wet amp
+# CC 22 delay time
+# CC 23 sample offset
+# CC 4  dry to wet amp
+# CC 5  dry amp
+# CC 6  feedback amp
+# CC 7  sample speed
+echo-exp:
+  mix:
+    signals:
+      # DRY Signal
+      - expression:
+          exp: "amp * signal"
+          signal:
+            sample:
+              id: paulo
+              file: samples/satanic.wav
+              loop: true
+              start: 0.5
+              offset:
+                midi_cc:
+                  channel: 0
+                  cc: 23
+                  range: [-1, 1]
+                  initial: 0
+              speed:
+                midi_cc:
+                  channel: 0
+                  cc: 7
+                  range: [-2, 2]
+                  initial: 1
+          amp:
+            midi_cc:
+              channel: 0
+              cc: 5
+              range: [0, 1]
+              initial: 1
+      # WET Signal
+      - expression:
+          exp: "amp * signal"
+          amp:
+            midi_cc:
+              channel: 0
+              cc: 21
+              range: [0, 1]
+              initial: 0
+          signal:
+            delay: 
+              id: echo
+              mode: tape
+              time: 
+                midi_cc:
+                  channel: 0
+                  cc: 22
+                  range: [0, 5]
+                  initial: 1
+              signal:
+                mix:
+                  signals:
+                    # DRY into delay
+                    - expression:
+                        exp: "max(amp_a, amp_b) * signal"
+                        amp_a:
+                          midi_cc:
+                            channel: 0
+                            cc: 4
+                            range: [0, 1]
+                            initial: 0
+                        amp_b:
+                          midi_cc:
+                            channel: 0
+                            cc: 36
+                            range: [0, 1]
+                            initial: 0
+                        signal:
+                          reference:
+                            ref: paulo
+                    # WET Feedback into delay
+                    - expression:
+                        exp: "amp * signal"
+                        amp:
+                          midi_cc:
+                            channel: 0
+                            cc: 6
+                            range: [0, 1]
+                            initial: 0
+                        signal:
+                          reference:
+                            ref: echo
+
 
 echo2:
   mix:
@@ -1729,3 +593,170 @@ echo2:
                         signal:
                           reference:
                             ref: echo
+
+# Test context node - creates custom variables in render params
+test-context:
+  context:
+    my_freq: 220  # Scalar value
+    my_mod:  # Node value
+      osc:
+        freq: 5
+        range: [0.8, 1.2]
+    signal:
+      expression:
+        exp: "sin(t * tau * my_freq * my_mod) * 0.3"
+        duration: 2
+
+# Test snap node - quantize to specific values
+test-snap:
+  osc:
+    duration: 10
+    freq:
+      snap:
+        values: [100, 200, 400, 800, 1600]  # Frequency steps
+        glide: 0.5  # Glide time in seconds
+        signal:
+          osc:
+            freq: 0.1  # Complete one full cycle in 10 seconds
+            range: [100, 1600]
+
+# Test snap with range and interval
+test-snap-range:
+  osc:
+    duration: 15
+    freq:
+      snap:
+        range: [100, 1000]  # Frequency range
+        interval: 100  # Step every 50 Hz: [200, 250, 300, 350, ..., 800]
+        glide: 0.3
+        signal:
+          osc:
+            type: perlin
+            scale: 10
+            range: [200, 800]
+
+# Test snap with dynamic glide time
+test-snap-dynamic-glide:
+  osc:
+    duration: 10
+    freq:
+      snap:
+        values: [100, 200, 400, 800, 1600]
+        glide:
+          osc:
+            freq: 0.5
+            range: [0.1, 1.0]  # Glide time varies from 0.1 to 1.0 seconds
+        signal:
+          osc:
+            freq: 0.1
+            range: [100, 1600]
+
+
+# Test envelope retrigger with fast gate
+test-envelope-retrigger:
+  context:
+    gate:
+      osc:
+        freq: 5  # 5 Hz = retrigger every 0.2 seconds
+        range: [0, 1]
+    signal:
+      envelope:
+        attack: 1.0  # 1 second attack, much longer than retrigger period
+        decay: 0.1
+        sustain: 0.5
+        release: 0.5
+        gate: gate
+        signal:
+          osc:
+            freq: 440
+            amp: 0.3
+
+
+# Test snap with MIDI CC (if you have a MIDI controller connected)
+# This would snap continuous MIDI CC values to specific note frequencies
+test-snap-midi:
+  context:
+    gate:
+      osc:
+        freq: 1
+        range: [0, 1]
+    signal:
+      envelope:
+        attack: 0.3
+        decay: 0.01
+        sustain: 0.3
+        release: 0.5
+        gate: gate
+        signal:
+          osc:
+            freq:
+              snap:
+                values: [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25]  # C major scale
+                glide: 0.2
+                signal:
+                  midi_cc:
+                    channel: 0
+                    cc: 23
+                    range: [200, 600]
+
+# Test tempo node - adds musical timing variables
+test-tempo-basic:
+  tempo:
+    bpm: 120
+    signal:
+      expression:
+        exp: "sin(t * tau / beat) * 0.3"  # Sine wave that completes one cycle per beat
+        duration: 4
+
+# Test tempo with different time divisions
+test-tempo-divisions:
+  tempo:
+    bpm: 140
+    signal:
+      mix:
+        signals:
+          # Kick on every beat
+          - expression:
+              exp: "exp(-t * 50) * sin(t * tau * 60) * 0.5 if t % beat < 0.01 else 0"
+              duration: 4
+          # Hi-hat on every eighth note
+          - expression:
+              exp: "exp(-t * 100) * (np.random.random(n) * 2 - 1) * 0.1 if (t % eighth) < 0.005 else 0"
+              duration: 4
+
+# Test tempo with envelope - attack/release scaled to tempo
+test-tempo-envelope:
+  tempo:
+    bpm: 120
+    signal:
+      envelope:
+        attack: "beat * 0.1"  # Attack is 10% of a beat
+        decay: "beat * 0.2"
+        sustain: 0.6
+        release: "beat * 0.3"
+        duration: 2
+        signal:
+          osc:
+            type: saw
+            freq: 220
+
+# Test tempo with BPM from vars
+test-tempo-with-vars:
+  tempo:
+    bpm: bpm  # Uses the BPM from global vars
+    signal:
+      expression:
+        exp: "sin(t * tau * 440) * (0.5 + 0.5 * sin(t * tau / bar))"  # Amplitude modulated by bar
+        duration: 8
+
+# Test tempo-synced LFO modulating oscillator frequency
+test-tempo-lfo:
+  tempo:
+    bpm: 120
+    signal:
+      osc:
+        type: saw
+        duration: 8
+        freq:
+          expression:
+            exp: "440 + 220 * sin(t * tau / (bar * 2))"  # LFO completes once every 2 bars

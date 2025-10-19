@@ -63,7 +63,7 @@ Some parameters of nodes can be fixed scalar values or waves – dynamic values 
 
 2. **Expression strings**: Any string value is treated as a Python expression that is evaluated at render time. Expressions have access to global constants, user-defined variables, render parameters, and NumPy functions. For example:
    `freq: "440 * 2"` evaluates to 880
-   `freq: "root_note * frequency_multiplier"` uses a user variable and render parameter
+   `freq: "root_note * 2"` uses a user variable
 
 ### Expression System
 
@@ -79,7 +79,7 @@ The expression system (nodes/expression_globals.py, nodes/expression.py) allows 
 **Available in expressions:**
 - **Global constants**: `pi`, `tau`, `e`, `sr` (sample rate), `sample_rate`
 - **Runtime variables**: `time` or `t` (time since start), `samples` or `n` (number of samples in chunk)
-- **Render parameters**: `frequency`, `amplitude_multiplier`, `duration`, `is_in_sustain`, etc.
+- **Render parameters**: `freq`/`f` (frequency), `amp`/`a` (amplitude), `gate` (>= 0.5 = sustaining), `duration`, and any custom params passed by parent nodes
 - **User variables**: Defined in `vars:` section at the top of YAML file
 - **NumPy functions**: `sin`, `cos`, `tan`, `abs`, `sqrt`, `exp`, `log`, `clip`, `max`, `min`, `floor`, `ceil`, `round`, `sign`, `zeros`, `ones`, `linspace`, `arange`, `sum`, `mean`, `std`, and full `np` module
 
@@ -103,7 +103,7 @@ my_sound:
 **Expression examples:**
 - Scalar: `attack: "60 / bpm * 0.05"` (uses user variable)
 - WavableValue: `freq: "440 * 2"` (simple math)
-- With render params: `freq: "root_note * frequency_multiplier"`
+- With render params: `freq: "root_note * 2"`
 - Array operations: `exp: "clip(signal * 2, -1, 1)"` (distortion)
 - Time-based: `exp: "sin(t * tau * 440) * 0.5"` (synthesize from scratch)
 
@@ -259,4 +259,4 @@ When adding new features we should consider the following ideas for future work 
 - We don't need to write detailed instructions of usage or changes in .md files, if there is anything non-trivial we can just add a comment on the node file, just above the node model class.
 - For neatness, we try to keep node parameters as one word, but if we can't find a good name, we can use underscores to separate words. Feel free to suggest better names for parameters if you think of any.
 - When passing positional arguments to functions or methods and the arguments have the same name as the variables, we should just pass them without specifying the name to avoid "name=name" argument passing.
-- Use vectorised numpy operations when possible, avoid for loops over numpy arrays because this is a realtime application dealing with very large arrays.
+- Very important:Use vectorised numpy operations when possible, avoid "for" loops over numpy arrays because this is a realtime application dealing with very large arrays.

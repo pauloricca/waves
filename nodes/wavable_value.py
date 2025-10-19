@@ -52,7 +52,7 @@ class WavableValueNode(BaseNode):
 
     def _do_render(self, num_samples=None, context=None, **params):
         from nodes.oscillator import OSCILLATOR_RENDER_ARGS
-        from nodes.expression_globals import get_expression_context
+        from expression_globals import get_expression_context
         
         if self.value_type == 'node':
             # Existing node rendering logic

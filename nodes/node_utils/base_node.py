@@ -217,7 +217,7 @@ class BaseNode:
         """
         if isinstance(value, str):
             # It's an expression
-            from nodes.expression_globals import get_expression_context
+            from expression_globals import get_expression_context
             eval_context = get_expression_context(render_params, self.time_since_start, 1)
             
             # Evaluate
