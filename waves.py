@@ -25,6 +25,36 @@ rendered_sounds: dict[np.ndarray] = {}
 recording_buffer = None
 recording_active = False
 
+def get_unique_filename(base_filename):
+    """
+    Generate a unique filename by appending _2, _3, etc. if the file already exists.
+    
+    Args:
+        base_filename: The base filename (e.g., "recording.wav")
+    
+    Returns:
+        A unique filename that doesn't exist in OUTPUT_DIR
+    """
+    output_dir = os.path.join(os.path.dirname(__file__), OUTPUT_DIR)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Split filename into name and extension
+    name, ext = os.path.splitext(base_filename)
+    
+    # Check if base filename exists
+    filepath = os.path.join(output_dir, base_filename)
+    if not os.path.exists(filepath):
+        return base_filename
+    
+    # Try _2, _3, etc. until we find a unique name
+    counter = 2
+    while True:
+        new_filename = f"{name}_{counter}{ext}"
+        filepath = os.path.join(output_dir, new_filename)
+        if not os.path.exists(filepath):
+            return new_filename
+        counter += 1
+
 def save_recording():
     """Save the recorded audio buffer to a file."""
     global recording_buffer, recording_active
@@ -36,9 +66,12 @@ def save_recording():
         # Convert deque to numpy array
         recorded_audio = np.array(recording_buffer, dtype=np.float32)
         
+        # Get a unique filename to avoid overwriting
+        unique_filename = get_unique_filename(REAL_TIME_RECORDING_FILENAME)
+        
         # Save using the existing save function
-        save(recorded_audio, REAL_TIME_RECORDING_FILENAME)
-        print(f"Recording saved: {len(recorded_audio) / SAMPLE_RATE:.2f} seconds")
+        save(recorded_audio, unique_filename)
+        print(f"Recording saved: {unique_filename} ({len(recorded_audio) / SAMPLE_RATE:.2f} seconds)")
     except Exception as e:
         print(f"Error saving recording: {e}")
     finally:

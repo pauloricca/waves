@@ -4,22 +4,21 @@ loop:
   #   duration: 5
   #   freq: 30
   #   phase:
-      # retrigger:
-      #   duration: 50
-      #   time: 0.1
-      #   feedback: 0.5
-      #   repeats: 4
-        # signal:
+      retrigger:
+        time: 0.3
+        feedback: 0.5
+        repeats: 1
+        signal:
         #   mix:
         #     signals:
               envelope:
-                  attack: 0.001
-                  release: 0.3
+                  attack: 0.003
+                  release: 0.1
                   decay: 0.1
-                  sustain: 0.7
+                  sustain: 0
                   gate:
                     osc:
-                      freq: 0.7
+                      freq: 3
                       range: [0, 1]
                       type: sqr
                   signal:
@@ -29,7 +28,7 @@ loop:
                     #   glide: 0.005  # Glide time in seconds
                     #   signal:
                         shuffle:
-                          chunks: 64
+                          chunks: 500
                           invert: 0.5
                           crossfade: 0.005
                           signal:
@@ -38,7 +37,7 @@ loop:
                               id: sample
                               exp: amp * signal
                               amp: 0.0001
-                              amp: 1
+                              amp: 3
                               signal:
                                 sample:
                                   file: samples/gregor.wav
