@@ -60,6 +60,16 @@ class SequencerNode(BaseNode):
                 param_value = float(match.group(2))
                 render_args[param_name] = param_value
         
+        # Update sound model with render args
+        # Skip when sound_model is None (should be handled by instantiate_node)
+        if sound_model:
+            # For each render_arg, update the corresponding attribute in sound_model
+            # We're modifying the model parameters before instantiation
+            for param_name, param_value in render_args.items():
+                # Only set parameters that exist in the model to avoid errors
+                if hasattr(sound_model, param_name):
+                    setattr(sound_model, param_name, param_value)
+        
         return instantiate_node(sound_model), render_args
 
     def create_sound_nodes_for_step(self, step_index, **params):
