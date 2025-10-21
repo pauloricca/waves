@@ -260,3 +260,4 @@ When adding new features we should consider the following ideas for future work 
 - For neatness, we try to keep node parameters as one word, but if we can't find a good name, we can use underscores to separate words. Feel free to suggest better names for parameters if you think of any.
 - When passing positional arguments to functions or methods and the arguments have the same name as the variables, we should just pass them without specifying the name to avoid "name=name" argument passing.
 - Very important:Use vectorised numpy operations when possible, avoid "for" loops over numpy arrays because this is a realtime application dealing with very large arrays.
+- The timeout and gtimeout commands are not available on my system, avoid using them.

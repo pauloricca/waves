@@ -7,12 +7,13 @@ from config import SAMPLE_RATE
 from sound_library import get_sound_model
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
+from nodes.wavable_value import WavableValue
 from utils import look_for_duration
 
 
 class SequencerModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
-    interval: float = 0
+    interval: WavableValue = 0
     repeat: int = 1
     sequence: Optional[List[Union[BaseNodeModel, str, List[Union[str, BaseNodeModel]], None]]] = None
     chain: Optional[List[Union[str, BaseNodeModel]]] = None
@@ -20,11 +21,19 @@ class SequencerModel(BaseNodeModel):
 
 class SequencerNode(BaseNode):
     def __init__(self, model: SequencerModel):
+        from nodes.node_utils.instantiate_node import instantiate_node
+        from nodes.wavable_value import WavableValueNode, WavableValueModel
         super().__init__(model)
         self.sequence = model.sequence
         self.chain = model.chain
-        self.interval = model.interval
         self.repeat = model.repeat
+        
+        # Wrap interval in WavableValue
+        if isinstance(model.interval, BaseNodeModel):
+            self.interval_node = instantiate_node(model.interval)
+        else:
+            wavable_model = WavableValueModel(value=model.interval)
+            self.interval_node = WavableValueNode(wavable_model)
         
         # Realtime state tracking
         self.current_repeat = 0
@@ -136,6 +145,15 @@ class SequencerNode(BaseNode):
                     return np.array([])
                 self._last_chunk_samples = num_samples
         
+        # Evaluate interval for this chunk
+        num_samples_resolved = self.resolve_num_samples(num_samples)
+        if num_samples_resolved is None:
+            num_samples_resolved = num_samples
+        
+        interval_wave = self.interval_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+        # Use first value if interval is a wave (assume constant interval for now)
+        interval = float(interval_wave[0]) if len(interval_wave) > 0 else 0.0
+        
         sequence = self.sequence or self.chain
         if not sequence:
             return np.zeros(num_samples, dtype=np.float32)
@@ -161,27 +179,15 @@ class SequencerNode(BaseNode):
             
             # Check if we've completed the sequence (but haven't finished all repeats)
             elif self.current_step >= len(sequence):
-                # We've finished the sequence steps
-                # If we have no active sounds, we can advance immediately
-                if len(self.all_active_sounds) == 0:
-                    self.current_repeat += 1
-                    self.current_step = 0
-                    self.time_in_current_step = 0
-                    self.step_triggered = set()
-                    if self.current_repeat >= self.repeat:
-                        self.sequence_complete = True
-                        continue
-                # Move to next repeat with interval gap (only if we have active sounds)
-                elif self.time_in_current_step >= self.interval:
-                    self.current_repeat += 1
-                    self.current_step = 0
-                    self.time_in_current_step = 0
-                    # Reset triggered steps for new repeat (but keep active sounds playing)
-                    self.step_triggered = set()
-                    if self.current_repeat >= self.repeat:
-                        self.sequence_complete = True
-                        continue
-                # Note: we don't skip rendering here - we fall through to render active sounds during the gap
+                # We've finished the sequence steps - loop back immediately
+                self.current_repeat += 1
+                self.current_step = 0
+                self.time_in_current_step = 0
+                # Reset triggered steps for new repeat (but keep active sounds playing)
+                self.step_triggered = set()
+                if self.current_repeat >= self.repeat:
+                    self.sequence_complete = True
+                continue
             
             # Define step_key for tracking
             step_key = (self.current_repeat, self.current_step)
@@ -199,23 +205,17 @@ class SequencerNode(BaseNode):
             
             if self.sequence and not self.sequence_complete:
                 # For sequence mode: calculate based on interval
-                if self.current_step < len(sequence):
-                    # We're in a step - use interval
-                    step_remaining_time = self.interval - self.time_in_current_step
-                    step_remaining_samples = int(step_remaining_time * SAMPLE_RATE)
-                    samples_to_render = min(remaining_samples, step_remaining_samples)
-                else:
-                    # We're in the gap after the sequence - use interval for the gap
-                    gap_remaining_time = self.interval - self.time_in_current_step
-                    gap_remaining_samples = int(gap_remaining_time * SAMPLE_RATE)
-                    samples_to_render = min(remaining_samples, gap_remaining_samples)
+                # We're in a step - use interval
+                step_remaining_time = interval - self.time_in_current_step
+                step_remaining_samples = int(step_remaining_time * SAMPLE_RATE)
+                samples_to_render = min(remaining_samples, step_remaining_samples)
             else:
                 # For chain mode or when sequence is complete: render all remaining samples
                 samples_to_render = remaining_samples
             # Safeguard: if samples_to_render is 0 due to rounding, advance to next step
             # This can happen when time_in_current_step is very close to interval
             if samples_to_render <= 0:
-                if self.sequence and not self.sequence_complete and self.time_in_current_step >= self.interval - 0.0001:
+                if self.sequence and not self.sequence_complete and self.time_in_current_step >= interval - 0.0001:
                     self.current_step += 1
                     self.time_in_current_step = 0
                     continue
@@ -289,7 +289,7 @@ class SequencerNode(BaseNode):
             self.time_in_current_step += samples_to_render / SAMPLE_RATE
             
             # Check if we should advance to next step for sequence mode
-            if self.sequence and not self.sequence_complete and self.time_in_current_step >= self.interval:
+            if self.sequence and not self.sequence_complete and self.time_in_current_step >= interval:
                 # For sequence mode: advance based on interval timing
                 self.current_step += 1
                 self.time_in_current_step = 0

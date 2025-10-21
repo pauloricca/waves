@@ -4,23 +4,38 @@ seq:
     signal:
       sequencer:
         interval: sixteenth
-        seq:
+        repeat: 4
+        sequence:
           - techno-kick
           -
-          -
-          -
-          - techno-kick
-          -
-          -
+          - hihat
           -
           - techno-kick
           -
-          -
+          - hihat
           -
           - techno-kick
           -
+          - hihat
           -
+          - techno-kick
           -
+          - hihat
+          - hihat
+
+
+hihat:
+  filter:
+    duration: 0.25
+    cutoff: [20000, 200]
+    signal:
+      osc:
+        type: noise
+        amp: [0.2, [0.1, 0.005], [0, 0.15]]
+        attack: 0.001
+        release: 1
+
+
 
 techno-kick:
   mix:
