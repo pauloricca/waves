@@ -63,10 +63,11 @@ class SequencerNode(BaseNode):
         # Update sound model with render args
         # Skip when sound_model is None (should be handled by instantiate_node)
         if sound_model:
-            # For each render_arg, update the corresponding attribute in sound_model
-            # We're modifying the model parameters before instantiation
+            # Create a copy of the sound model to avoid modifying the original
+            sound_model = sound_model.model_copy(deep=True)
+            # For each render_arg, update the corresponding attribute in the copied sound_model
             for param_name, param_value in render_args.items():
-                # Only set parameters that exist in the model to avoid errors
+            # Only set parameters that exist in the model to avoid errors
                 if hasattr(sound_model, param_name):
                     setattr(sound_model, param_name, param_value)
         
