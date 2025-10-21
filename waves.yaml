@@ -8,9 +8,9 @@ seq:
         sequence:
           - techno-kick
           -
-          - hihat
+          - 
           -
-          - techno-kick
+          - [techno-kick, hihat]
           -
           - hihat v0.5
           -
@@ -18,7 +18,7 @@ seq:
           -
           - hihat
           -
-          - techno-kick
+          - [techno-kick, hihat]
           -
           - hihat
           - hihat v0.2
@@ -734,6 +734,7 @@ echo-exp:
 
 echo2:
   mix:
+    duration: 3
     signals:
       - osc:
           id: paulo

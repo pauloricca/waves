@@ -52,7 +52,9 @@ class BaseNode:
             # Register this node instance in the context so it can be referenced
             context.store_node(self.node_id, self)
             
-            recursion_depth = context.get_recursion_depth(self.node_id)
+            # Use Python's id() to track this specific node instance
+            instance_id = id(self)
+            recursion_depth = context.get_recursion_depth(instance_id)
             
             # Check if we've hit max recursion (feedback loop break)
             if recursion_depth >= context.max_recursion:
@@ -61,22 +63,24 @@ class BaseNode:
                     return np.array([], dtype=np.float32)
                 return np.zeros(num_samples, dtype=np.float32)
             
-            # If not in recursion and we have a cached output, use it
+            # If not in recursion and THIS INSTANCE has a cached output, use it
+            # This allows the same node instance to be called multiple times (fan-out)
+            # without re-rendering, but different instances with the same ID will render independently
             if recursion_depth == 0:
-                cached = context.get_output(self.node_id)
+                cached = context.get_output(instance_id)
                 if cached is not None:
                     # Return cached output (trim/pad as needed)
                     return self._adjust_output_length(cached.copy(), num_samples)
             
             # Increment recursion, render, decrement, cache (if top level)
-            context.increment_recursion(self.node_id)
+            context.increment_recursion(instance_id)
             try:
                 wave = self._render_with_timing(num_samples, context, **params)
                 if recursion_depth == 0:  # Only cache at top level
-                    context.store_output(self.node_id, wave)
+                    context.store_output(instance_id, self.node_id, wave)
                 return wave
             finally:
-                context.decrement_recursion(self.node_id)
+                context.decrement_recursion(instance_id)
         
         # No id, just render normally with timing
         return self._render_with_timing(num_samples, context, **params)
