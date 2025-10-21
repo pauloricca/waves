@@ -1,5 +1,6 @@
 import numpy as np
 from config import SAMPLE_RATE
+from random import uniform
 
 # Global constants and functions available in all expressions
 GLOBAL_CONSTANTS = {
@@ -7,6 +8,8 @@ GLOBAL_CONSTANTS = {
     'pi': np.pi,
     'tau': 2 * np.pi,
     'e': np.e,
+
+    'rand': uniform,
     
     # Sample rate
     'sr': SAMPLE_RATE,
