@@ -57,23 +57,31 @@ def set_user_variables(vars_dict: dict):
 def get_expression_context(render_params: dict, time: float, num_samples: int) -> dict:
     """
     Build the complete context for expression evaluation.
-    Priority (later overwrites earlier):
-    1. Global constants
+    Priority (highest priority overwrites lower):
+    1. Global constants (lowest priority - base layer)
     2. User variables
-    3. Render params
-    4. Special runtime variables
+    3. Render params  
+    4. Special runtime variables (highest priority)
+    
+    Optimized: Start with global constants, layer on top to minimize dict operations.
     """
-    context = {
-        **GLOBAL_CONSTANTS,
-        **USER_VARIABLES,
-        **render_params,  # frequency, amplitude_multiplier, duration, etc.
-        
-        # Runtime specials
-        'time': time,
-        't': time,
-        'samples': num_samples,
-        'n': num_samples,
-    }
+    # Start with global constants (we need these in almost all expressions)
+    # This copy is necessary but happens only once per render
+    context = GLOBAL_CONSTANTS.copy()
+    
+    # Layer on user variables (overwrite globals if there's a conflict)
+    if USER_VARIABLES:
+        context.update(USER_VARIABLES)
+    
+    # Layer on render params (overwrite user vars if there's a conflict)
+    if render_params:
+        context.update(render_params)
+    
+    # Add runtime-specific values (highest priority - overwrite everything)
+    context['time'] = time
+    context['t'] = time
+    context['samples'] = num_samples
+    context['n'] = num_samples
     
     return context
 

@@ -155,6 +155,20 @@ def look_for_duration(model: BaseNodeModel):
                     if duration is not None:
                         durations.append(duration)
     
+    # Also check __pydantic_extra__ for models with extra='allow' (like ExpressionNodeModel)
+    if hasattr(model, '__pydantic_extra__') and model.__pydantic_extra__:
+        for attr in model.__pydantic_extra__.values():
+            if isinstance(attr, BaseNodeModel):
+                duration = look_for_duration(attr)
+                if duration is not None:
+                    durations.append(duration)
+            elif isinstance(attr, list):
+                for item in attr:
+                    if isinstance(item, BaseNodeModel):
+                        duration = look_for_duration(item)
+                        if duration is not None:
+                            durations.append(duration)
+    
     # Return the largest duration found, or None if no durations found
     return max(durations) if durations else None
 

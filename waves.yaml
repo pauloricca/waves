@@ -12,7 +12,7 @@ seq:
           -
           - techno-kick
           -
-          - hihat
+          - hihat v0.5
           -
           - techno-kick
           -
@@ -21,19 +21,25 @@ seq:
           - techno-kick
           -
           - hihat
-          - hihat
+          - hihat v0.2
 
 
 hihat:
-  filter:
-    duration: 0.25
-    cutoff: [20000, 200]
+  context:
+    v: 1
     signal:
-      osc:
-        type: noise
-        amp: [0.2, [0.1, 0.005], [0, 0.15]]
-        attack: 0.001
-        release: 1
+      expression:
+        exp: v * signal
+        signal:
+          filter:
+            duration: 0.25
+            cutoff: [20000, 200]
+            signal:
+              osc:
+                type: noise
+                amp: [0.2, [0.1, 0.005], [0, 0.15]]
+                attack: 0.001
+                release: 1
 
 
 

@@ -22,16 +22,20 @@ class ExpressionNode(BaseNode):
         # Store all extra arguments (both nodes and raw values)
         # Pydantic with extra='allow' stores them in __pydantic_extra__
         self.args = {}
+        self.compiled_string_args = {}  # Pre-compile string expressions
         if hasattr(model, '__pydantic_extra__') and model.__pydantic_extra__:
             for field_name, field_value in model.__pydantic_extra__.items():
                 if isinstance(field_value, BaseNodeModel):
                     self.args[field_name] = instantiate_node(field_value)
-                elif isinstance(field_value, (str, int, float)):
-                    # String (expression) or scalar - store as-is
+                elif isinstance(field_value, str):
+                    # String (expression) - compile it once
+                    self.compiled_string_args[field_name] = compile(field_value, '<expression>', 'eval')
+                elif isinstance(field_value, (int, float)):
+                    # Scalar - store as-is
                     self.args[field_name] = field_value
     
     def _do_render(self, num_samples=None, context=None, **params):
-        from expression_globals import get_expression_context, evaluate_expression
+        from expression_globals import get_expression_context
         
         num_samples = self.resolve_num_samples(num_samples)
         if num_samples is None:
@@ -51,12 +55,19 @@ class ExpressionNode(BaseNode):
                 wave = value.render(num_samples, context, 
                                    **self.get_params_for_children(params))
                 eval_context[name] = wave
-            elif isinstance(value, str):
-                # String = expression, evaluate it
-                eval_context[name] = evaluate_expression(value, eval_context, num_samples)
             else:
                 # Scalar (int/float)
                 eval_context[name] = value
+        
+        # Evaluate compiled string arguments
+        for name, compiled_expr in self.compiled_string_args.items():
+            result = eval(compiled_expr, {"__builtins__": {}}, eval_context)
+            if isinstance(result, np.ndarray):
+                eval_context[name] = result
+            elif isinstance(result, (int, float, np.number)):
+                eval_context[name] = np.full(num_samples, float(result), dtype=np.float32)
+            else:
+                eval_context[name] = result
         
         # Evaluate main expression
         result = eval(self.compiled_exp, {"__builtins__": {}}, eval_context)
