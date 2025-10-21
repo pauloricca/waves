@@ -6,7 +6,6 @@ from pydantic import ConfigDict
 from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.oscillator import OSCILLATOR_RENDER_ARGS
 from nodes.wavable_value import WavableValue, wavable_value_node_factory
 
 class FilterTypes(str, Enum):
@@ -70,10 +69,10 @@ class FilterNode(BaseNode):
     
     def _apply_filter(self, signal_wave, num_samples, context, params):
         """Apply filter to the signal wave"""
-        cutoff = self.cutoff_node.render(num_samples, context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+        cutoff = self.cutoff_node.render(num_samples, context, **self.get_params_for_children(params))
         
         # Render only a single sample from peak to get current value
-        peak_wave = self.peak_node.render(1, context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+        peak_wave = self.peak_node.render(1, context, **self.get_params_for_children(params))
         peak = peak_wave[0] if len(peak_wave) > 0 else 0.0
 
         if len(cutoff) == 1:

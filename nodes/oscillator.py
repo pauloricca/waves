@@ -22,7 +22,7 @@ class OscillatorTypes(str, Enum):
     SAW = "SAW"
     NOISE = "NOISE"
     PERLIN = "PERLIN"
-    WANDER = "WANDER"  # Fast random walk LFO
+    WANDER = "WANDER"
     NONE = "NONE"
 
 
@@ -86,9 +86,6 @@ class OscillatorNode(BaseNode):
         if num_samples is None:
             raise ValueError("Cannot render full signal: oscillator has no duration specified")
         
-        # Store original num_samples to check if we need to truncate params
-        original_num_samples = num_samples
-        
         # Check if we've reached the end of our duration
         if self.duration is not None:
             total_duration_samples = int(self.duration * SAMPLE_RATE)
@@ -108,20 +105,25 @@ class OscillatorNode(BaseNode):
 
         total_wave = np.zeros(num_samples)
 
+        params_for_children = self.get_params_for_children(params)
+
         if self.freq:
-            frequency = self.freq.render(num_samples, context, **params)
+            frequency = self.freq.render(num_samples, context, **params_for_children)
             if len(frequency) == 1:
                 frequency = frequency[0]
         else:
             frequency = 1
 
-        amplitude = self.amp.render(num_samples, context, **params)
+        amplitude = self.amp.render(num_samples, context, **params_for_children)
         
         # Render phase modulation if provided
         phase_modulation = None
         if self.phase_mod:
-            phase_modulation = self.phase_mod.render(num_samples, context, **params)
-            if len(phase_modulation) == 1:
+            phase_modulation = self.phase_mod.render(num_samples, context, **params_for_children)
+            # If phase modulation signal has ended (empty array), treat as no modulation
+            if len(phase_modulation) == 0:
+                phase_modulation = None
+            elif len(phase_modulation) == 1:
                 phase_modulation = phase_modulation[0]
         
         osc_type = self.model.type

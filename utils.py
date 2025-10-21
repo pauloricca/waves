@@ -1,8 +1,10 @@
 import os
 import shutil
+import math
 import sounddevice as sd
 import numpy as np
 from scipy.io import wavfile
+
 
 from config import *
 from nodes.node_utils.base_node import BaseNodeModel
@@ -125,25 +127,36 @@ def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_l
 
 
 def look_for_duration(model: BaseNodeModel):
-        """
-        Recursively looks for the duration attribute in the model or its attributes.
-        Returns None if no finite duration is found (e.g., for infinite-running nodes).
-        """
-        import math
-        
-        if hasattr(model, "duration") and model.duration is not None:
-            # If duration is infinite, treat it as None (no duration limit)
-            if math.isinf(model.duration):
-                return None
-            return model.duration
-            
-        for attr in model.__dict__.values():
-            if isinstance(attr, BaseNodeModel):
-                duration = look_for_duration(attr)
-                if duration is not None:
-                    return duration
-        
-        return None
+    """
+    Recursively looks for the duration attribute in the model or its attributes.
+    Returns None if no finite duration is found (e.g., for infinite-running nodes).
+    If multiple durations are found (e.g., in lists), returns the largest value.
+    """
+    durations = []
+    
+    # Check if model itself has a duration attribute
+    if hasattr(model, "duration") and model.duration is not None:
+        # If duration is infinite, treat it as None (no duration limit)
+        if not math.isinf(model.duration):
+            durations.append(model.duration)
+    
+    # Check all attributes
+    for attr in model.__dict__.values():
+        if isinstance(attr, BaseNodeModel):
+            # For BaseNodeModel attributes, recurse
+            duration = look_for_duration(attr)
+            if duration is not None:
+                durations.append(duration)
+        elif isinstance(attr, list):
+            # For list attributes, check each item
+            for item in attr:
+                if isinstance(item, BaseNodeModel):
+                    duration = look_for_duration(item)
+                    if duration is not None:
+                        durations.append(duration)
+    
+    # Return the largest duration found, or None if no durations found
+    return max(durations) if durations else None
 
 
 def add_waves(a: np.ndarray, b: np.ndarray, b_offset: int = 0) -> np.ndarray:

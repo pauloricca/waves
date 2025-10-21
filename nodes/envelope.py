@@ -12,9 +12,9 @@ class EnvelopeModel(BaseNodeModel):
     decay: Union[float, str] = 0 # length of decay in seconds (or expression)
     sustain: Union[float, str] = 1.0 # sustain level (0 to 1) (or expression)
     release: Union[float, str] = 0 # length of release in seconds (or expression)
-    gate: Optional[WavableValue] = None # gate signal (>= 0.5 = on, < 0.5 = trigger release)
-    signal: BaseNodeModel = None
-    end: bool = False # if True, return empty array after release is complete (signals parent to stop rendering)
+    gate: Optional[WavableValue] = 1.0 # gate signal (>= 0.5 = on, < 0.5 = trigger release)
+    signal: BaseNodeModel = None # If none, uses a constant signal of 1.0, effectively making it a simple envelope generator
+    end: bool | None = None # if True, return empty array after release is complete (signals parent to stop rendering)
 
 
 class EnvelopeNode(BaseNode):
@@ -22,8 +22,14 @@ class EnvelopeNode(BaseNode):
         from nodes.node_utils.instantiate_node import instantiate_node
         super().__init__(model)
         self.model = model
-        self.signal_node = instantiate_node(model.signal)
+        self.signal_node = instantiate_node(model.signal) if model.signal is not None else None
         self.gate_node = wavable_value_node_factory(model.gate) if model.gate is not None else None
+
+        # If no gate or end is defined, set end to True for envelope completion
+        if model.end is None:
+            self.end = True if model.gate is 1.0 else False
+        else:
+            self.end = model.end
         
         # State tracking for real-time rendering
         self.fade_in_multiplier = None  # Attack envelope
@@ -99,8 +105,9 @@ class EnvelopeNode(BaseNode):
             self.is_in_release_phase = True
             self.release_started = True
         
-        # Get the signal from the child node
-        signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))
+        # Get the signal from the child node. if no signal is defined, render ones
+        signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(
+            params)) if self.signal_node is not None else np.ones(num_samples, dtype=np.float32)
         
         # If signal is exhausted, create silent output instead of returning empty
         if len(signal_wave) == 0:
@@ -215,7 +222,7 @@ class EnvelopeNode(BaseNode):
                     self.current_amplitude = 0.0  # Release complete, amplitude is now 0
                     
                     # If end=True, return empty array to signal completion
-                    if self.model.end:
+                    if self.end:
                         return np.array([], dtype=np.float32)
         elif self.is_in_release_phase and release_len == 0:
             # No release time, output silence immediately
@@ -223,7 +230,7 @@ class EnvelopeNode(BaseNode):
             self.current_amplitude = 0.0
             
             # If end=True, return empty array to signal completion
-            if self.model.end:
+            if self.end:
                 return np.array([], dtype=np.float32)
 
         return signal_wave

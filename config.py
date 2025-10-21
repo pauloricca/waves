@@ -14,14 +14,14 @@ RENDERED_MASTER_GAIN = 0.6
 DO_NORMALISE_EACH_SOUND = False
 DEFAULT_PLAYBACK_TIME = 4  # seconds, for nodes without explicit duration
 
-WAIT_FOR_CHANGES_IN_WAVES_YAML = False
+WAIT_FOR_CHANGES_IN_WAVES_YAML = True
 
 # Playback settings
 DO_PRE_RENDER_WHOLE_SOUND = False
 DO_PLAY_IN_REAL_TIME = True
 
 # Visualisation settings
-DO_VISUALISE_OUTPUT = False
+DO_VISUALISE_OUTPUT = True
 DISPLAY_RENDER_TIME_PERCENTAGE = True
 DO_ONLY_VISUALISE_ONE_BUFFER = False
 VISUALISATION_FPS = 25  # Lower FPS reduces CPU usage and audio interference

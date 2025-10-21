@@ -51,18 +51,17 @@ class WavableValueNode(BaseNode):
             self.value_type = 'unknown'
 
     def _do_render(self, num_samples=None, context=None, **params):
-        from nodes.oscillator import OSCILLATOR_RENDER_ARGS
         from expression_globals import get_expression_context
         
         if self.value_type == 'node':
             # Existing node rendering logic
             if num_samples is None:
-                wave = self.wave_node.render(context=context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+                wave = self.wave_node.render(context=context, **self.get_params_for_children(params))
                 if len(wave) > 0:
                     self._last_chunk_samples = len(wave)
                 return wave
             else:
-                wave = self.wave_node.render(num_samples, context, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+                wave = self.wave_node.render(num_samples, context, **self.get_params_for_children(params))
                 # If the wave node returns fewer samples than requested, pad with the last value
                 if len(wave) > 0 and len(wave) < num_samples:
                     last_value = wave[-1] if len(wave) > 0 else 0

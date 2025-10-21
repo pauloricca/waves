@@ -154,7 +154,6 @@ class MapNode(BaseNode):
     
     def _apply_mapping(self, signal_wave, num_samples, context, params):
         """Apply mapping to the signal wave"""
-        # Pass all params to children (not just OSCILLATOR_RENDER_ARGS) to support interpolated values
         child_params = self.get_params_for_children(params)
         
         from_min_wave = self.from_min.render(num_samples, context, **child_params)
