@@ -4,42 +4,44 @@ loop:
   #   duration: 5
   #   freq: 30
   #   phase:
-      retrigger:
-        duration: 50
-        time: 0.1
-        feedback: 0.5
-        repeats: 4
+      # retrigger:
+      #   duration: 50
+      #   time: 0.1
+      #   feedback: 0.5
+      #   repeats: 4
         # signal:
         #   mix:
         #     signals:
-        #       - envelope:
-        #           attack: 0.1
-        #           release: 0.3
-        #           decay: 0.1
-        #           sustain: 0.5
-        #           gate:
-        #             osc:
-        #               freq: 3
-        #               range: [0, 1]
-        #               type: sqr
-        signal:
+              envelope:
+                  attack: 0.001
+                  release: 0.3
+                  decay: 0.1
+                  sustain: 0.7
+                  gate:
+                    osc:
+                      freq: 0.7
+                      range: [0, 1]
+                      type: sqr
+                  signal:
                     # snap:
                     #   interval: 0.01  # Frequency steps
                     #   range: [-1, 1]
                     #   glide: 0.005  # Glide time in seconds
                     #   signal:
                         shuffle:
-                          chunks: 128
+                          chunks: 64
                           invert: 0.5
+                          crossfade: 0.005
                           signal:
                             expression:
                               duration: 50
                               id: sample
                               exp: amp * signal
                               amp: 0.0001
+                              amp: 1
                               signal:
                                 sample:
-                                  file: samples/fx.wav
+                                  file: samples/gregor.wav
                                   speed: [0.2, -0.2, 4, 1, -0.5, 3, 0.2]
                                   loop: true
               # - reference:
