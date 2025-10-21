@@ -8,6 +8,8 @@ import traceback
 from collections import deque
 import threading
 import gc
+import signal
+import atexit
 
 
 from config import *
@@ -19,7 +21,45 @@ from utils import look_for_duration, play, save, visualise_wave
 
 rendered_sounds: dict[np.ndarray] = {}
 
+# Global recording buffer (thread-safe deque)
+recording_buffer = None
+recording_active = False
+
+def save_recording():
+    """Save the recorded audio buffer to a file."""
+    global recording_buffer, recording_active
+    
+    if not recording_active or recording_buffer is None or len(recording_buffer) == 0:
+        return
+    
+    try:
+        # Convert deque to numpy array
+        recorded_audio = np.array(recording_buffer, dtype=np.float32)
+        
+        # Save using the existing save function
+        save(recorded_audio, REAL_TIME_RECORDING_FILENAME)
+        print(f"Recording saved: {len(recorded_audio) / SAMPLE_RATE:.2f} seconds")
+    except Exception as e:
+        print(f"Error saving recording: {e}")
+    finally:
+        recording_active = False
+
+def signal_handler(sig, frame):
+    """Handle Ctrl-C gracefully and save recording."""
+    print("\nInterrupted by user, saving recording...")
+    save_recording()
+    sys.exit(0)
+
 def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float):
+    global recording_buffer, recording_active
+    
+    # Initialize recording if enabled
+    if DO_RECORD_REAL_TIME:
+        recording_buffer = deque()
+        recording_active = True
+        # Register cleanup function to save on normal exit
+        atexit.register(save_recording)
+    
     visualised_wave_buffer = deque(maxlen=10_000)
     should_stop = False
     start_time = time.time()
@@ -43,6 +83,10 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float):
 
         # Apply master gain
         audio_data *= RENDERED_MASTER_GAIN
+
+        # Add to recording buffer if recording is enabled (before clipping for visualization)
+        if recording_active and recording_buffer is not None:
+            recording_buffer.extend(audio_data)
 
         visualised_wave_buffer.extend(audio_data)
 
@@ -160,6 +204,10 @@ def main():
         play(rendered_sound)
 
 if __name__ == "__main__":
+    # Register signal handler for Ctrl-C to save recording
+    if DO_RECORD_REAL_TIME and DO_PLAY_IN_REAL_TIME:
+        signal.signal(signal.SIGINT, signal_handler)
+    
     if DISABLE_GARBAGE_COLLECTION:
         gc.disable()
 

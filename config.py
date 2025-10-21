@@ -20,10 +20,14 @@ WAIT_FOR_CHANGES_IN_WAVES_YAML = True
 DO_PRE_RENDER_WHOLE_SOUND = False
 DO_PLAY_IN_REAL_TIME = True
 
+# Real-time recording settings
+DO_RECORD_REAL_TIME = True  # Enable to save real-time playback to file
+REAL_TIME_RECORDING_FILENAME = "realtime_recording.wav"  # Output filename in OUTPUT_DIR
+
 # Visualisation settings
-DO_VISUALISE_OUTPUT = False
+DO_VISUALISE_OUTPUT = True
 DISPLAY_RENDER_TIME_PERCENTAGE = True
 DO_ONLY_VISUALISE_ONE_BUFFER = False
-VISUALISATION_FPS = 25  # Lower FPS reduces CPU usage and audio interference
+VISUALISATION_FPS = 20  # Lower FPS reduces CPU usage and audio interference
 
 DISABLE_GARBAGE_COLLECTION = False

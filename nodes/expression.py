@@ -48,6 +48,9 @@ class ExpressionNode(BaseNode):
             num_samples=num_samples
         )
         
+        # Track the actual minimum number of samples from all child nodes
+        actual_num_samples = num_samples
+        
         # Evaluate all arguments and add to context
         for name, value in self.args.items():
             if isinstance(value, BaseNode):
@@ -55,9 +58,31 @@ class ExpressionNode(BaseNode):
                 wave = value.render(num_samples, context, 
                                    **self.get_params_for_children(params))
                 eval_context[name] = wave
+                # Track if child returned fewer samples
+                if len(wave) < actual_num_samples:
+                    actual_num_samples = len(wave)
             else:
                 # Scalar (int/float)
                 eval_context[name] = value
+        
+        # If any child returned fewer samples, we need to handle completion
+        if actual_num_samples < num_samples:
+            # If any child returned 0 samples, signal completion
+            if actual_num_samples == 0:
+                return np.array([], dtype=np.float32)
+            
+            # Otherwise, truncate all arrays to match the shortest child
+            num_samples = actual_num_samples
+            # Update base context arrays to match
+            eval_context = get_expression_context(
+                render_params=params,
+                time=self.time_since_start,
+                num_samples=num_samples
+            )
+            # Truncate all child node outputs
+            for name, value in eval_context.items():
+                if isinstance(value, np.ndarray) and len(value) > num_samples:
+                    eval_context[name] = value[:num_samples]
         
         # Evaluate compiled string arguments
         for name, compiled_expr in self.compiled_string_args.items():

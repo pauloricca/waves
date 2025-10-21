@@ -2,10 +2,8 @@ from __future__ import annotations
 import numpy as np
 from pydantic import ConfigDict
 from config import SAMPLE_RATE
-from constants import RenderArgs
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.oscillator import OSCILLATOR_RENDER_ARGS
 from nodes.wavable_value import WavableValue, wavable_value_node_factory
 from utils import load_wav_file
 
@@ -41,8 +39,8 @@ class SampleNode(BaseNode):
             num_samples = self.resolve_num_samples(num_samples)
             if num_samples is None:
                 # Render start/end for a single sample to get their initial values
-                start_vals = self.start_node.render(1, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
-                end_vals = self.end_node.render(1, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+                start_vals = self.start_node.render(1, **self.get_params_for_children(params))
+                end_vals = self.end_node.render(1, **self.get_params_for_children(params))
                 start = int(start_vals[0] * len(self.audio))
                 end = int(end_vals[0] * len(self.audio))
                 end = min(end, len(self.audio))
@@ -60,8 +58,8 @@ class SampleNode(BaseNode):
                     raise ValueError("Cannot render full signal: looping sample requires duration to be specified")
         
         # Render start and end values for this chunk
-        start_vals = self.start_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
-        end_vals = self.end_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+        start_vals = self.start_node.render(num_samples, **self.get_params_for_children(params))
+        end_vals = self.end_node.render(num_samples, **self.get_params_for_children(params))
         
         # Ensure they are arrays
         if np.isscalar(start_vals):
@@ -102,7 +100,7 @@ class SampleNode(BaseNode):
         
         # If base_freq is set, modulate speed by frequency parameter
         if self.model.base_freq is not None:
-            frequency = params.get(RenderArgs.FREQUENCY, None)
+            frequency = params.get('frequency', None)
             if frequency is not None:
                 # Ensure frequency is an array
                 if np.isscalar(frequency):
