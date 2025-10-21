@@ -1,6 +1,5 @@
 from __future__ import annotations
 from typing import List, Optional, Union
-import re
 import numpy as np
 from pydantic import ConfigDict
 from config import SAMPLE_RATE
@@ -44,34 +43,8 @@ class SequencerNode(BaseNode):
         self.sequence_complete = False  # Flag to indicate when sequence playback is done
     
     def instantiate_sound_node(self, sound_model: BaseNodeModel, sound_name_with_params, **params):
-        from nodes.node_utils.instantiate_node import instantiate_node
-        parts = sound_name_with_params.split()
-        render_args = {}
-
-        # Parse parameters by separating text from numeric parts
-        # e.g., "f440" -> param_name="f", value=440
-        #       "amp0.5" -> param_name="amp", value=0.5
-        #       "t2" -> param_name="t", value=2
-        for param in parts[1:]:
-            # Use regex to separate alphabetic prefix from numeric suffix
-            match = re.match(r'^([a-zA-Z_]+)([-+]?[0-9]*\.?[0-9]+)$', param)
-            if match:
-                param_name = match.group(1)
-                param_value = float(match.group(2))
-                render_args[param_name] = param_value
-        
-        # Update sound model with render args
-        # Skip when sound_model is None (should be handled by instantiate_node)
-        if sound_model:
-            # Create a copy of the sound model to avoid modifying the original
-            sound_model = sound_model.model_copy(deep=True)
-            # For each render_arg, update the corresponding attribute in the copied sound_model
-            for param_name, param_value in render_args.items():
-            # Only set parameters that exist in the model to avoid errors
-                if hasattr(sound_model, param_name):
-                    setattr(sound_model, param_name, param_value)
-        
-        return instantiate_node(sound_model), render_args
+        from nodes.node_utils.node_string_parser import instantiate_node_from_string
+        return instantiate_node_from_string(sound_name_with_params, sound_model)
 
     def create_sound_nodes_for_step(self, step_index, **params):
         """Create sound nodes for a given step in the sequence."""

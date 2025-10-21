@@ -45,7 +45,8 @@ class ExpressionNode(BaseNode):
         eval_context = get_expression_context(
             render_params=params,
             time=self.time_since_start,
-            num_samples=num_samples
+            num_samples=num_samples,
+            render_context=context
         )
         
         # Track the actual minimum number of samples from all child nodes
@@ -77,7 +78,8 @@ class ExpressionNode(BaseNode):
             eval_context = get_expression_context(
                 render_params=params,
                 time=self.time_since_start,
-                num_samples=num_samples
+                num_samples=num_samples,
+                render_context=context
             )
             # Truncate all child node outputs
             for name, value in eval_context.items():

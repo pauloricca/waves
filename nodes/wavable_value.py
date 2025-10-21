@@ -81,7 +81,7 @@ class WavableValueNode(BaseNode):
                 num_samples = int(duration * SAMPLE_RATE)
                 self._last_chunk_samples = num_samples
             
-            eval_context = get_expression_context(params, self.time_since_start, num_samples)
+            eval_context = get_expression_context(params, self.time_since_start, num_samples, context)
             result = eval(self.compiled_expr, {"__builtins__": {}}, eval_context)
             
             # Handle result type

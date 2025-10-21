@@ -182,12 +182,26 @@ def main():
         return
 
     if len(sys.argv) < 2:
-        print("Usage: python waves.py <sound-name>")
+        print("Usage: python waves.py <sound-name> [param1VALUE] [param2VALUE] ...")
+        print("Examples:")
+        print("  python waves.py kick")
+        print("  python waves.py kick f440 a0.5")
+        print("  python waves.py my_sound t2 f880")
         sys.exit(1)
 
-    sound_name_to_play = sys.argv[1]    
+    # Join all arguments to handle node string with parameters
+    sound_string = ' '.join(sys.argv[1:])
+    
+    # Parse the node string to get name and parameters
+    from nodes.node_utils.node_string_parser import parse_node_string, apply_params_to_model
+    sound_name_to_play, params = parse_node_string(sound_string)
 
     sound_model_to_play = get_sound_model(sound_name_to_play)
+    
+    # Apply parameters to the model if any were provided
+    if params:
+        sound_model_to_play = apply_params_to_model(sound_model_to_play, params)
+    
     sound_node_to_play = instantiate_node(sound_model_to_play)
 
     sound_duration = look_for_duration(sound_model_to_play)

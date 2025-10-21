@@ -974,3 +974,24 @@ test-tempo-lfo:
         freq:
           expression:
             exp: "440 + 220 * sin(t * tau / (bar * 2))"  # LFO completes once every 2 bars
+
+
+exp-node:
+  context:
+    a: 0
+    signal:
+      map:
+        from: [0, 1]
+        to: [0, a]
+        signal:
+          osc:
+            range: [0, 1]
+            freq: 1
+
+
+test-exp-node:
+  osc:
+    duration: 5
+    freq: 200
+    amp: "node('exp-node a1').render(samples, context)"
+

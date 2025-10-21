@@ -57,7 +57,7 @@ def set_user_variables(vars_dict: dict):
     global USER_VARIABLES
     USER_VARIABLES = vars_dict.copy() if vars_dict else {}
 
-def get_expression_context(render_params: dict, time: float, num_samples: int) -> dict:
+def get_expression_context(render_params: dict, time: float, num_samples: int, render_context=None) -> dict:
     """
     Build the complete context for expression evaluation.
     Priority (highest priority overwrites lower):
@@ -85,6 +85,10 @@ def get_expression_context(render_params: dict, time: float, num_samples: int) -
     context['t'] = time
     context['samples'] = num_samples
     context['n'] = num_samples
+    
+    # Add render context if provided (for advanced usage like node() function)
+    if render_context is not None:
+        context['context'] = render_context
     
     return context
 
