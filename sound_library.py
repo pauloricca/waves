@@ -9,8 +9,10 @@ from nodes.node_utils.base_node import BaseNodeModel
 sound_library: SoundLibraryModel = None
 
 
-def parse_node(data) -> BaseNodeModel:
+def parse_node(data, available_sound_names=None, raw_sound_data=None) -> BaseNodeModel:
     from nodes.node_utils.node_registry import NODE_REGISTRY
+    from nodes.node_utils.node_string_parser import apply_params_to_model
+    
     if not isinstance(data, dict) or len(data) != 1:
         raise ValueError(f"Each node must have exactly one node_type key: {data}")
     
@@ -19,17 +21,26 @@ def parse_node(data) -> BaseNodeModel:
     # Recursively parse params that look like nodes
     for k, v in params.items():
         if isinstance(v, dict) and len(v) == 1 and isinstance(next(iter(v.values())), dict):
-            params[k] = parse_node(v)
+            params[k] = parse_node(v, available_sound_names, raw_sound_data)
         elif isinstance(v, list):
             params[k] = [
-                parse_node(i) if isinstance(i, dict) and len(i) == 1 and isinstance(next(iter(i.values())), dict) else i
+                parse_node(i, available_sound_names, raw_sound_data) if isinstance(i, dict) and len(i) == 1 and isinstance(next(iter(i.values())), dict) else i
                 for i in v
             ]
     
     node_definition = next((n for n in NODE_REGISTRY if n.name == node_type), None)
 
     if not node_definition:
-        raise ValueError(f"Node type '{node_type}' not recognised")
+        # Check if this is a sub-patch reference
+        if available_sound_names and node_type in available_sound_names and raw_sound_data:
+            # Get the raw sound data and parse it
+            sound_data = raw_sound_data[node_type]
+            # Parse the sound to get its base model
+            base_model = parse_node(sound_data, available_sound_names, raw_sound_data)
+            # Apply parameters to the model
+            return apply_params_to_model(base_model, params)
+        else:
+            raise ValueError(f"Node type '{node_type}' not recognised and not found in sound library")
 
     model_cls = node_definition.model
 
@@ -40,7 +51,11 @@ class SoundLibraryModel(RootModel[Dict[str, BaseNodeModel]]):
     @model_validator(mode="before")
     @classmethod
     def parse_graph(cls, data):
-        return {k: parse_node(v) for k, v in data.items()}
+        # Get list of all root-level sound names for sub-patch recognition
+        available_sound_names = set(data.keys())
+        
+        # Parse all sounds with knowledge of available sound names and raw data
+        return {k: parse_node(v, available_sound_names, data) for k, v in data.items()}
 
     def __getitem__(self, key):
         return self.root[key]

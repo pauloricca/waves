@@ -46,28 +46,35 @@ loop:
               # - reference:
               #     ref: sample
 
+chop:
+  sample:
+    file: output/chopped
+    chop: 
+      hold:
+        signal: rand(0, 20)
+
 seq:
   tempo:
     bpm: 135
     signal:
       sequencer:
         interval: sixteenth
-        repeat: 4
+        repeat: 8
         sequence:
           - techno-kick
           -
-          - 
-          -
+          - chop
+          - hihat v0.4
           - [techno-kick, hihat v1]
-          -
-          - hihat v0.5
-          -
+          - 
+          - hihat v.5
+          - hihat v.2
           - techno-kick
           -
           - hihat
-          -
+          - chop
           - [techno-kick, hihat]
-          -
+          - hihat v.2
           - hihat
           - hihat v.1
 
@@ -974,6 +981,20 @@ test-tempo-lfo:
         freq:
           expression:
             exp: "440 + 220 * sin(t * tau / (bar * 2))"  # LFO completes once every 2 bars
+
+
+test-subpatch:
+  mix:
+    duration: 5
+    signals:
+      - hihat:
+          v: 1
+      - techno-kick: {}
+      - delay:
+          time: 2
+          signal:
+            techno-kick: {}
+
 
 
 

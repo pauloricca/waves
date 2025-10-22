@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 import numpy as np
 from pydantic import ConfigDict
 from config import SAMPLE_RATE
@@ -25,13 +26,27 @@ class SampleModel(BaseNodeModel):
     base_freq: float = None  # Hz (base frequency for freq parameter)
     freq: WavableValue = None  # Hz (target frequency - modulates speed based on base_freq)
     offset: WavableValue = 0.0  # seconds (shift playhead position)
+    # When provided, 'file' is treated as a directory path. The 'chop' selects
+    # one of the audio files in that directory (sorted alphabetically).
+    chop: WavableValue | int | None = None
 
 
 class SampleNode(BaseNode):
     def __init__(self, model: SampleModel):
         super().__init__(model)
         self.model = model
-        self.audio = load_wav_file(model.file)
+        # Chop mode state (directory of files)
+        self.is_in_chop_mode = model.chop is not None
+        self.chop_node = wavable_value_node_factory(model.chop) if self.is_in_chop_mode else None
+        self.audio_files = None
+        self.current_chop_index = None
+
+        if self.is_in_chop_mode:
+            # In chop mode, we'll defer audio loading until first render
+            # when we evaluate the chop index
+            self.audio = np.zeros(1, dtype=np.float32)
+        else:
+            self.audio = load_wav_file(model.file)
         self.speed_node = wavable_value_node_factory(model.speed)
         self.freq_node = wavable_value_node_factory(model.freq) if model.freq is not None else None
         self.start_node = wavable_value_node_factory(model.start)
@@ -39,8 +54,79 @@ class SampleNode(BaseNode):
         self.offset_node = wavable_value_node_factory(model.offset)
         self.last_playhead_position = 0
         self.total_samples_rendered = 0
+        # Internal flag to reset playhead to start on chop change
+        self._reset_playhead_this_chunk = False
+
+    def _resolve_project_path(self, path_str: str) -> str:
+        """Resolve path relative to project root (waves/), handling ~ and env vars."""
+        path_str = os.path.expandvars(os.path.expanduser(path_str))
+        if os.path.isabs(path_str):
+            return path_str
+        project_root = os.path.dirname(os.path.dirname(__file__))  # nodes/ -> project root
+        return os.path.normpath(os.path.join(project_root, path_str))
+
+    def _ensure_chop_listing(self):
+        """Build and cache the list of .wav files for chop mode."""
+        if getattr(self, "_chop_files_abs", None) is not None:
+            return
+        base = self.model.file
+        if base is None:
+            raise ValueError("Sample node: 'file' is required")
+        base_abs = self._resolve_project_path(base)
+        if not os.path.isdir(base_abs):
+            raise ValueError(f"Sample node: 'file' should be a directory when 'chop' is provided. "
+                           f"Not a directory: {base} (resolved: {base_abs})")
+        try:
+            entries = [f for f in os.listdir(base_abs) if f.lower().endswith(".wav")]
+        except FileNotFoundError:
+            raise ValueError(f"Sample node: directory not found: {base} (resolved: {base_abs})")
+        entries.sort(key=lambda s: s.lower())
+        if not entries:
+            raise ValueError(f"Sample node: no .wav files found in directory: {base} (resolved: {base_abs})")
+        # Store relative paths for load_wav_file
+        self._chop_files = [os.path.join(base, e) for e in entries]
+
+    def _select_chop_path_for_index(self, idx: int) -> tuple[str, int]:
+        """Return relative path of selected file by clipped index."""
+        if getattr(self, "_chop_files", None) is None:
+            self._ensure_chop_listing()
+        files = self._chop_files
+        if not files:
+            raise ValueError("Sample node: internal error, chop file list is empty")
+        idx = int(np.clip(int(idx), 0, len(files) - 1))
+        return files[idx], idx
+
+    def _pick_and_load_chop_audio(self, context, params):
+        """Evaluate chop node once per render and swap audio if selection changed."""
+        if not self.is_in_chop_mode:
+            return  # not in chop mode
+        # Ensure directory listing is ready
+        self._ensure_chop_listing()
+
+        # Evaluate chop as a scalar (one sample)
+        try:
+            raw = self.chop_node.render(1, context, **self.get_params_for_children(params))
+        except Exception as e:
+            raise ValueError(f"Sample node: error evaluating 'chop': {e}")
+        idx_val = raw[0] if isinstance(raw, np.ndarray) and raw.size > 0 else raw
+        try:
+            idx_int = int(idx_val)
+        except Exception:
+            idx_int = 0
+
+        path, idx_int = self._select_chop_path_for_index(idx_int)
+
+        # Load only if changed
+        if self.current_chop_index != idx_int or len(self.audio) <= 1:
+            self.audio = load_wav_file(path)  # utils caches by path
+            self.current_chop_index = idx_int
+            # Reset playhead for this chunk to avoid mid-file discontinuity
+            self._reset_playhead_this_chunk = True
 
     def _do_render(self, num_samples=None, context=None, **params):
+        # Evaluate 'chop' at every render and swap audio if needed
+        self._pick_and_load_chop_audio(context, params)
+
         # If num_samples is None, resolve it from duration
         if num_samples is None:
             num_samples = self.resolve_num_samples(num_samples)
@@ -78,9 +164,10 @@ class SampleNode(BaseNode):
         start_indices = np.clip(start_vals * len(self.audio), 0, len(self.audio) - 1).astype(int)
         end_indices = np.clip(end_vals * len(self.audio), 0, len(self.audio)).astype(int)
         
-        # Initialize playhead to start position on first render
-        if self.number_of_chunks_rendered == 0 and self.last_playhead_position == 0:
+        # Initialize playhead to start position on first render or when chop changes
+        if (self.number_of_chunks_rendered == 0 and self.last_playhead_position == 0) or self._reset_playhead_this_chunk:
             self.last_playhead_position = float(start_indices[0])
+            self._reset_playhead_this_chunk = False
         
         # Check if all start/end pairs are valid
         if np.any(end_indices <= start_indices):

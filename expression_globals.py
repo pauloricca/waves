@@ -1,6 +1,19 @@
 import numpy as np
 from config import SAMPLE_RATE
-from random import uniform
+from random import uniform, choice
+
+def rand(a: float | list, b: float | None = None) -> float:
+    """Return a random value based on input pattern:
+       - rand(a, b): uniform random between a and b
+       - rand(a): uniform random between 0 and a
+       - rand([list]): random choice from list"""
+    # Handle different input patterns for rand function
+    if isinstance(a, list):
+        return choice(a)
+    elif b is None:
+        return uniform(0, a)
+    # Regular case: uniform between a and b
+    return uniform(a, b)
 
 # Global constants and functions available in all expressions
 GLOBAL_CONSTANTS = {
@@ -9,7 +22,7 @@ GLOBAL_CONSTANTS = {
     'tau': 2 * np.pi,
     'e': np.e,
 
-    'rand': uniform,
+    'rand': rand,
     
     # Sample rate
     'sr': SAMPLE_RATE,

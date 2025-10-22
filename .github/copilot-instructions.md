@@ -198,6 +198,36 @@ feedback_delay:
 
 When recursion depth exceeds `MAX_RECURSION_DEPTH` (default 10), the system returns zeros to break the loop.
 
+### Sub-Patching
+
+You can reference root-level sounds as if they were node types, allowing sound reuse with parameter overrides:
+
+```yaml
+# Define base sounds
+hihat:
+  context:
+    v: 1
+    signal:
+      # ... hihat definition
+
+kick:
+  mix:
+    # ... kick definition
+
+# Use them as sub-patches with custom parameters
+my_composition:
+  mix:
+    signals:
+      - hihat:
+          v: 2       # Override v parameter
+      - kick:
+          amp: 0.5   # Override amp parameter
+      - hihat:
+          v: 0.3     # Another instance with different v
+```
+
+When a node type isn't recognized in the NODE_REGISTRY, the parser checks if it matches a root-level sound name. If found, it instantiates that sound and applies any provided parameters directly to its model. This enables modular composition and sound reuse.
+
 ## Running the code
 
 To run the code we use the main waves.py file, followed by one parameter, which should match one of the root level keys in the yaml file. For example:

@@ -4,6 +4,7 @@ from nodes.retrigger import RETRIGGER_DEFINITION
 from nodes.envelope import ENVELOPE_DEFINITION
 from nodes.expression import EXPRESSION_DEFINITION
 from nodes.filter import FILTER_DEFINITION
+from nodes.hold import HOLD_DEFINITION
 from nodes.non_realtime.invert import INVERT_DEFINITION
 from nodes.map import MAP_DEFINITION
 from nodes.midi import MIDI_DEFINITION
@@ -38,4 +39,5 @@ NODE_REGISTRY = [
     MIDI_CC_DEFINITION,
     MIX_DEFINITION,
     REFERENCE_DEFINITION,
+    HOLD_DEFINITION,
 ]

@@ -36,9 +36,16 @@ class DelayNode(BaseNode):
         self.signal_node = instantiate_node(model.signal)
         
         # Circular buffer for storing delayed samples
-        # We allocate enough space for the maximum delay time we might need
-        # Using 10 seconds as a reasonable maximum
-        max_delay_samples = int(10 * SAMPLE_RATE)
+        # Calculate buffer size based on the delay time parameter
+        # For scalar delays, use that value. For dynamic delays, use a safe maximum.
+        if isinstance(model.time, (int, float)):
+            # Scalar delay time - allocate exactly what we need (plus some headroom)
+            max_delay_time = float(model.time) * 1.1  # 10% headroom
+        else:
+            # Dynamic delay (node or list) - use a generous default
+            max_delay_time = 30.0  # 30 seconds should be enough for most cases
+        
+        max_delay_samples = int(max_delay_time * SAMPLE_RATE)
         self.buffer_size = max_delay_samples
         
         # Single buffer and write position (like a physical delay unit)
@@ -48,6 +55,10 @@ class DelayNode(BaseNode):
         # For TAPE mode: track the fractional read position
         self.read_position = 0.0  # Can be fractional for tape speed changes
         self.previous_delay_time = None  # Track delay time changes for tape mode
+        
+        # Track when input signal finishes to know when to stop outputting tail
+        self.input_finished = False
+        self.samples_since_input_finished = 0
 
     def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, get the full child signal
@@ -80,9 +91,32 @@ class DelayNode(BaseNode):
         self.read_position = read_position_snapshot
         self.previous_delay_time = previous_delay_time_snapshot
         
-        # If signal is done, we're done (no tail for pure delay)
-        if len(signal_wave) == 0:
-            return np.array([], dtype=np.float32)
+        # Track when input signal finishes
+        input_is_active = len(signal_wave) > 0
+        
+        # If signal returned fewer samples than requested, pad it with zeros
+        # This allows the delay to continue reading from the buffer for the full chunk
+        # Even if the input signal has finished, we want to output the delayed content
+        if len(signal_wave) > 0 and len(signal_wave) < num_samples:
+            signal_wave = np.pad(signal_wave, (0, num_samples - len(signal_wave)), mode='constant', constant_values=0)
+        elif len(signal_wave) == 0:
+            # Input signal is completely finished
+            if not self.input_finished:
+                self.input_finished = True
+                self.samples_since_input_finished = 0
+            
+            # Check if we should stop (after delay time has passed since input finished)
+            # Get the current delay time to know how long to continue
+            delay_time_check = self.time_node.render(1, context, **self.get_params_for_children(params))[0]
+            max_tail_samples = int(delay_time_check * SAMPLE_RATE)
+            
+            if self.samples_since_input_finished >= max_tail_samples:
+                # We've output enough tail, stop now
+                return np.array([], dtype=np.float32)
+            
+            # Create a silent input signal (all zeros) to allow reading from the buffer
+            signal_wave = np.zeros(num_samples, dtype=np.float32)
+            self.samples_since_input_finished += num_samples
         
         # Get delay times
         delay_times = self.time_node.render(num_samples, context, **self.get_params_for_children(params))
