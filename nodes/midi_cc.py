@@ -34,21 +34,24 @@ class MidiCCModel(BaseNodeModel):
 
 
 class MidiCCNode(BaseNode):
-    def __init__(self, model: MidiCCModel):
+    def __init__(self, model: MidiCCModel, state, hot_reload=False):
         super().__init__(model)
         self.channel = model.channel
         self.cc_number = model.cc
         self.min_value, self.max_value = model.range
+        self.state = state
         
-        # Convert initial value from min-max range to normalized (0-1)
-        value_range = self.max_value - self.min_value
-        if value_range != 0:
-            self.current_normalized_value = (model.initial - self.min_value) / value_range
-        else:
-            self.current_normalized_value = 0.5
-        
-        # Track the last output value for smooth interpolation
-        self.last_output_value = self.min_value + (self.current_normalized_value * (self.max_value - self.min_value))
+        # Persistent state for CC tracking (survives hot reload)
+        if not hot_reload:
+            # Convert initial value from min-max range to normalized (0-1)
+            value_range = self.max_value - self.min_value
+            if value_range != 0:
+                self.state.current_normalized_value = (model.initial - self.min_value) / value_range
+            else:
+                self.state.current_normalized_value = 0.5
+            
+            # Track the last output value for smooth interpolation
+            self.state.last_output_value = self.min_value + (self.state.current_normalized_value * (self.max_value - self.min_value))
         
         # Get the shared MIDI input manager
         self.midi_manager = MidiInputManager()
@@ -63,11 +66,11 @@ class MidiCCNode(BaseNode):
             new_normalized_value = cc_value / 127.0
             
             # Only update and log if the value changed
-            if new_normalized_value != self.current_normalized_value:
-                self.current_normalized_value = new_normalized_value
+            if new_normalized_value != self.state.current_normalized_value:
+                self.state.current_normalized_value = new_normalized_value
                 if MIDI_DEBUG:
-                    mapped_value = self.min_value + (self.current_normalized_value * (self.max_value - self.min_value))
-                    print(f"CC {self.cc_number} on channel {self.channel}: {cc_value} -> {self.current_normalized_value:.3f} -> {mapped_value:.3f}")
+                    mapped_value = self.min_value + (self.state.current_normalized_value * (self.max_value - self.min_value))
+                    print(f"CC {self.cc_number} on channel {self.channel}: {cc_value} -> {self.state.current_normalized_value:.3f} -> {mapped_value:.3f}")
     
     def _do_render(self, num_samples=None, context=None, **params):
         # MIDI CC node never finishes, so if num_samples is None, use a default buffer size
@@ -82,17 +85,17 @@ class MidiCCNode(BaseNode):
         self._process_midi_messages()
         
         # Map the normalized value (0-1) to the min-max range
-        target_value = self.min_value + (self.current_normalized_value * (self.max_value - self.min_value))
+        target_value = self.min_value + (self.state.current_normalized_value * (self.max_value - self.min_value))
         
         # When rendering a single sample, return the target value directly without smoothing
         if num_samples == 1:
             output_wave = np.array([target_value], dtype=np.float32)
         else:
             # Create smooth interpolation from last value to target value
-            output_wave = np.linspace(self.last_output_value, target_value, num_samples, dtype=np.float32)
+            output_wave = np.linspace(self.state.last_output_value, target_value, num_samples, dtype=np.float32)
         
         # Store the last value for the next chunk
-        self.last_output_value = target_value
+        self.state.last_output_value = target_value
         
         return output_wave
 

@@ -240,6 +240,121 @@ The program will then play the sound and stay idle until it detects a change in 
 
 There is a command-line based audio visualizer that shows the waveform of the sound being played (both in realtime and non-realtime modes).
 
+## Hot Reload & Live State Preservation
+
+The system supports hot reloading of the YAML sound definition file during playback, allowing for live editing without interrupting audio. When `WAIT_FOR_CHANGES_IN_WAVES_YAML` is enabled in config.py, the system automatically detects changes to waves.yaml and reloads the sound definition while preserving node state.
+
+### How Hot Reload Works
+
+**State Preservation Pattern:**
+- Nodes that maintain persistent state (like playback position) should store this in `self.state` (a SimpleNamespace object)
+- Only state that needs to survive reloads should be in `self.state`; ephemeral attributes like child nodes are regular instance attributes
+- On hot reload, nodes with an `id` field have their state captured before the reload and restored to the new node tree after instantiation
+
+**Creating a Stateful Node (Example: SampleNode):**
+```python
+class MyNode(BaseNode):
+    def __init__(self, model, state, hot_reload=False):
+        super().__init__(model)
+        self.model = model
+        self.state = state  # Assign the state object
+        
+        # Only initialize persistent state if not hot reloading
+        if not hot_reload:
+            self.state.playhead_position = 0
+            self.state.total_samples_rendered = 0
+        
+        # Child nodes are regular attributes (not in state)
+        self.child_node = wavable_value_node_factory(model.param)
+    
+    def _do_render(self, num_samples=None, context=None, **params):
+        # Access persistent state
+        self.state.playhead_position += 1
+        # Use child nodes
+        value = self.child_node.render(num_samples, context, **params)
+        return value
+```
+
+**Key Rules:**
+1. All stateful nodes must accept `state` and `hot_reload` parameters in `__init__`
+2. Only truly persistent state goes in `self.state` (e.g., playback position, sample count)
+3. Child nodes, helpers, and ephemeral state are regular instance attributes
+4. When `hot_reload=False`, initialize all state attributes on `self.state`
+5. When `hot_reload=True`, skip initialization (state will be restored from the old tree)
+6. Use attribute access for state: `self.state.attr_name` (not dict keys)
+7. Node IDs are now automatically generated (see Automatic ID Generation below)
+   - Explicit `id` fields still work and take priority
+   - Nodes without `id` still get state preservation via auto-generated IDs
+   - You only need to set explicit `id` for nodes you want to reference or need stable IDs across structural changes
+
+### Automatic ID Generation
+
+All nodes now automatically get hierarchical IDs for state preservation. You no longer need to manually assign IDs to every node!
+
+**How it works:**
+- Explicit IDs: If you set `id: "my_node"`, that ID is used (priority)
+- Auto IDs: Nodes without explicit IDs get hierarchical IDs like `"0"`, `"root.0"`, `"my_node.1"`
+- **Both types get state preservation!** No more need for manual IDs everywhere
+
+**Example YAML:**
+```yaml
+my_sound:
+  sample:
+    # No id needed - gets auto ID "root.0"
+    file: kick.wav
+  osc:
+    # No id needed - gets auto ID "root.1"  
+    type: sin
+    freq: 440
+  sample:
+    id: snare    # Explicit ID takes priority
+    file: snare.wav
+```
+
+All three nodes will preserve their playback state during hot reloads, whether they have explicit or auto-generated IDs.
+
+**When to use explicit IDs:**
+- ✅ When you need to reference a node from another node (`reference: {ref: my_lfo}`)
+- ✅ When you want stable IDs that survive tree restructuring (inserting/removing siblings)
+- ❌ Don't use explicit IDs just for state preservation - auto IDs handle that now!
+
+**See:** `HIERARCHICAL_AUTO_IDS.md` for detailed documentation on the auto-ID system
+
+**Hot Reload Mechanism:**
+- `HotReloadManager` (nodes/node_utils/hot_reload_manager.py) handles capture and restoration:
+  - Works with both explicit and auto-generated node IDs
+  - `capture_state(node)` - Captures state from all nodes (uses `AutoIDGenerator.get_effective_id()`)
+  - `restore_state(node, state_dict)` - Restores captured state to matching nodes in new tree
+  - `get_all_node_ids(node)` - Gets all node IDs (explicit + auto-generated) for determining which existed before reload
+- `AutoIDGenerator` (nodes/node_utils/auto_id_generator.py) generates hierarchical IDs:
+  - Auto ID generation happens at parse time (in sound_library.py) after YAML is loaded
+  - `get_effective_id(model)` returns explicit ID if present, otherwise auto-generated ID
+  - Enables state preservation for all nodes automatically
+- `instantiate_node()` accepts `hot_reload` and `previous_ids` parameters for coordinating the reload process
+- The main loop detects YAML changes and calls `perform_hot_reload()` to coordinate the full cycle
+
+**Example Usage in waves.yaml:**
+```yaml
+my_sound:
+  sample:
+    id: main_sample  # Give this node an ID to preserve its state
+    file: samples/kick.wav
+    speed: 1.0
+    duration: 2
+```
+
+When you edit this YAML file and save it, the system will:
+1. Capture the playback state of `main_sample`
+2. Reload the YAML definition
+3. Instantiate a new node tree with the updated parameters
+4. Restore the captured state to the new `main_sample` node
+5. Resume playback from the preserved position
+
+### References
+- See `docs/HOT_RELOAD_PLAN.md` for detailed architecture documentation
+- See `nodes/sample.py` for a complete reference implementation
+- See `nodes/node_utils/hot_reload_manager.py` for the state capture/restore mechanism
+
 ## Creating a new type of Node
 
 To create a new type of node, we create a new file with the node name in the nodes/ directory. The file should contain:
@@ -256,6 +371,7 @@ Then we need to add the new node to the NODE_REGISTRY in nodes/node_utils/node_r
 - Ensure the node works correctly in both realtime and non-realtime modes
 - In realtime mode, the node renders in chunks; in non-realtime, it may render the entire signal at once
 - When `num_samples` is None, render the full signal (or raise an error if the node needs explicit duration)
+- For stateful nodes that support hot reload, accept `state` and `hot_reload` parameters (see Hot Reload section above)
 
 ## Configuration
 
@@ -291,3 +407,4 @@ When adding new features we should consider the following ideas for future work 
 - When passing positional arguments to functions or methods and the arguments have the same name as the variables, we should just pass them without specifying the name to avoid "name=name" argument passing.
 - Very important:Use vectorised numpy operations when possible, avoid "for" loops over numpy arrays because this is a realtime application dealing with very large arrays.
 - The timeout and gtimeout commands are not available on my system, avoid using them.
+- Don't bother doing intensive testing, just run a basic check after each task to check that the code compilies.

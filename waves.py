@@ -15,11 +15,87 @@ import atexit
 from config import *
 from sound_library import get_sound_model, load_sound_library
 from nodes.node_utils.base_node import BaseNode
-from nodes.node_utils.instantiate_node import instantiate_node
+from nodes.node_utils.instantiate_node import instantiate_node, instantiate_node_tree
 from nodes.node_utils.render_context import RenderContext
+from nodes.node_utils.hot_reload_manager import HotReloadManager
 from utils import look_for_duration, play, save, visualise_wave
 
 rendered_sounds: dict[np.ndarray] = {}
+
+# Hot reload state management
+hot_reload_manager = HotReloadManager()
+hot_reload_lock = threading.Lock()  # Protects access to current_sound_node and model during reload
+current_sound_node = None  # Currently playing node
+current_sound_model = None  # Currently loaded model
+yaml_changed = False  # Flag to signal that YAML has changed
+
+# Global recording buffer (thread-safe deque)
+recording_buffer = None
+recording_active = False
+current_sound_name = None  # Track current sound name for recording
+
+def perform_hot_reload(sound_name_to_play: str, params: dict = None):
+    """
+    Perform a hot reload of the sound model, preserving node state.
+    
+    This function:
+    1. Captures state from the current node tree
+    2. Reloads the YAML and gets the new model
+    3. Applies any parameters
+    4. Instantiates the new tree with hot_reload flags
+    5. Restores captured state to matching nodes
+    6. Cleans up orphaned state from nodes that no longer exist
+    7. Returns the new node tree
+    
+    Args:
+        sound_name_to_play: The sound identifier in the YAML file
+        params: Optional parameter overrides to apply to the model
+    
+    Returns:
+        A newly instantiated node tree with preserved state
+    """
+    global current_sound_node, current_sound_model
+    
+    # Capture state from current tree
+    old_state = None
+    old_ids = set()
+    if current_sound_node:
+        old_state = hot_reload_manager.capture_state(current_sound_node)
+        old_ids = hot_reload_manager.get_all_node_ids(current_sound_node)
+    
+    # Reload sound library and get new model
+    load_sound_library(YAML_FILE)
+    new_model = get_sound_model(sound_name_to_play)
+    
+    # Apply parameters if provided
+    if params:
+        from nodes.node_utils.node_string_parser import apply_params_to_model
+        new_model = apply_params_to_model(new_model, params)
+    
+    # Instantiate new tree with hot_reload context
+    new_node = instantiate_node_tree(new_model, hot_reload=True, previous_ids=old_ids)
+    
+    # Get the set of node IDs that still exist in the new tree
+    new_ids = hot_reload_manager.get_all_node_ids(new_node)
+    
+    # Restore state to new tree (only for nodes that still exist)
+    if old_state:
+        hot_reload_manager.restore_state(new_node, old_state)
+    
+    # Clean up orphaned state entries from nodes that no longer exist
+    orphaned_ids = old_ids - new_ids
+    if orphaned_ids and old_state:
+        for orphaned_id in orphaned_ids:
+            if orphaned_id in old_state:
+                del old_state[orphaned_id]
+        if DISPLAY_HOT_RELOAD_CLEANUP:
+            print(f"[HOT RELOAD] Cleaned up orphaned state from {len(orphaned_ids)} removed node(s): {orphaned_ids}")
+    
+    # Update global state
+    current_sound_node = new_node
+    current_sound_model = new_model
+    
+    return new_node
 
 # Global recording buffer (thread-safe deque)
 recording_buffer = None
@@ -88,7 +164,7 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_name: str = None):
-    global recording_buffer, recording_active, current_sound_name
+    global recording_buffer, recording_active, current_sound_name, current_sound_node, yaml_changed
     
     # Initialize recording if enabled
     if DO_RECORD_REAL_TIME:
@@ -98,20 +174,43 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
         # Register cleanup function to save on normal exit
         atexit.register(lambda: save_recording(sound_name))
     
+    # Set the global current node for hot reload manager
+    with hot_reload_lock:
+        current_sound_node = sound_node
+    
     visualised_wave_buffer = deque(maxlen=10_000)
     should_stop = False
     start_time = time.time()
     last_render_time = 0
+    active_sound_node = sound_node  # Local reference to current node
+    stored_sound_name = sound_name  # Store the sound name for hot reload
     
     # Create render context that persists across chunks
     render_context = RenderContext()
     render_context.is_realtime = True
 
     def audio_callback(outdata, frames, sdtime, status):
-        nonlocal should_stop, last_render_time
+        global yaml_changed
+        nonlocal should_stop, last_render_time, active_sound_node, render_context
         rendering_start_time = time.time()
+        
+        # Check if YAML has changed and perform hot reload if needed
+        if yaml_changed:
+            with hot_reload_lock:
+                try:
+                    # Perform hot reload with the original sound name
+                    active_sound_node = perform_hot_reload(stored_sound_name, params=None)
+                    # Reset render context to restart state tracking
+                    render_context = RenderContext()
+                    render_context.is_realtime = True
+                    yaml_changed = False
+                    print("[HOT RELOAD] Successfully reloaded sound definition")
+                except Exception as e:
+                    print(f"Hot reload error: {e}")
+                    traceback.print_exc()
+                    # Continue with old node on error
 
-        audio_data = sound_node.render(frames, context=render_context) 
+        audio_data = active_sound_node.render(frames, context=render_context) 
 
         if len(audio_data) == 0:
             should_stop = True
@@ -181,7 +280,7 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
             time.sleep(0.1)
 
 def main():
-    global rendered_sounds
+    global rendered_sounds, current_sound_node, current_sound_model
 
     if not load_sound_library(YAML_FILE):
         return
@@ -207,7 +306,13 @@ def main():
     if params:
         sound_model_to_play = apply_params_to_model(sound_model_to_play, params)
     
-    sound_node_to_play = instantiate_node(sound_model_to_play)
+    # Initialize the node (not as hot reload on first load)
+    sound_node_to_play = instantiate_node(sound_model_to_play, hot_reload=False)
+    
+    # Store globals for hot reload
+    with hot_reload_lock:
+        current_sound_node = sound_node_to_play
+        current_sound_model = sound_model_to_play
 
     sound_duration = look_for_duration(sound_model_to_play)
 
@@ -264,18 +369,38 @@ if __name__ == "__main__":
         gc.disable()
 
     if WAIT_FOR_CHANGES_IN_WAVES_YAML:
-        last_modified_time = ""
-        try:
-            while True:
-                current_modified_time = os.path.getmtime(YAML_FILE)
-                if current_modified_time != last_modified_time:
-                    last_modified_time = current_modified_time
+        def yaml_watcher_thread():
+            """
+            Watch for changes to the YAML file and signal hot reloads.
+            
+            This runs in a separate thread and sets the yaml_changed flag
+            when the YAML file is modified.
+            """
+            global yaml_changed
+            last_modified_time = os.path.getmtime(YAML_FILE)
+            
+            try:
+                while True:
                     try:
-                        main()
+                        current_modified_time = os.path.getmtime(YAML_FILE)
+                        if current_modified_time != last_modified_time:
+                            # YAML file changed, signal hot reload
+                            yaml_changed = True
+                            print("[HOT RELOAD] YAML file changed, reloading on next audio chunk...")
+                            last_modified_time = current_modified_time
                     except Exception as e:
-                        print(f"Error: {e}")
-                        traceback.print_exc()
-                time.sleep(0.2)
+                        print(f"Error checking YAML file: {e}")
+                    
+                    time.sleep(0.2)
+            except KeyboardInterrupt:
+                pass
+        
+        # Start the watcher thread as a daemon so it doesn't prevent exit
+        watcher = threading.Thread(target=yaml_watcher_thread, daemon=True)
+        watcher.start()
+        
+        try:
+            main()
         except KeyboardInterrupt:
             sys.exit(0)
     else:

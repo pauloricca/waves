@@ -19,13 +19,17 @@ class SequencerModel(BaseNodeModel):
 
 
 class SequencerNode(BaseNode):
-    def __init__(self, model: SequencerModel):
+    def __init__(self, model: SequencerModel, state, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
         from nodes.wavable_value import WavableValueNode, WavableValueModel
         super().__init__(model)
+        self.model = model
+        self.state = state
         self.sequence = model.sequence
         self.chain = model.chain
         self.repeat = model.repeat
+
+        print("SequencerNode initialized with repeat =", self.repeat)
         
         # Wrap interval in WavableValue
         if isinstance(model.interval, BaseNodeModel):
@@ -34,13 +38,17 @@ class SequencerNode(BaseNode):
             wavable_model = WavableValueModel(value=model.interval)
             self.interval_node = WavableValueNode(wavable_model)
         
-        # Realtime state tracking
-        self.current_repeat = 0
-        self.current_step = 0
-        self.time_in_current_step = 0  # Time elapsed in current step (seconds)
-        self.all_active_sounds = []  # List of (sound_node, render_args, sound_duration, samples_rendered, step_index) tuples
-        self.step_triggered = set()  # Set of (repeat, step) tuples that have been triggered
-        self.sequence_complete = False  # Flag to indicate when sequence playback is done
+        # Persistent state for realtime playback (survives hot reload)
+        if not hot_reload:
+            self.state.current_repeat = 0
+            self.state.current_step = 0
+            self.state.time_in_current_step = 0  # Time elapsed in current step (seconds)
+            self.state.all_active_sounds = []  # List of (sound_node, render_args, sound_duration, samples_rendered, step_index) tuples
+            self.state.step_triggered = set()  # Set of (repeat, step) tuples that have been triggered
+            self.state.sequence_complete = False  # Flag to indicate when sequence playback is done
+        
+        # Non-persistent attributes
+        self._last_chunk_samples = None
     
     def instantiate_sound_node(self, sound_model: BaseNodeModel, sound_name_with_params, **params):
         from nodes.node_utils.node_string_parser import instantiate_node_from_string
@@ -147,12 +155,12 @@ class SequencerNode(BaseNode):
         
         while samples_written < num_samples:
             # Check if we've completed all repeats
-            if self.current_repeat >= self.repeat:
-                self.sequence_complete = True
+            if self.state.current_repeat >= self.repeat:
+                self.state.sequence_complete = True
             
             # If sequence is complete but we still have active sounds, render them
-            if self.sequence_complete:
-                if len(self.all_active_sounds) == 0:
+            if self.state.sequence_complete:
+                if len(self.state.all_active_sounds) == 0:
                     # No more sounds to render, we're done - return what we have so far
                     # If we haven't written anything yet, return empty array
                     if samples_written == 0:
@@ -162,35 +170,35 @@ class SequencerNode(BaseNode):
                 # Continue to render active sounds below
             
             # Check if we've completed the sequence (but haven't finished all repeats)
-            elif self.current_step >= len(sequence):
+            elif self.state.current_step >= len(sequence):
                 # We've finished the sequence steps - loop back immediately
-                self.current_repeat += 1
-                self.current_step = 0
-                self.time_in_current_step = 0
+                self.state.current_repeat += 1
+                self.state.current_step = 0
+                self.state.time_in_current_step = 0
                 # Reset triggered steps for new repeat (but keep active sounds playing)
-                self.step_triggered = set()
-                if self.current_repeat >= self.repeat:
-                    self.sequence_complete = True
+                self.state.step_triggered = set()
+                if self.state.current_repeat >= self.repeat:
+                    self.state.sequence_complete = True
                 continue
             
             # Define step_key for tracking
-            step_key = (self.current_repeat, self.current_step)
+            step_key = (self.state.current_repeat, self.state.current_step)
             
             # Check if we need to trigger new sounds for the current step (only if not complete)
-            if not self.sequence_complete:
-                if step_key not in self.step_triggered:
+            if not self.state.sequence_complete:
+                if step_key not in self.state.step_triggered:
                     # Trigger sounds for this step
-                    new_sounds = self.create_sound_nodes_for_step(self.current_step, **params)
-                    self.all_active_sounds.extend(new_sounds)
-                    self.step_triggered.add(step_key)
+                    new_sounds = self.create_sound_nodes_for_step(self.state.current_step, **params)
+                    self.state.all_active_sounds.extend(new_sounds)
+                    self.state.step_triggered.add(step_key)
             
             # Calculate how much time is left in this chunk
             remaining_samples = num_samples - samples_written
             
-            if self.sequence and not self.sequence_complete:
+            if self.sequence and not self.state.sequence_complete:
                 # For sequence mode: calculate based on interval
                 # We're in a step - use interval
-                step_remaining_time = interval - self.time_in_current_step
+                step_remaining_time = interval - self.state.time_in_current_step
                 step_remaining_samples = int(step_remaining_time * SAMPLE_RATE)
                 samples_to_render = min(remaining_samples, step_remaining_samples)
             else:
@@ -199,9 +207,9 @@ class SequencerNode(BaseNode):
             # Safeguard: if samples_to_render is 0 due to rounding, advance to next step
             # This can happen when time_in_current_step is very close to interval
             if samples_to_render <= 0:
-                if self.sequence and not self.sequence_complete and self.time_in_current_step >= interval - 0.0001:
-                    self.current_step += 1
-                    self.time_in_current_step = 0
+                if self.sequence and not self.state.sequence_complete and self.state.time_in_current_step >= interval - 0.0001:
+                    self.state.current_step += 1
+                    self.state.time_in_current_step = 0
                     continue
                 # Otherwise this shouldn't happen - break to avoid infinite loop
                 break
@@ -210,7 +218,7 @@ class SequencerNode(BaseNode):
             step_wave = np.zeros(samples_to_render, dtype=np.float32)
             
             sounds_to_remove = []
-            for i, (sound_node, render_args, sound_duration, samples_rendered_so_far, step_idx) in enumerate(self.all_active_sounds):
+            for i, (sound_node, render_args, sound_duration, samples_rendered_so_far, step_idx) in enumerate(self.state.all_active_sounds):
                 # Check if this sound has finished playing
                 total_sound_samples = int(sound_duration * SAMPLE_RATE)
                 if samples_rendered_so_far >= total_sound_samples:
@@ -244,7 +252,7 @@ class SequencerNode(BaseNode):
                     sounds_to_remove.append(i)
                 
                 # Update samples rendered counter
-                self.all_active_sounds[i] = (sound_node, render_args, sound_duration, samples_rendered_so_far + len(sound_chunk), step_idx)
+                self.state.all_active_sounds[i] = (sound_node, render_args, sound_duration, samples_rendered_so_far + len(sound_chunk), step_idx)
                 
                 # Mix into step wave (pad if needed)
                 if len(sound_chunk) < len(step_wave):
@@ -254,29 +262,29 @@ class SequencerNode(BaseNode):
             
             # Remove finished sounds (in reverse order to avoid index issues)
             for i in reversed(sounds_to_remove):
-                self.all_active_sounds.pop(i)
+                self.state.all_active_sounds.pop(i)
             
             # For chain mode: check if we should advance to next step immediately
             # This prevents gaps between chain items
-            if self.chain and not self.sequence_complete:
-                current_step_sounds = [s for s in self.all_active_sounds if s[4] == self.current_step]
-                if len(current_step_sounds) == 0 and step_key in self.step_triggered:
+            if self.chain and not self.state.sequence_complete:
+                current_step_sounds = [s for s in self.state.all_active_sounds if s[4] == self.state.current_step]
+                if len(current_step_sounds) == 0 and step_key in self.state.step_triggered:
                     # Current step has finished, move to next
-                    self.current_step += 1
-                    self.time_in_current_step = 0
+                    self.state.current_step += 1
+                    self.state.time_in_current_step = 0
                     # Don't continue the loop - we want to trigger the next step in the same chunk
                     # if there are still samples to render
             
             # Add to output
             output_wave[samples_written:samples_written + samples_to_render] = step_wave
             samples_written += samples_to_render
-            self.time_in_current_step += samples_to_render / SAMPLE_RATE
+            self.state.time_in_current_step += samples_to_render / SAMPLE_RATE
             
             # Check if we should advance to next step for sequence mode
-            if self.sequence and not self.sequence_complete and self.time_in_current_step >= interval:
+            if self.sequence and not self.state.sequence_complete and self.state.time_in_current_step >= interval:
                 # For sequence mode: advance based on interval timing
-                self.current_step += 1
-                self.time_in_current_step = 0
+                self.state.current_step += 1
+                self.state.time_in_current_step = 0
         
         return output_wave
 

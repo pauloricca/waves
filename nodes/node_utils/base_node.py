@@ -22,7 +22,10 @@ class BaseNode:
         self.time_since_start = 0
         self.number_of_chunks_rendered = 0
         self._last_chunk_samples = 0
-        self.node_id = model.id if hasattr(model, 'id') else None  # Store node id for caching
+        
+        # Get the effective ID (explicit or auto-generated)
+        from nodes.node_utils.auto_id_generator import AutoIDGenerator
+        self.node_id = AutoIDGenerator.get_effective_id(model)  # Store node id for caching
 
 
     def render(self, num_samples: int = None, context = None, **params) -> np.ndarray:
@@ -91,7 +94,8 @@ class BaseNode:
         Updates timing info and calls _do_render().
         This keeps timing logic separate from rendering logic.
         """
-        self.number_of_chunks_rendered += self._last_chunk_samples
+        if self._last_chunk_samples is not None:
+            self.number_of_chunks_rendered += self._last_chunk_samples
         self.time_since_start = self.number_of_chunks_rendered / SAMPLE_RATE
         if num_samples is not None:
             self._last_chunk_samples = num_samples

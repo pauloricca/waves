@@ -28,12 +28,14 @@ class DelayModel(BaseNodeModel):
     signal: BaseNodeModel = None
 
 class DelayNode(BaseNode):
-    def __init__(self, model: DelayModel):
+    def __init__(self, model: DelayModel, state, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
         super().__init__(model)
         self.model = model
         self.time_node = wavable_value_node_factory(model.time)
         self.signal_node = instantiate_node(model.signal)
+        
+        self.state = state
         
         # Circular buffer for storing delayed samples
         # Calculate buffer size based on the delay time parameter
@@ -48,17 +50,16 @@ class DelayNode(BaseNode):
         max_delay_samples = int(max_delay_time * SAMPLE_RATE)
         self.buffer_size = max_delay_samples
         
-        # Single buffer and write position (like a physical delay unit)
-        self.buffer = np.zeros(self.buffer_size, dtype=np.float32)
-        self.write_position = 0
-        
-        # For TAPE mode: track the fractional read position
-        self.read_position = 0.0  # Can be fractional for tape speed changes
-        self.previous_delay_time = None  # Track delay time changes for tape mode
-        
-        # Track when input signal finishes to know when to stop outputting tail
-        self.input_finished = False
-        self.samples_since_input_finished = 0
+        # Persistent state for buffer and positions (survives hot reload)
+        if not hot_reload:
+            self.state.buffer = np.zeros(self.buffer_size, dtype=np.float32)
+            self.state.write_position = 0
+            self.state.read_position = 0.0  # Can be fractional for tape speed changes
+            self.state.previous_delay_time = None  # Track delay time changes for tape mode
+            self.state.input_finished = False
+            self.state.samples_since_input_finished = 0
+            # Tape mode only
+            self.state.tape_head_distance = None  # For TAPE mode
 
     def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, get the full child signal
@@ -77,19 +78,19 @@ class DelayNode(BaseNode):
         
         # CRITICAL: Snapshot buffer state BEFORE rendering input signal
         # This ensures all recursion depths see the same initial buffer state
-        buffer_snapshot = self.buffer.copy()
-        write_position_snapshot = self.write_position
-        read_position_snapshot = self.read_position
-        previous_delay_time_snapshot = self.previous_delay_time
+        buffer_snapshot = self.state.buffer.copy()
+        write_position_snapshot = self.state.write_position
+        read_position_snapshot = self.state.read_position
+        previous_delay_time_snapshot = self.state.previous_delay_time
         
         # Now render the input signal (which may trigger recursive calls)
         signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))
         
         # Restore buffer state for our read/write operations
-        self.buffer = buffer_snapshot
-        self.write_position = write_position_snapshot
-        self.read_position = read_position_snapshot
-        self.previous_delay_time = previous_delay_time_snapshot
+        self.state.buffer = buffer_snapshot
+        self.state.write_position = write_position_snapshot
+        self.state.read_position = read_position_snapshot
+        self.state.previous_delay_time = previous_delay_time_snapshot
         
         # Track when input signal finishes
         input_is_active = len(signal_wave) > 0
@@ -101,22 +102,22 @@ class DelayNode(BaseNode):
             signal_wave = np.pad(signal_wave, (0, num_samples - len(signal_wave)), mode='constant', constant_values=0)
         elif len(signal_wave) == 0:
             # Input signal is completely finished
-            if not self.input_finished:
-                self.input_finished = True
-                self.samples_since_input_finished = 0
+            if not self.state.input_finished:
+                self.state.input_finished = True
+                self.state.samples_since_input_finished = 0
             
             # Check if we should stop (after delay time has passed since input finished)
             # Get the current delay time to know how long to continue
             delay_time_check = self.time_node.render(1, context, **self.get_params_for_children(params))[0]
             max_tail_samples = int(delay_time_check * SAMPLE_RATE)
             
-            if self.samples_since_input_finished >= max_tail_samples:
+            if self.state.samples_since_input_finished >= max_tail_samples:
                 # We've output enough tail, stop now
                 return np.array([], dtype=np.float32)
             
             # Create a silent input signal (all zeros) to allow reading from the buffer
             signal_wave = np.zeros(num_samples, dtype=np.float32)
-            self.samples_since_input_finished += num_samples
+            self.state.samples_since_input_finished += num_samples
         
         # Get delay times
         delay_times = self.time_node.render(num_samples, context, **self.get_params_for_children(params))
@@ -142,24 +143,24 @@ class DelayNode(BaseNode):
             delay_samples = np.clip(delay_samples, 0, self.buffer_size - 1)
             
             # Calculate all positions at once
-            write_positions = (self.write_position + np.arange(num_samples)) % self.buffer_size
+            write_positions = (self.state.write_position + np.arange(num_samples)) % self.buffer_size
             read_positions = (write_positions - delay_samples) % self.buffer_size
             
             # CRITICAL: Read BEFORE write (like physical hardware)
-            output = self.buffer[read_positions].copy()
+            output = self.state.buffer[read_positions].copy()
             
             # Now write the input
-            self.buffer[write_positions] = signal_wave
+            self.state.buffer[write_positions] = signal_wave
             
             # Update write position for next render
-            self.write_position = (self.write_position + num_samples) % self.buffer_size
+            self.state.write_position = (self.state.write_position + num_samples) % self.buffer_size
         else:
             # Time-varying delay - requires interpolation
             delay_samples_array = delay_times * SAMPLE_RATE
             delay_samples_array = np.clip(delay_samples_array, 0, self.buffer_size - 1)
             
             # Calculate write positions
-            write_positions = (self.write_position + np.arange(num_samples)) % self.buffer_size
+            write_positions = (self.state.write_position + np.arange(num_samples)) % self.buffer_size
             
             # For fractional delays, use linear interpolation
             delay_samples_int = delay_samples_array.astype(int)
@@ -170,15 +171,15 @@ class DelayNode(BaseNode):
             read_positions_2 = (write_positions - delay_samples_int - 1) % self.buffer_size
             
             # CRITICAL: Read BEFORE write
-            sample_1 = self.buffer[read_positions_1]
-            sample_2 = self.buffer[read_positions_2]
+            sample_1 = self.state.buffer[read_positions_1]
+            sample_2 = self.state.buffer[read_positions_2]
             output = sample_1 * (1 - delay_samples_frac) + sample_2 * delay_samples_frac
             
             # Now write the input
-            self.buffer[write_positions] = signal_wave
+            self.state.buffer[write_positions] = signal_wave
             
             # Update write position for next render
-            self.write_position = (self.write_position + num_samples) % self.buffer_size
+            self.state.write_position = (self.state.write_position + num_samples) % self.buffer_size
         
         return output
     
@@ -198,26 +199,26 @@ class DelayNode(BaseNode):
         target_delay_samples = np.clip(target_delay_time * SAMPLE_RATE, 1, self.buffer_size - 1)
         
         # Initialize if first call
-        if self.previous_delay_time is None:
-            self.previous_delay_time = target_delay_time
+        if self.state.previous_delay_time is None:
+            self.state.previous_delay_time = target_delay_time
             # Fixed "physical" distance between heads (in samples)
             # This represents the actual physical distance on the tape
-            self.tape_head_distance = target_delay_samples
-            self.read_position = float((self.write_position - self.tape_head_distance) % self.buffer_size)
+            self.state.tape_head_distance = target_delay_samples
+            self.state.read_position = float((self.state.write_position - self.state.tape_head_distance) % self.buffer_size)
         
         # Calculate tape speed based on delay time change
         # If delay increases, tape must slow down (speed < 1.0)
         # If delay decreases, tape must speed up (speed > 1.0)
         # The relationship: delay_time = head_distance / tape_speed
         # Therefore: tape_speed = head_distance / delay_time
-        tape_speed = self.tape_head_distance / target_delay_samples
+        tape_speed = self.state.tape_head_distance / target_delay_samples
         
         # No clamping - allow extreme values for experimental effects
         
         # BOTH read and write at the tape speed
         # Generate positions for reading
         read_increments = np.full(num_samples, tape_speed)
-        read_positions = self.read_position + np.concatenate([[0], np.cumsum(read_increments[:-1])])
+        read_positions = self.state.read_position + np.concatenate([[0], np.cumsum(read_increments[:-1])])
         
         # Wrap and interpolate for reading
         read_positions_wrapped = read_positions % self.buffer_size
@@ -231,10 +232,10 @@ class DelayNode(BaseNode):
         pos_next = (read_positions_int + 1) % self.buffer_size
         pos_next2 = (read_positions_int + 2) % self.buffer_size
         
-        y0 = self.buffer[pos_prev]
-        y1 = self.buffer[pos_curr]
-        y2 = self.buffer[pos_next]
-        y3 = self.buffer[pos_next2]
+        y0 = self.state.buffer[pos_prev]
+        y1 = self.state.buffer[pos_curr]
+        y2 = self.state.buffer[pos_next]
+        y3 = self.state.buffer[pos_next2]
         
         # Hermite interpolation (4-point, 3rd order)
         # Provides smooth interpolation with no overshoot
@@ -250,18 +251,18 @@ class DelayNode(BaseNode):
         # When tape is slow (speed < 1), we write fewer samples to the buffer
         # When tape is fast (speed > 1), we write more samples (with interpolation)
         write_increments = np.full(num_samples, tape_speed)
-        write_positions = self.write_position + np.concatenate([[0], np.cumsum(write_increments[:-1])])
+        write_positions = self.state.write_position + np.concatenate([[0], np.cumsum(write_increments[:-1])])
         write_positions_wrapped = write_positions % self.buffer_size
         write_positions_int = write_positions_wrapped.astype(int)
         
         # Write input signal to buffer at tape speed
-        self.buffer[write_positions_int] = signal_wave
+        self.state.buffer[write_positions_int] = signal_wave
         
         # Update positions for next render
         total_tape_advance = num_samples * tape_speed
-        self.write_position = (self.write_position + total_tape_advance) % self.buffer_size
-        self.read_position = (self.read_position + total_tape_advance) % self.buffer_size
-        self.previous_delay_time = target_delay_time
+        self.state.write_position = (self.state.write_position + total_tape_advance) % self.buffer_size
+        self.state.read_position = (self.state.read_position + total_tape_advance) % self.buffer_size
+        self.state.previous_delay_time = target_delay_time
         
         return output
 

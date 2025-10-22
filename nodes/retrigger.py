@@ -15,12 +15,16 @@ class RetriggerModel(BaseNodeModel):
     signal: BaseNodeModel = None
 
 class RetriggerNode(BaseNode):
-    def __init__(self, model: RetriggerModel):
+    def __init__(self, model: RetriggerModel, state, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
         super().__init__(model)
         self.model = model
         self.signal_node = instantiate_node(model.signal)
-        self.carry_over: np.ndarray = []
+        self.state = state
+        
+        # Persistent state for carry over samples (survives hot reload)
+        if not hot_reload:
+            self.state.carry_over = np.array([], dtype=np.float32)
 
     def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, we need to render the full signal
@@ -46,7 +50,7 @@ class RetriggerNode(BaseNode):
         signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))
         
         # If signal is done and we have no carry over, we're done
-        if len(signal_wave) == 0 and len(self.carry_over) == 0:
+        if len(signal_wave) == 0 and len(self.state.carry_over) == 0:
             return np.array([], dtype=np.float32)
         
         n_delay_time_samples = int(SAMPLE_RATE * self.model.time)
@@ -58,12 +62,12 @@ class RetriggerNode(BaseNode):
                 delayed_wave[i * n_delay_time_samples : i * n_delay_time_samples + len(signal_wave)] += signal_wave * (self.model.feedback ** i)
         
         # Add carry over from previous render
-        if len(self.carry_over) > 0:
-            delayed_wave = add_waves(delayed_wave, self.carry_over[:len(delayed_wave)])
+        if len(self.state.carry_over) > 0:
+            delayed_wave = add_waves(delayed_wave, self.state.carry_over[:len(delayed_wave)])
 
         # Return n_samples and save the rest as carry over for the next render
         part_to_return = delayed_wave[:num_samples]
-        self.carry_over = delayed_wave[num_samples:]
+        self.state.carry_over = delayed_wave[num_samples:]
         
         return part_to_return
 

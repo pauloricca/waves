@@ -15,10 +15,12 @@ class ContextNodeModel(BaseNodeModel):
 
 
 class ContextNode(BaseNode):
-    def __init__(self, model: ContextNodeModel):
+    def __init__(self, model: ContextNodeModel, state, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
         from nodes.wavable_value import WavableValueNode, WavableValueModel
         super().__init__(model)
+        self.model = model
+        self.state = state
         
         # Instantiate the signal node
         self.signal_node = instantiate_node(model.signal)

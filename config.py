@@ -16,6 +16,9 @@ DEFAULT_PLAYBACK_TIME = 4  # seconds, for nodes without explicit duration
 
 WAIT_FOR_CHANGES_IN_WAVES_YAML = True
 
+# Hot reload settings
+DISPLAY_HOT_RELOAD_CLEANUP = False  # Log when orphaned node state is cleaned up
+
 # Playback settings
 DO_PRE_RENDER_WHOLE_SOUND = False
 DO_PLAY_IN_REAL_TIME = True

@@ -32,18 +32,21 @@ class SampleModel(BaseNodeModel):
 
 
 class SampleNode(BaseNode):
-    def __init__(self, model: SampleModel):
+    def __init__(self, model: SampleModel, state, hot_reload=False):
         super().__init__(model)
         self.model = model
-        # Chop mode state (directory of files)
+        self.state = state
+        # Only persistent playback state is kept in self.state
+        if not hot_reload:
+            self.state.last_playhead_position = 0
+            self.state.total_samples_rendered = 0
+            self.state.current_chop_index = None
+        # All other fields are regular attributes (not in state)
         self.is_in_chop_mode = model.chop is not None
+        self._reset_playhead_this_chunk = False
         self.chop_node = wavable_value_node_factory(model.chop) if self.is_in_chop_mode else None
         self.audio_files = None
-        self.current_chop_index = None
-
         if self.is_in_chop_mode:
-            # In chop mode, we'll defer audio loading until first render
-            # when we evaluate the chop index
             self.audio = np.zeros(1, dtype=np.float32)
         else:
             self.audio = load_wav_file(model.file)
@@ -52,10 +55,7 @@ class SampleNode(BaseNode):
         self.start_node = wavable_value_node_factory(model.start)
         self.end_node = wavable_value_node_factory(model.end)
         self.offset_node = wavable_value_node_factory(model.offset)
-        self.last_playhead_position = 0
-        self.total_samples_rendered = 0
-        # Internal flag to reset playhead to start on chop change
-        self._reset_playhead_this_chunk = False
+        # Only persistent playback state is kept in self.state (see above)
 
     def _resolve_project_path(self, path_str: str) -> str:
         """Resolve path relative to project root (waves/), handling ~ and env vars."""
@@ -67,7 +67,7 @@ class SampleNode(BaseNode):
 
     def _ensure_chop_listing(self):
         """Build and cache the list of .wav files for chop mode."""
-        if getattr(self, "_chop_files_abs", None) is not None:
+        if "_chop_files" in vars(self):
             return
         base = self.model.file
         if base is None:
@@ -83,12 +83,12 @@ class SampleNode(BaseNode):
         entries.sort(key=lambda s: s.lower())
         if not entries:
             raise ValueError(f"Sample node: no .wav files found in directory: {base} (resolved: {base_abs})")
-        # Store relative paths for load_wav_file
+        # Cache relative paths for load_wav_file
         self._chop_files = [os.path.join(base, e) for e in entries]
 
     def _select_chop_path_for_index(self, idx: int) -> tuple[str, int]:
         """Return relative path of selected file by clipped index."""
-        if getattr(self, "_chop_files", None) is None:
+        if "_chop_files" not in vars(self):
             self._ensure_chop_listing()
         files = self._chop_files
         if not files:
@@ -117,9 +117,9 @@ class SampleNode(BaseNode):
         path, idx_int = self._select_chop_path_for_index(idx_int)
 
         # Load only if changed
-        if self.current_chop_index != idx_int or len(self.audio) <= 1:
+        if self.state.current_chop_index != idx_int or len(self.audio) <= 1:
             self.audio = load_wav_file(path)  # utils caches by path
-            self.current_chop_index = idx_int
+            self.state.current_chop_index = idx_int
             # Reset playhead for this chunk to avoid mid-file discontinuity
             self._reset_playhead_this_chunk = True
 
@@ -139,36 +139,33 @@ class SampleNode(BaseNode):
                 end = min(end, len(self.audio))
                 start = max(start, 0)
                 sample_length = end - start
-                
                 if sample_length <= 0:
                     return np.array([])
-                
                 # For non-looping samples, length is just the sample length
                 if not self.model.loop:
                     num_samples = sample_length
-                    self._last_chunk_samples = num_samples
                 else:
                     raise ValueError("Cannot render full signal: looping sample requires duration to be specified")
-        
+
         # Render start and end values for this chunk
         start_vals = self.start_node.render(num_samples, context, **self.get_params_for_children(params))
         end_vals = self.end_node.render(num_samples, context, **self.get_params_for_children(params))
-        
+
         # Ensure they are arrays
         if np.isscalar(start_vals):
             start_vals = np.full(num_samples, start_vals)
         if np.isscalar(end_vals):
             end_vals = np.full(num_samples, end_vals)
-        
+
         # Convert to sample indices
         start_indices = np.clip(start_vals * len(self.audio), 0, len(self.audio) - 1).astype(int)
         end_indices = np.clip(end_vals * len(self.audio), 0, len(self.audio)).astype(int)
-        
+
         # Initialize playhead to start position on first render or when chop changes
-        if (self.number_of_chunks_rendered == 0 and self.last_playhead_position == 0) or self._reset_playhead_this_chunk:
-            self.last_playhead_position = float(start_indices[0])
+        if (self.number_of_chunks_rendered == 0 and self.state.last_playhead_position == 0) or self._reset_playhead_this_chunk:
+            self.state.last_playhead_position = float(start_indices[0])
             self._reset_playhead_this_chunk = False
-        
+
         # Check if all start/end pairs are valid
         if np.any(end_indices <= start_indices):
             # For simplicity, when ranges are invalid, return zeros for those samples
@@ -178,12 +175,11 @@ class SampleNode(BaseNode):
         # Check if we have a duration limit and if we've exceeded it
         if self.model.duration is not None:
             max_total_samples = int(self.model.duration * SAMPLE_RATE)
-            if self.total_samples_rendered >= max_total_samples:
+            if self.state.total_samples_rendered >= max_total_samples:
                 # Already rendered full duration
                 return np.array([], dtype=np.float32)
-            
             # Check if this chunk would exceed the duration
-            samples_remaining = max_total_samples - self.total_samples_rendered
+            samples_remaining = max_total_samples - self.state.total_samples_rendered
             if num_samples > samples_remaining:
                 num_samples = samples_remaining
                 # Truncate start/end arrays as well
@@ -191,11 +187,11 @@ class SampleNode(BaseNode):
                 end_indices = end_indices[:num_samples]
 
         speed = self.speed_node.render(num_samples, context, **self.get_params_for_children(params))
-        
+
         # Ensure speed is an array
         if np.isscalar(speed):
             speed = np.full(num_samples, speed)
-        
+
         # If freq is set and base_freq is set, modulate speed by frequency ratio
         if self.freq_node is not None and self.model.base_freq is not None:
             freq = self.freq_node.render(num_samples, context, **self.get_params_for_children(params))
@@ -207,11 +203,11 @@ class SampleNode(BaseNode):
 
         # Render offset
         offset = self.offset_node.render(num_samples, context, **self.get_params_for_children(params))
-        
+
         # Ensure offset is an array
         if np.isscalar(offset):
             offset = np.full(num_samples, offset)
-        
+
         # Convert offset from seconds to samples
         offset_samples = offset * SAMPLE_RATE
 
@@ -220,20 +216,20 @@ class SampleNode(BaseNode):
         abs_speed = np.maximum(abs_speed, 1e-6)  # avoid zero speed
         sign = np.sign(speed)
         dt = 1.0 / SAMPLE_RATE
-        
+
         # Calculate the window lengths for each sample
         window_lengths = end_indices - start_indices
         window_lengths = np.maximum(window_lengths, 1)  # Ensure at least 1 sample
-        
+
         # Integrate speed to get absolute playhead position in the audio buffer
         # The playhead moves through the actual audio buffer, not relative to the window
         playhead_delta = abs_speed * sign * dt * SAMPLE_RATE
-        playhead_absolute = self.last_playhead_position + np.cumsum(playhead_delta)
-        
+        playhead_absolute = self.state.last_playhead_position + np.cumsum(playhead_delta)
+
         # Apply offset (in samples) - this is applied as a displacement, not accumulated
         # Save the unmodified playhead for updating last_playhead_position
         playhead_with_offset = playhead_absolute + offset_samples
-        
+
         if not self.model.loop:
             # Non-looping: find where we exceed the window bounds
             outside_bounds = (playhead_with_offset >= end_indices) | (playhead_with_offset < start_indices)
@@ -249,7 +245,6 @@ class SampleNode(BaseNode):
                 playhead_absolute = playhead_absolute[:num_samples]
                 start_indices = start_indices[:num_samples]
                 end_indices = end_indices[:num_samples]
-            
             audio_indices = playhead_with_offset
         else:
             # Looping: wrap around when outside the window
@@ -257,7 +252,6 @@ class SampleNode(BaseNode):
             outside_high = playhead_with_offset >= end_indices
             outside_low = playhead_with_offset < start_indices
             outside = outside_high | outside_low
-            
             if np.any(outside):
                 # For samples outside the window, wrap them back
                 # Calculate offset from start of window
@@ -266,21 +260,19 @@ class SampleNode(BaseNode):
                 wrapped_offset = np.mod(offset_from_start, window_lengths)
                 # Update playhead for wrapped samples
                 playhead_with_offset = np.where(outside, start_indices + wrapped_offset, playhead_with_offset)
-            
             audio_indices = playhead_with_offset
-        
+
         # Handle the case where we truncated early (non-looping)
         if num_samples == 0:
             return np.array([], dtype=np.float32)
-        
+
         # Clip to valid audio buffer range
         audio_indices = np.clip(audio_indices, 0, len(self.audio) - 1)
-        
         # Interpolate from the audio buffer
         wave = np.interp(audio_indices, np.arange(len(self.audio)), self.audio)
 
-        self.last_playhead_position = playhead_absolute[-1] if len(playhead_absolute) > 0 else self.last_playhead_position
-        self.total_samples_rendered += len(wave)
+        self.state.last_playhead_position = playhead_absolute[-1] if len(playhead_absolute) > 0 else self.state.last_playhead_position
+        self.state.total_samples_rendered += len(wave)
 
         return wave
 

@@ -24,13 +24,17 @@ class HoldNode(BaseNode):
     Note: Change detection is chunk-level: if trigger changes anywhere within the chunk,
           we resample once for the whole chunk.
     """
-    def __init__(self, model: HoldModel):
+    def __init__(self, model: HoldModel, state, hot_reload=False):
         super().__init__(model)
         self.model = model
         self.signal_node = wavable_value_node_factory(model.signal)
         self.trigger_node = wavable_value_node_factory(model.trigger) if model.trigger is not None else None
-        self._held_value: float | None = None
-        self._last_trigger_value: float | None = None
+        self.state = state
+        
+        # Persistent state for held value and trigger tracking (survives hot reload)
+        if not hot_reload:
+            self.state.held_value = None
+            self.state.last_trigger_value = None
 
     def _sample_signal_once(self, context, **params) -> float:
         """Sample the signal once and return a scalar value."""
@@ -44,11 +48,11 @@ class HoldNode(BaseNode):
                 num_samples = BUFFER_SIZE
 
         # Initialize held value on first render
-        if self._held_value is None:
-            self._held_value = self._sample_signal_once(context, **params)
+        if self.state.held_value is None:
+            self.state.held_value = self._sample_signal_once(context, **params)
 
         # Prepare output with current held value
-        out = np.full(num_samples, float(self._held_value), dtype=np.float32)
+        out = np.full(num_samples, float(self.state.held_value), dtype=np.float32)
 
         # Evaluate trigger if provided
         if self.trigger_node is not None:
@@ -59,7 +63,7 @@ class HoldNode(BaseNode):
             first_change_idx = 0
             
             # Check change from previous chunk to first sample
-            if self._last_trigger_value is None or float(trig[0]) != self._last_trigger_value:
+            if self.state.last_trigger_value is None or float(trig[0]) != self.state.last_trigger_value:
                 trigger_changed = True
                 first_change_idx = 0
             # Check changes within the chunk
@@ -76,9 +80,9 @@ class HoldNode(BaseNode):
                 # Fill from the change point to the end with the new value
                 out[first_change_idx:] = new_value
                 # Update held value for next chunk
-                self._held_value = new_value
+                self.state.held_value = new_value
             
-            self._last_trigger_value = float(trig[-1])
+            self.state.last_trigger_value = float(trig[-1])
         
         return out
 

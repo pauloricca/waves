@@ -62,24 +62,24 @@ seq:
     signal:
       sequencer:
         interval: sixteenth
-        repeat: 4
+        repeat: 400
         sequence:
           - techno-kick
           -
-          - chop c1
-          - hihat v0.4
-          - [techno-kick, hihat v1]
           - 
-          - hihat v.5
-          - hihat v.2
-          - techno-kick
+          - 
           -
-          - hihat
-          - chop
-          - [techno-kick, hihat]
-          - hihat v.2
-          - hihat
-          - hihat v.1
+          - 
+          - 
+          - 
+          - 
+          -
+          -
+          -
+          - 
+          -
+          - 
+          -
 
 
 hihat:
@@ -999,5 +999,32 @@ test-subpatch:
             techno-kick: {}
 
 
+test-ids:
+  osc:
+    freq:
+      osc:
+        freq: 1
+        range: [10, 50]
 
 
+test-ids-2:
+  mix:
+    signals:
+      - osc:  # test-ids-2.mix.signals[0].osc
+          freq: 200
+          range: [10, 50]
+      - osc:  # test-ids-2.mix.signals[1].osc
+          freq: 400
+
+
+test-ids-3:
+  sequencer:
+    interval: 5
+    sequence:
+      - osc: # <- test-ids-3.sequencer.sequence[0].osc
+          freq: 200
+          range: [10, 50]
+      -
+      -
+      - osc: # <- test-ids-3.sequencer.sequence[3].osc
+          freq: 400

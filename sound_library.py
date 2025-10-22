@@ -77,6 +77,12 @@ def load_sound_library(file_path: str) -> SoundLibraryModel:
     
     try:
         sound_library = SoundLibraryModel.model_validate(raw_data)
+        
+        # Generate automatic hierarchical IDs for all nodes
+        from nodes.node_utils.auto_id_generator import AutoIDGenerator
+        for sound_name, sound_model in sound_library.root.items():
+            AutoIDGenerator.generate_ids(sound_model)
+    
     except Exception as e:
         print(f"Error loading sound library: {e}")
     return sound_library

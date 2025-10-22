@@ -29,22 +29,22 @@ class FilterModel(BaseNodeModel):
     signal: BaseNodeModel = None
 
 class FilterNode(BaseNode):
-    def __init__(self, model: FilterModel):
+    def __init__(self, model: FilterModel, state, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
         super().__init__(model)
         self.model = model
         self.cutoff_node = wavable_value_node_factory(model.cutoff)
         self.peak_node = wavable_value_node_factory(model.peak)
         self.signal_node = instantiate_node(model.signal)
+        self.state = state
         
-        # Filter state variables for continuity between chunks
-        self.x1 = 0.0
-        self.x2 = 0.0
-        self.y1 = 0.0
-        self.y2 = 0.0
-        
-        # State for scipy.signal.lfilter (used when cutoff is constant)
-        self.zi = None  # Filter initial conditions
+        # Persistent state for continuity between chunks (survives hot reload)
+        if not hot_reload:
+            self.state.x1 = 0.0
+            self.state.x2 = 0.0
+            self.state.y1 = 0.0
+            self.state.y2 = 0.0
+            self.state.zi = None  # Filter initial conditions
 
     def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, get the full child signal
@@ -93,19 +93,19 @@ class FilterNode(BaseNode):
                 raise ValueError(f"Unsupported filter type: {filter_type}")
             
             # Initialize filter state if needed
-            if self.zi is None:
-                self.zi = scipy.signal.lfilter_zi(b, a)
+            if self.state.zi is None:
+                self.state.zi = scipy.signal.lfilter_zi(b, a)
             
             # Apply filter with state
-            filtered, self.zi = scipy.signal.lfilter(b, a, signal_wave, zi=self.zi)
+            filtered, self.state.zi = scipy.signal.lfilter(b, a, signal_wave, zi=self.state.zi)
             return filtered
         else:
             # Modulated cutoff with Q support
             out = np.zeros_like(signal_wave)
             
             # Use instance state variables for continuity between chunks
-            x1, x2 = self.x1, self.x2
-            y1, y2 = self.y1, self.y2
+            x1, x2 = self.state.x1, self.state.x2
+            y1, y2 = self.state.y1, self.state.y2
 
             for i in range(len(signal_wave)):
                 fc = cutoff[i]
@@ -128,8 +128,8 @@ class FilterNode(BaseNode):
                 y2, y1 = y1, y0
 
             # Store state for next chunk
-            self.x1, self.x2 = x1, x2
-            self.y1, self.y2 = y1, y2
+            self.state.x1, self.state.x2 = x1, x2
+            self.state.y1, self.state.y2 = y1, y2
 
             return out
 
