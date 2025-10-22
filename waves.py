@@ -24,6 +24,7 @@ rendered_sounds: dict[np.ndarray] = {}
 # Global recording buffer (thread-safe deque)
 recording_buffer = None
 recording_active = False
+current_sound_name = None  # Track current sound name for recording
 
 def get_unique_filename(base_filename):
     """
@@ -55,7 +56,7 @@ def get_unique_filename(base_filename):
             return new_filename
         counter += 1
 
-def save_recording():
+def save_recording(sound_name=None):
     """Save the recorded audio buffer to a file."""
     global recording_buffer, recording_active
     
@@ -66,8 +67,11 @@ def save_recording():
         # Convert deque to numpy array
         recorded_audio = np.array(recording_buffer, dtype=np.float32)
         
+        # Use sound name if provided, otherwise fall back to default
+        base_filename = f"{sound_name}.wav" if sound_name else "realtime_recording.wav"
+        
         # Get a unique filename to avoid overwriting
-        unique_filename = get_unique_filename(REAL_TIME_RECORDING_FILENAME)
+        unique_filename = get_unique_filename(base_filename)
         
         # Save using the existing save function
         save(recorded_audio, unique_filename)
@@ -80,18 +84,19 @@ def save_recording():
 def signal_handler(sig, frame):
     """Handle Ctrl-C gracefully and save recording."""
     print("\nInterrupted by user, saving recording...")
-    save_recording()
+    save_recording(current_sound_name)
     sys.exit(0)
 
-def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float):
-    global recording_buffer, recording_active
+def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_name: str = None):
+    global recording_buffer, recording_active, current_sound_name
     
     # Initialize recording if enabled
     if DO_RECORD_REAL_TIME:
         recording_buffer = deque()
         recording_active = True
+        current_sound_name = sound_name
         # Register cleanup function to save on normal exit
-        atexit.register(save_recording)
+        atexit.register(lambda: save_recording(sound_name))
     
     visualised_wave_buffer = deque(maxlen=10_000)
     should_stop = False
@@ -207,7 +212,7 @@ def main():
     sound_duration = look_for_duration(sound_model_to_play)
 
     if DO_PLAY_IN_REAL_TIME:
-        play_in_real_time(sound_node_to_play, sound_duration)
+        play_in_real_time(sound_node_to_play, sound_duration, sound_name_to_play)
     else:
         # Non-realtime mode requires a duration
         if not sound_duration:

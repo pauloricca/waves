@@ -47,11 +47,14 @@ loop:
               #     ref: sample
 
 chop:
-  sample:
-    file: output/chopped
-    chop: 
-      hold:
-        signal: rand(0, 20)
+  context:
+    c: rand(0, 14)
+    signal:
+      sample:
+        file: output/chopped5
+        chop: 
+          hold:
+            signal: c
 
 seq:
   tempo:
@@ -59,11 +62,11 @@ seq:
     signal:
       sequencer:
         interval: sixteenth
-        repeat: 8
+        repeat: 4
         sequence:
           - techno-kick
           -
-          - chop
+          - chop c1
           - hihat v0.4
           - [techno-kick, hihat v1]
           - 

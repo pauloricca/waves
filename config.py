@@ -21,8 +21,7 @@ DO_PRE_RENDER_WHOLE_SOUND = False
 DO_PLAY_IN_REAL_TIME = True
 
 # Real-time recording settings
-DO_RECORD_REAL_TIME = True  # Enable to save real-time playback to file
-REAL_TIME_RECORDING_FILENAME = "realtime_recording.wav"  # Output filename in OUTPUT_DIR
+DO_RECORD_REAL_TIME = False  # Enable to save real-time playback to file
 
 # Visualisation settings
 DO_VISUALISE_OUTPUT = False
