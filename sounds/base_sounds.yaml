@@ -51,7 +51,7 @@ hihat:
 kick:
   mix:
     signals:
-      # Deep rumble - sub bass with aggressive pitch envelope
+      # Rumble
       - osc:
           type: sin
           freq: [420, [55, 0.02], [45, 0.15]]
@@ -60,7 +60,7 @@ kick:
           release: 0.6
           duration: 0.75
       
-      # Body - mid bass with phase distortion for punch
+      # Body
       - osc:
           type: sin
           freq: [150, [55, 0.015]]
@@ -77,7 +77,7 @@ kick:
               release: 0.15
               duration: 0.2
       
-      # Upper harmonics for clarity
+      # Upper harmonics
       - osc:
           type: tri
           freq: [180, [110, 0.01]]
@@ -86,7 +86,7 @@ kick:
           release: 0.15
           duration: 0.2
       
-      # Punch - aggressive click transient
+      # Punch
       - osc:
           type: noise
           amp: 0.02
@@ -94,7 +94,7 @@ kick:
           release: 0.008
           duration: 0.004
       
-      # Extra punch - high frequency click
+      # Extra punch
       - osc:
           type: sin
           freq: [3500, [800, 0.003]]
@@ -103,7 +103,7 @@ kick:
           release: 0.006
           duration: 0.01
       
-      # Sub harmonic for extra weight
+      # Sub harmonic
       - osc:
           type: sin
           freq: 40

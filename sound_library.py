@@ -187,7 +187,7 @@ def get_sound_model(sound_name: str) -> BaseNodeModel:
     if sound_name not in sound_index:
         raise ValueError(f"Sound '{sound_name}' not found in any loaded YAML file.")
     
-    filename, sound_model = sound_index[sound_name]
+    _, sound_model = sound_index[sound_name]
     return sound_model
 
 

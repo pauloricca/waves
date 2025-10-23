@@ -1,4 +1,4 @@
-seq2:
+seq1:
   tempo:
     bpm: 130
     signal:
@@ -15,7 +15,7 @@ seq2:
           - [oscar, oscar, oscar, kick2, chop, hihat]
           - [oscar, oscar, oscar]
 
-seq3:
+seq2:
   tempo:
     bpm: 130
     signal:
@@ -32,7 +32,7 @@ seq3:
           - [oscar, kick2, chop, hihat]
           - [oscar]
 
-seq4:
+seq3:
   tempo:
     bpm: 130
     signal:
@@ -44,12 +44,45 @@ seq4:
           - [oscar, chop]
           - [chop, hihat v0.5]
           - [oscar, oscar, kick2]
-          - [hihat]
+          - []
           - [oscar]
-          - [oscar, kick2, chop, hihat]
+          - [oscar, kick2, chop, hihat v0.5]
+          - [oscar]
+
+seq4:
+  tempo:
+    bpm: 130
+    signal:
+      sequencer:
+        interval: sixteenth
+        repeat: 4000
+        sequence:
+          - kick
+          -
+          - [chop, hihat v0.5]
+          - kick2
+          - kick
+          - 
+          - [kick2, hihat]
+          - 
+
+
+seq5:
+  tempo:
+    bpm: 130
+    signal:
+      sequencer:
+        interval: sixteenth
+        repeat: 4000
+        sequence:
+          - [kick]
+          - [chop]
+          - [chop, hihat v0.5]
+          - [oscar, kick2]
+          - [kick, hihat]
+          - 
+          - [oscar, kick2, hihat]
           - [oscar]
 
 seq:
-  expression:
-    exp: signal
-    signal: seq4
+  seq4: {}
