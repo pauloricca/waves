@@ -67,7 +67,13 @@ class SoundLibraryModel(RootModel[Dict[str, BaseNodeModel]]):
 def load_sound_library(file_path: str) -> SoundLibraryModel:
     global sound_library
     with open(file_path) as file:
-        raw_data = yaml.safe_load(file)
+        # Use the C-based LibYAML loader if available (much faster for hot reload)
+        # Falls back to SafeLoader if LibYAML is not installed
+        try:
+            Loader = yaml.CSafeLoader
+        except AttributeError:
+            Loader = yaml.SafeLoader
+        raw_data = yaml.load(file, Loader=Loader)
     
     # Extract and set user variables if present
     user_vars = raw_data.pop('vars', None)

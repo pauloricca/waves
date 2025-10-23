@@ -18,6 +18,7 @@ WAIT_FOR_CHANGES_IN_WAVES_YAML = True
 
 # Hot reload settings
 DISPLAY_HOT_RELOAD_CLEANUP = False  # Log when orphaned node state is cleaned up
+HOT_RELOAD_DELAY = 0.1  # Seconds to wait before starting reload (gives audio time to stabilize)
 
 # Playback settings
 DO_PRE_RENDER_WHOLE_SOUND = False
@@ -28,7 +29,7 @@ DO_RECORD_REAL_TIME = False  # Enable to save real-time playback to file
 
 # Visualisation settings
 DO_VISUALISE_OUTPUT = False
-DISPLAY_RENDER_TIME_PERCENTAGE = False
+DISPLAY_RENDER_TIME_PERCENTAGE = True
 DO_ONLY_VISUALISE_ONE_BUFFER = False
 VISUALISATION_FPS = 20  # Lower FPS reduces CPU usage and audio interference
 

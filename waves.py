@@ -92,13 +92,10 @@ def perform_hot_reload_background(sound_name_to_play: str, params: dict = None):
             for orphaned_id in orphaned_ids:
                 if orphaned_id in old_state:
                     del old_state[orphaned_id]
-            if DISPLAY_HOT_RELOAD_CLEANUP:
-                print(f"[HOT RELOAD] Cleaned up orphaned state from {len(orphaned_ids)} removed node(s): {orphaned_ids}")
         
         # Store the new node for atomic swap on next audio chunk
         with hot_reload_lock:
             hot_reload_pending_node = (new_node, old_node)  # Store both new and old for cleanup
-            print("[HOT RELOAD] Successfully reloaded sound definition (ready for swap)")
     
     except Exception as e:
         print(f"Hot reload error: {e}")
@@ -209,7 +206,7 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
             with hot_reload_lock:
                 if hot_reload_pending_node is not None:
                     # Atomically swap in the new node
-                    new_node, old_node = hot_reload_pending_node
+                    new_node, _old_node = hot_reload_pending_node
                     active_sound_node = new_node
                     current_sound_node = new_node
                     hot_reload_pending_node = None
@@ -217,22 +214,20 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
                     # Clear stale node instance references in the render context
                     # This prevents segfaults from keeping pointers to deleted nodes
                     render_context.clear_node_instances()
-                    
-                    # Explicitly delete the old node to break circular references
-                    del old_node
-                    # Force garbage collection to clean up freed memory
-                    gc.collect()
-                    print("[HOT RELOAD] Swapped to new node tree")
         
         # Check if YAML has changed and start background hot reload if not already in progress
         if yaml_changed and not hot_reload_in_progress:
             yaml_changed = False
             hot_reload_in_progress = True
-            print("[HOT RELOAD] YAML file changed, reloading in background...")
+            
+            # Add a small delay before reloading to give audio callback time to stabilize
+            def delayed_reload():
+                time.sleep(HOT_RELOAD_DELAY)
+                perform_hot_reload_background(stored_sound_name, None)
+            
             # Start hot reload on a separate thread
             reload_thread = threading.Thread(
-                target=perform_hot_reload_background,
-                args=(stored_sound_name, None),
+                target=delayed_reload,
                 daemon=True
             )
             reload_thread.start()
@@ -413,7 +408,6 @@ if __name__ == "__main__":
                         if current_modified_time != last_modified_time:
                             # YAML file changed, signal hot reload
                             yaml_changed = True
-                            print("[HOT RELOAD] YAML file changed, reloading on next audio chunk...")
                             last_modified_time = current_modified_time
                     except Exception as e:
                         print(f"Error checking YAML file: {e}")
