@@ -79,9 +79,13 @@ def load_sound_library(file_path: str) -> SoundLibraryModel:
         sound_library = SoundLibraryModel.model_validate(raw_data)
         
         # Generate automatic hierarchical IDs for all nodes
+        # IMPORTANT: We generate IDs for each root sound starting with that sound's name as the base
+        # This ensures that dynamically instantiated sounds don't get colliding IDs
         from nodes.node_utils.auto_id_generator import AutoIDGenerator
         for sound_name, sound_model in sound_library.root.items():
-            AutoIDGenerator.generate_ids(sound_model)
+            # Generate IDs starting from the sound name, not from "root"
+            # This makes root-level techno-kick different from other root sounds
+            AutoIDGenerator.generate_ids(sound_model, param_path=sound_name)
     
     except Exception as e:
         print(f"Error loading sound library: {e}")

@@ -57,29 +57,31 @@ chop:
             signal: c
 
 seq:
+
+seq:
   tempo:
     bpm: 135
     signal:
       sequencer:
         interval: sixteenth
-        repeat: 400
+        repeat: 40
         sequence:
           - techno-kick
           -
-          - 
-          - 
+          - chop c10
           -
-          - 
-          - 
-          - 
-          - 
+          - [techno-kick, hihat v1]
           -
+          - hihat v0.5
           -
+          - techno-kick
+          - chop c14
+          - hihat
           -
-          - 
+          - [techno-kick, hihat]
           -
-          - 
-          -
+          - hihat
+          - hihat v.1
 
 
 hihat:

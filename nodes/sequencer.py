@@ -28,8 +28,6 @@ class SequencerNode(BaseNode):
         self.sequence = model.sequence
         self.chain = model.chain
         self.repeat = model.repeat
-
-        print("SequencerNode initialized with repeat =", self.repeat)
         
         # Wrap interval in WavableValue
         if isinstance(model.interval, BaseNodeModel):

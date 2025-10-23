@@ -50,12 +50,12 @@ class BaseNode:
             from nodes.node_utils.render_context import RenderContext
             context = RenderContext()
         
-        # If this node has an id, handle caching and recursion
+        # If this node has an id, handle recursion tracking and node registration
         if self.node_id:
             # Register this node instance in the context so it can be referenced
             context.store_node(self.node_id, self)
             
-            # Use Python's id() to track this specific node instance
+            # Use Python's id() to track this specific node instance for recursion
             instance_id = id(self)
             recursion_depth = context.get_recursion_depth(instance_id)
             
@@ -66,21 +66,16 @@ class BaseNode:
                     return np.array([], dtype=np.float32)
                 return np.zeros(num_samples, dtype=np.float32)
             
-            # If not in recursion and THIS INSTANCE has a cached output, use it
-            # This allows the same node instance to be called multiple times (fan-out)
-            # without re-rendering, but different instances with the same ID will render independently
-            if recursion_depth == 0:
-                cached = context.get_output(instance_id)
-                if cached is not None:
-                    # Return cached output (trim/pad as needed)
-                    return self._adjust_output_length(cached.copy(), num_samples)
-            
             # Increment recursion, render, decrement, cache (if top level)
             context.increment_recursion(instance_id)
             try:
                 wave = self._render_with_timing(num_samples, context, **params)
                 if recursion_depth == 0:  # Only cache at top level
-                    context.store_output(instance_id, self.node_id, wave)
+                    # Only write cache for nodes with explicit IDs (not auto-generated)
+                    # Cache is only meant to be read by reference nodes
+                    has_explicit_id = hasattr(self, 'model') and hasattr(self.model, 'id') and self.model.id is not None
+                    if has_explicit_id:
+                        context.store_output(instance_id, self.node_id, wave)
                 return wave
             finally:
                 context.decrement_recursion(instance_id)
