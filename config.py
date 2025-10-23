@@ -1,4 +1,5 @@
 YAML_FILE = "waves.yaml"
+SOUNDS_DIR = "sounds"  # Directory containing YAML sound definition files
 OUTPUT_DIR = "output"
 OSC_ENVELOPE_TYPE = "exponential"  # Options: "linear", "exponential"
 SAMPLE_RATE = 44100

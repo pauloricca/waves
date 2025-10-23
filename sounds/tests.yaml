@@ -1,0 +1,724 @@
+loop:
+  # osc:
+  #   type: tri
+  #   duration: 5
+  #   freq: 30
+  #   phase:
+      retrigger:
+        time: 0.3
+        feedback: 0.5
+        repeats: 1
+        signal:
+        #   mix:
+        #     signals:
+              envelope:
+                  attack: 0.003
+                  release: 0.1
+                  decay: 0.1
+                  sustain: 0
+                  gate:
+                    osc:
+                      freq: 3
+                      range: [0, 1]
+                      type: sqr
+                  signal:
+                    # snap:
+                    #   interval: 0.01  # Frequency steps
+                    #   range: [-1, 1]
+                    #   glide: 0.005  # Glide time in seconds
+                    #   signal:
+                        shuffle:
+                          chunks: 500
+                          invert: 0.5
+                          crossfade: 0.005
+                          signal:
+                            expression:
+                              duration: 50
+                              id: sample
+                              exp: amp * signal
+                              amp: 0.0001
+                              amp: 5
+                              signal:
+                                sample:
+                                  file: samples/gregor.wav
+                                  speed: [0.2, -0.2, 4, 1, -0.5, 3, 0.2]
+                                  loop: true
+              # - reference:
+              #     ref: sample
+
+synth:
+  context:
+    freq: 200
+    signal:
+      mix:
+        signals:
+          - osc:
+              freq: freq
+          - osc:
+              freq: freq
+
+
+# MIDI Example - Play sounds via MIDI input
+midi-test:
+  midi:
+    channel: 0  # MIDI channel (0-15)
+    signal:
+      envelope:
+        attack: 0.01
+        release: 0.3
+        end: true  # Signal completion when release is done
+        signal:
+          osc:
+            type: SIN
+            amp: 0.5
+
+# MIDI with more complex sound
+midi-synth:
+  midi:
+    channel: 0
+    signal:
+      envelope:
+        duration: 1
+        attack: 0.2
+        release: 0.8
+        signal:
+          expression:
+            exp: "signal * 1"
+            signal:
+              mix:
+                signals:
+                  - envelope:
+                      duration: 0.01
+                      signal:
+                        expression:
+                          exp: "signal * 0.4"
+                          signal:
+                            mix:
+                              signals:
+                                - osc:
+                                    freq: f
+                                    attack: 0.2
+                                - osc:
+                                    freq: "f * 2"
+                                    amp: 0.5
+                                    attack: 0.2
+                                - osc:
+                                    freq: "f * 2.2"
+                                    amp: 0.5
+                                    attack: 0.2
+                                - osc:
+                                    freq: "f * 2.3"
+                                    amp: 0.5
+                                    attack: 0.2
+                                - osc:
+                                    freq: "f * 5"
+                                    amp: 0.5
+                                    attack: 0.2
+                  - osc:
+                      freq: "f * 1.5"
+                      amp: 0.5
+                      attack: 0.2
+                  - osc:
+                      freq: "f * 2"
+                      amp: 0.5
+                      attack: 0.2
+
+# MIDI with more complex sound
+midi-env:
+  retrigger:
+    time: 0.1
+    feedback: 0.5
+    repeats: 4
+    signal:
+      midi:
+        channel: 0
+        signal:
+          mix:
+            signals:
+              - envelope:
+                  attack: 0.1
+                  decay: 0.1
+                  sustain: 0.3
+                  release: 1
+                  signal:
+                    # shuffle:
+                    #   seed: 7
+                    #   chunks: 32
+                    #   signal:
+                        sample:
+                          # base_freq: 2000
+                          # duration: 4
+                          base_freq: 200
+                          # start: 0.354
+                          start: 0
+                          # end: 0.5
+                          # speed: [0.1, 0.05]
+                          # speed: 1
+                          loop: true
+                          # overlap: 0.5
+                          file: samples/paulo.wav
+              # - envelope:
+              #     attack: 0.1
+              #     decay: 0.5
+              #     sustain: 0.2
+              #     release: 1
+              #     signal:
+              #       osc:
+              #         amp: 0.15
+              #         partials:
+              #           - osc:
+              #               amp: 
+              #                 osc:
+              #                   freq: 5
+              #                   amp: 0.3
+              #               duration: 1
+              #               release: 0.2
+              #               partials:
+              #                 - osc:
+              #                     freq: 2
+              #                     amp: 0.5
+              #                 - osc:
+              #                     freq: 2.2
+              #                     amp: 0.5
+              #                 - osc:
+              #                     freq: 2.3
+              #                     amp: 0.4
+              #                 - osc:
+              #                     freq: 5
+              #                     amp: 0.1
+              #           - osc:
+              #               freq: 1.5
+              #               amp: 0.5
+              #           - osc:
+              #               freq: 2
+              #               amp: 0.2
+
+
+
+# MIDI with more complex sound
+midi-fm:
+      midi:
+        channel: 0
+        signal:
+          envelope:
+            attack: 0.1
+            decay: 0.5
+            sustain: 0.8
+            release: 1
+            signal:
+              osc:
+                type: sin
+                freq: [1, 2]
+                  # normalise:
+                  #   max: 10
+                  #   signal:
+                  #     sample:
+                  #       # base_freq: 2000
+                  #       # duration: 4
+                  #       # base_freq: 200
+                  #       # start: 0.354
+                  #       start: 0.1
+                  #       # end: 0.5
+                  #       # speed: [0.1, 0.05]
+                  #       # speed: 1
+                  #       loop: true
+                  #       # overlap: 0.5
+                  #       file: samples/paulo.wav
+                
+
+
+midi-cc-filter:
+  filter:
+    type: lowpass
+    cutoff:
+      midi_cc:
+        channel: 0
+        cc: 17
+        range: [0, 20000]
+        initial: 1000
+    peak:
+      midi_cc:
+        channel: 0
+        cc: 18
+        range: [0, 10]
+        initial: 0
+    signal:
+      osc:
+        type: saw
+        freq: 
+          midi_cc:
+            channel: 0
+            cc: 16
+            range: [20, 2000]
+            initial: 0
+        amp: 0.3
+        attack: 0.01
+        release: 0.3
+
+
+midi-cc-sample:
+  sample:
+    start:
+      midi_cc:
+        channel: 0
+        cc: 16
+        range: [0, 1]
+        initial: 0
+    end:
+      midi_cc:
+        channel: 0
+        cc: 17
+        range: [0, 1]
+        initial: 1
+    speed:
+      midi_cc:
+        channel: 0
+        cc: 18
+        range: [-10, 10]
+        initial: 1
+    loop: true
+    # overlap: 0.5
+    file: samples/waves.wav
+
+fm:
+  mix:
+    signals:
+      - osc:
+          type: sin
+          freq:
+            midi_cc:
+              channel: 0
+              cc: 16
+              range: [0, 500]
+              initial: 250
+          amp:
+            midi_cc:
+              channel: 0
+              cc: 0
+              initial: 0.5
+          phase:
+            osc:
+              type: sin
+              freq:
+                midi_cc:
+                  channel: 0
+                  cc: 17
+                  range: [0, 500]
+                  initial: 250
+              amp:
+                midi_cc:
+                  channel: 0
+                  cc: 1
+                  initial: 0.5
+              phase:
+                osc:
+                  type: sin
+                  freq:
+                    midi_cc:
+                      channel: 0
+                      cc: 18
+                      range: [0, 500]
+                      initial: 250
+                  amp:
+                    midi_cc:
+                      channel: 0
+                      cc: 2
+                      initial: 0.5
+      - osc:
+          type: sin
+          freq:
+            midi_cc:
+              channel: 0
+              cc: 19
+              range: [0, 500]
+              initial: 250
+          amp:
+            midi_cc:
+              channel: 0
+              cc: 3
+              initial: 0.5
+          phase:
+            osc:
+              type: sin
+              freq:
+                midi_cc:
+                  channel: 0
+                  cc: 20
+                  range: [0, 500]
+                  initial: 250
+              amp:
+                midi_cc:
+                  channel: 0
+                  cc: 4
+                  initial: 0.5
+              phase:
+                osc:
+                  type: sin
+                  freq:
+                    midi_cc:
+                      channel: 0
+                      cc: 21
+                      range: [0, 500]
+                      initial: 250
+                  amp:
+                    midi_cc:
+                      channel: 0
+                      cc: 5
+                      initial: 0.5
+      - osc:
+          type: sin
+          freq:
+            midi_cc:
+              channel: 0
+              cc: 22
+              range: [0, 500]
+              initial: 250
+          amp:
+            midi_cc:
+              channel: 0
+              cc: 6
+              initial: 0.5
+          phase:
+            sample:
+              file: samples/feedback.wav
+              speed: 
+                midi_cc:
+                  channel: 0
+                  cc: 23
+                  range: [0, 5.0]
+                  initial: 1
+              loop: true
+
+
+
+
+sample-control:
+  sample:
+    file: samples/paulo.wav
+    loop: true
+    start: 0.5
+    offset:
+      midi_cc:
+        channel: 0
+        cc: 23
+        range: [-1, 1]
+        initial: 0
+    speed:
+      midi_cc:
+        channel: 0
+        cc: 7
+        range: [-2, 2]
+        initial: 0
+
+
+flanger:
+  delay:
+    time:
+      osc:
+        type: sin
+        freq: 0.5
+        range: [0.001, 0.01]  # Varies from 1ms to 10ms
+    signal:
+      osc:
+        type: sin
+        freq: 440
+
+# CC 21 wet amp
+# CC 22 delay time
+# CC 23 sample offset
+# CC 4  dry to wet amp
+# CC 5  dry amp
+# CC 6  feedback amp
+# CC 7  sample speed
+echo:
+  mix:
+    signals:
+      - map:
+          from: [-1, 1]
+          to: 
+            - midi_cc:
+                channel: 0
+                cc: 5
+                range: [0, -1]
+                initial: -1
+            - midi_cc:
+                channel: 0
+                cc: 5
+                range: [0, 1]
+                initial: 1
+          signal:
+            sample:
+              id: paulo
+              file: samples/satanic.wav
+              loop: true
+              start: 0.5
+              offset:
+                midi_cc:
+                  channel: 0
+                  cc: 23
+                  range: [-1, 1]
+                  initial: 0
+              speed:
+                midi_cc:
+                  channel: 0
+                  cc: 7
+                  range: [-2, 2]
+                  initial: 1
+      - map:
+          from: [-1, 1]
+          to: 
+            - midi_cc:
+                channel: 0
+                cc: 21
+                range: [0, -1]
+                initial: 0
+            - midi_cc:
+                channel: 0
+                cc: 21
+                range: [0, 1]
+                initial: 0
+          signal:
+            delay: 
+              id: echo
+              mode: tape
+              time: 
+                midi_cc:
+                  channel: 0
+                  cc: 22
+                  range: [0, 5]
+                  initial: 1
+              signal:
+                mix:
+                  signals:
+                    - map:
+                        from: [-1, 1]
+                        to: 
+                          - midi_cc:
+                              channel: 0
+                              cc: 4
+                              range: [0, -1]
+                              initial: 0
+                          - midi_cc:
+                              channel: 0
+                              cc: 4
+                              range: [0, 1]
+                              initial: 0
+                        signal:
+                          reference:
+                            ref: paulo
+                    - map:
+                        from: [-1, 1]
+                        to: 
+                          - midi_cc:
+                              channel: 0
+                              cc: 6
+                              range: [0, -1]
+                              initial: 0
+                          - midi_cc:
+                              channel: 0
+                              cc: 6
+                              range: [0, 1]
+                              initial: 0
+                        signal:
+                          reference:
+                            ref: echo
+
+
+# CC 21 wet amp
+# CC 22 delay time
+# CC 23 sample offset
+# CC 4  dry to wet amp
+# CC 5  dry amp
+# CC 6  feedback amp
+# CC 7  sample speed
+echo-exp:
+  mix:
+    signals:
+      # DRY Signal
+      - expression:
+          exp: "amp * signal"
+          signal:
+            sample:
+              id: paulo
+              file: samples/satanic.wav
+              loop: true
+              start: 0.5
+              offset:
+                midi_cc:
+                  channel: 0
+                  cc: 23
+                  range: [-1, 1]
+                  initial: 0
+              speed:
+                midi_cc:
+                  channel: 0
+                  cc: 7
+                  range: [-2, 2]
+                  initial: 1
+          amp:
+            midi_cc:
+              channel: 0
+              cc: 5
+              range: [0, 1]
+              initial: 1
+      # WET Signal
+      - expression:
+          exp: "amp * signal"
+          amp:
+            midi_cc:
+              channel: 0
+              cc: 21
+              range: [0, 1]
+              initial: 0
+          signal:
+            delay: 
+              id: echo
+              mode: tape
+              time: 
+                midi_cc:
+                  channel: 0
+                  cc: 22
+                  range: [0, 5]
+                  initial: 1
+              signal:
+                mix:
+                  signals:
+                    # DRY into delay
+                    - expression:
+                        exp: "max(amp_a, amp_b) * signal"
+                        amp_a:
+                          midi_cc:
+                            channel: 0
+                            cc: 4
+                            range: [0, 1]
+                            initial: 0
+                        amp_b:
+                          midi_cc:
+                            channel: 0
+                            cc: 36
+                            range: [0, 1]
+                            initial: 0
+                        signal:
+                          reference:
+                            ref: paulo
+                    # WET Feedback into delay
+                    - expression:
+                        exp: "amp * signal"
+                        amp:
+                          midi_cc:
+                            channel: 0
+                            cc: 6
+                            range: [0, 1]
+                            initial: 0
+                        signal:
+                          reference:
+                            ref: echo
+
+
+echo2:
+  mix:
+    duration: 3
+    signals:
+      - osc:
+          id: paulo
+          type: sin
+          freq: 440
+          duration: 0.1
+      - map:
+          from: [-1, 1]
+          to: [-0.7, 0.7]
+          signal:
+            delay: 
+              id: echo
+              time: 0.2
+              signal:
+                mix:
+                  signals:
+                    - reference:
+                        ref: paulo
+                    - map:
+                        from: [-1, 1]
+                        to: [-0.7, 0.7]
+                        signal:
+                          reference:
+                            ref: echo
+
+
+# Test snap with range and interval
+test-snap-range:
+  osc:
+    duration: 15
+    freq:
+      snap:
+        range: [100, 1000]  # Frequency range
+        interval: 100  # Step every 50 Hz: [200, 250, 300, 350, ..., 800]
+        glide: 0.3
+        signal:
+          osc:
+            type: perlin
+            scale: 10
+            range: [200, 800]
+
+# Test snap with dynamic glide time
+test-snap-dynamic-glide:
+  osc:
+    duration: 10
+    freq:
+      snap:
+        values: [100, 200, 400, 800, 1600]
+        glide:
+          osc:
+            freq: 0.5
+            range: [0.1, 1.0]  # Glide time varies from 0.1 to 1.0 seconds
+        signal:
+          osc:
+            freq: 0.1
+            range: [100, 1600]
+
+
+# Test envelope retrigger with fast gate
+test-envelope-retrigger:
+  context:
+    gate:
+      osc:
+        freq: 5  # 5 Hz = retrigger every 0.2 seconds
+        range: [0, 1]
+    signal:
+      envelope:
+        attack: 1.0  # 1 second attack, much longer than retrigger period
+        decay: 0.1
+        sustain: 0.5
+        release: 0.5
+        gate: gate
+        signal:
+          osc:
+            freq: 440
+            amp: 0.3
+
+
+# Test snap with MIDI CC (if you have a MIDI controller connected)
+# This would snap continuous MIDI CC values to specific note frequencies
+test-snap-midi:
+  context:
+    gate:
+      osc:
+        freq: 1
+        range: [0, 1]
+    signal:
+      envelope:
+        attack: 0.3
+        decay: 0.01
+        sustain: 0.3
+        release: 0.5
+        gate: gate
+        signal:
+          osc:
+            freq:
+              snap:
+                values: [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25]  # C major scale
+                glide: 0.2
+                signal:
+                  midi_cc:
+                    channel: 0
+                    cc: 23
+                    range: [200, 600]

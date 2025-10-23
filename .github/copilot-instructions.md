@@ -124,9 +124,20 @@ These variables are then available in all expressions throughout the file.
 - WavableValue automatically handles expression strings when the value type is detected as 'expression'
 - Expression node uses `ConfigDict(extra='allow')` to accept arbitrary named parameters, stored in `__pydantic_extra__`
 
-## The YAML file
+## YAML Sound Definition Files
 
-The yaml file (waves.yaml) is the main definitions file for the project. Each root level key identifies a different sound or sequence to be generated and the subsequent child keys define nodes and their parameters in a tree structure:
+Sound definitions are stored in YAML files located in the `sounds/` directory (configured via `SOUNDS_DIR` in config.py). The system supports multiple YAML files for better organization:
+
+**Multi-file support:**
+- All `*.yaml` files in the `sounds/` directory are automatically loaded at startup
+- Sounds can be organized across multiple files (e.g., `drums.yaml`, `synths.yaml`, `sequences.yaml`)
+- Sound names must be unique across all files
+- Sounds can reference sounds from other files via the sub-patching system
+- Hot reload is per-file: when a YAML file changes, only that file is reloaded (not all files)
+- Only `waves.yaml` processes the `vars:` section for global variables (backward compatibility)
+
+**File structure:**
+Each YAML file contains root-level sound identifiers with node definitions in a tree structure:
 
 ```yaml
 sound_identifier:
@@ -140,7 +151,7 @@ sound_identifier:
     (...)
 ```
 
-The structure of the yaml file as is, at the moment, always with the sound identifiers as root notes, then a root node name, then its parameters, some of which can be other nodes, and so on recursively. In the future we might think of adding some syntax sugar and relax this rule.
+The structure of the yaml file always has sound identifiers as root nodes, then a root node name, then its parameters, some of which can be other nodes, and so on recursively. In the future we might think of adding some syntax sugar and relax this rule.
 
 ### Node References and Advanced Routing
 
@@ -230,19 +241,24 @@ When a node type isn't recognized in the NODE_REGISTRY, the parser checks if it 
 
 ## Running the code
 
-To run the code we use the main waves.py file, followed by one parameter, which should match one of the root level keys in the yaml file. For example:
+To run the code we use the main waves.py file, followed by one parameter, which should match one of the root level keys in any of the yaml files in the `sounds/` directory. For example:
 
 ```bash
 python waves.py sound_identifier
 ```
 
-The program will then play the sound and stay idle until it detects a change in the yaml file, at which point it will re-render the sound and play it again, so that we can make changes and hear the results in real time.
+The program will then play the sound and stay idle until it detects a change in any yaml file in the `sounds/` directory, at which point it will reload only the changed file and re-render the sound, so that we can make changes and hear the results in real time.
 
 There is a command-line based audio visualizer that shows the waveform of the sound being played (both in realtime and non-realtime modes).
 
 ## Hot Reload & Live State Preservation
 
-The system supports hot reloading of the YAML sound definition file during playback, allowing for live editing without interrupting audio. When `WAIT_FOR_CHANGES_IN_WAVES_YAML` is enabled in config.py, the system automatically detects changes to waves.yaml and reloads the sound definition while preserving node state.
+The system supports hot reloading of YAML sound definition files during playback, allowing for live editing without interrupting audio. When `WAIT_FOR_CHANGES_IN_WAVES_YAML` is enabled in config.py, the system automatically detects changes to any YAML file in the `sounds/` directory and reloads only that specific file while preserving node state.
+
+**Multi-file hot reload:**
+- Only the changed YAML file is reloaded, not all files
+- This improves performance when working with large sound libraries split across multiple files
+- Node state is preserved across reloads for nodes with IDs (explicit or auto-generated)
 
 ### How Hot Reload Works
 
@@ -375,7 +391,7 @@ Then we need to add the new node to the NODE_REGISTRY in nodes/node_utils/node_r
 
 ## Configuration
 
-In config.py we can set some global parameters for the project, such as the sample rate, the buffer size, etc. but also some options on the mode of operating like whether we play the sound in realtime (render in chunks) or pre-render the whole sound and play it back (non-realtime).
+In config.py we can set some global parameters for the project, such as the sample rate, the buffer size, the sounds directory (`SOUNDS_DIR`), etc. but also some options on the mode of operating like whether we play the sound in realtime (render in chunks) or pre-render the whole sound and play it back (non-realtime).
 
 ## Past and Future Work
 

@@ -13,7 +13,7 @@ import atexit
 
 
 from config import *
-from sound_library import get_sound_model, load_sound_library
+from sound_library import get_sound_model, load_all_sound_libraries, reload_sound_library, get_sound_filename
 from nodes.node_utils.base_node import BaseNode
 from nodes.node_utils.instantiate_node import instantiate_node, instantiate_node_tree
 from nodes.node_utils.render_context import RenderContext
@@ -28,6 +28,7 @@ hot_reload_lock = threading.Lock()  # Protects access to current_sound_node and 
 current_sound_node = None  # Currently playing node
 current_sound_model = None  # Currently loaded model
 yaml_changed = False  # Flag to signal that YAML has changed
+changed_yaml_file = None  # Which YAML file changed (for selective reload)
 hot_reload_pending_node = None  # Tuple of (new_node, old_node) waiting to be swapped in
 hot_reload_in_progress = False  # True while hot reload thread is running
 
@@ -36,22 +37,24 @@ recording_buffer = None
 recording_active = False
 current_sound_name = None  # Track current sound name for recording
 
-def perform_hot_reload_background(sound_name_to_play: str, params: dict = None):
+def perform_hot_reload_background(sound_name_to_play: str, changed_filename: str = None, params: dict = None):
     """
     Perform a hot reload of the sound model on a background thread.
     
     This function:
     1. Captures state from the current node tree
-    2. Reloads the YAML and gets the new model
-    3. Applies any parameters
-    4. Instantiates the new tree with hot_reload flags
-    5. Restores captured state to matching nodes
-    6. Stores the new tree in hot_reload_pending_node for atomic swap
+    2. Reloads only the changed YAML file
+    3. Gets the new model
+    4. Applies any parameters
+    5. Instantiates the new tree with hot_reload flags
+    6. Restores captured state to matching nodes
+    7. Stores the new tree in hot_reload_pending_node for atomic swap
     
     This is designed to run on a separate thread to avoid blocking audio rendering.
     
     Args:
-        sound_name_to_play: The sound identifier in the YAML file
+        sound_name_to_play: The sound identifier
+        changed_filename: The YAML filename that changed (if known)
         params: Optional parameter overrides to apply to the model
     """
     global hot_reload_pending_node, hot_reload_in_progress
@@ -67,8 +70,14 @@ def perform_hot_reload_background(sound_name_to_play: str, params: dict = None):
                 old_ids = hot_reload_manager.get_all_node_ids(current_sound_node)
                 old_node = current_sound_node  # Keep reference for cleanup
         
-        # Reload sound library and get new model (outside the lock - this is slow)
-        load_sound_library(YAML_FILE)
+        # Reload only the changed file, or the file containing the sound if unknown
+        if changed_filename:
+            reload_sound_library(changed_filename)
+        else:
+            # Find which file contains this sound and reload it
+            filename = get_sound_filename(sound_name_to_play)
+            reload_sound_library(filename)
+        
         new_model = get_sound_model(sound_name_to_play)
         
         # Apply parameters if provided
@@ -220,10 +229,15 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
             yaml_changed = False
             hot_reload_in_progress = True
             
+            # Capture the changed file
+            global changed_yaml_file
+            captured_changed_file = changed_yaml_file
+            changed_yaml_file = None
+            
             # Add a small delay before reloading to give audio callback time to stabilize
             def delayed_reload():
                 time.sleep(HOT_RELOAD_DELAY)
-                perform_hot_reload_background(stored_sound_name, None)
+                perform_hot_reload_background(stored_sound_name, captured_changed_file)
             
             # Start hot reload on a separate thread
             reload_thread = threading.Thread(
@@ -304,7 +318,7 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
 def main():
     global rendered_sounds, current_sound_node, current_sound_model
 
-    if not load_sound_library(YAML_FILE):
+    if not load_all_sound_libraries(SOUNDS_DIR):
         return
 
     if len(sys.argv) < 2:
@@ -393,24 +407,39 @@ if __name__ == "__main__":
     if WAIT_FOR_CHANGES_IN_WAVES_YAML:
         def yaml_watcher_thread():
             """
-            Watch for changes to the YAML file and signal hot reloads.
+            Watch for changes to all YAML files and signal hot reloads.
             
             This runs in a separate thread and sets the yaml_changed flag
-            when the YAML file is modified.
+            when any YAML file is modified, tracking which file changed.
             """
-            global yaml_changed
-            last_modified_time = os.path.getmtime(YAML_FILE)
+            global yaml_changed, changed_yaml_file
+            import glob
+            
+            # Get all YAML files in sounds directory
+            yaml_files = glob.glob(f"{SOUNDS_DIR}/*.yaml")
+            last_modified_times = {f: os.path.getmtime(f) for f in yaml_files}
             
             try:
                 while True:
                     try:
-                        current_modified_time = os.path.getmtime(YAML_FILE)
-                        if current_modified_time != last_modified_time:
-                            # YAML file changed, signal hot reload
-                            yaml_changed = True
-                            last_modified_time = current_modified_time
+                        # Re-scan for new YAML files
+                        current_yaml_files = glob.glob(f"{SOUNDS_DIR}/*.yaml")
+                        
+                        for yaml_file in current_yaml_files:
+                            try:
+                                current_modified_time = os.path.getmtime(yaml_file)
+                                
+                                # Check if this is a new file or if it's been modified
+                                if yaml_file not in last_modified_times or current_modified_time != last_modified_times[yaml_file]:
+                                    # YAML file changed, signal hot reload
+                                    yaml_changed = True
+                                    changed_yaml_file = yaml_file
+                                    last_modified_times[yaml_file] = current_modified_time
+                                    break  # Only handle one change at a time
+                            except Exception as e:
+                                print(f"Error checking YAML file {yaml_file}: {e}")
                     except Exception as e:
-                        print(f"Error checking YAML file: {e}")
+                        print(f"Error scanning YAML files: {e}")
                     
                     time.sleep(0.2)
             except KeyboardInterrupt:

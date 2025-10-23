@@ -1,35 +1,3 @@
-
-chop:
-  context:
-    c: rand(0, 14)
-    signal:
-      sample:
-        speed: 2
-        file: output/chopped5
-        chop: 
-          hold:
-            signal: c
-
-
-
-seq3:
-  tempo:
-    bpm: 130
-    signal:
-      sequencer:
-        interval: sixteenth
-        repeat: 4000
-        sequence:
-          - [kick, oscar]
-          - [oscar, oscar, oscar]
-          - [oscar, oscar, oscar]
-          - [oscar, oscar, oscar, kick2]
-          - [kick, hihat]
-          - [oscar, oscar, oscar]
-          - [oscar, oscar, oscar, kick2]
-          - [oscar, oscar, oscar]
-
-
 oscar:
   retrigger:
     duration: 1
@@ -38,13 +6,28 @@ oscar:
     signal:
       osc:
         type: tri
-        duration: 0.1
+        amp: 0.5
+        duration: 0.05
         attack: 0.1
         release: 0.1
         freq:
           hold:
-            signal: rand([500, 250, 150, 700])
+            signal: rand([500, 250, 150, 700, 1300, 4000])
 
+chop:
+  map:
+    from: [-1, 1]
+    to: [-6, 6]
+    signal:
+      context:
+        c: rand(0, 14)
+        signal:
+          sample:
+            speed: 1
+            file: output/chopped9
+            chop: 
+              hold:
+                signal: c
 
 hihat:
   context:
