@@ -84,6 +84,41 @@ seq:
           - hihat v.1
 
 
+seq2:
+  tempo:
+    bpm: 135
+    signal:
+      sequencer:
+        interval: sixteenth
+        repeat: 4000
+        sequence:
+          - techno-kick
+          -
+          - chop c1
+          - 
+          - [techno-kick, chop]
+          -
+          - hihat
+          - chop c1
+          - techno-kick
+          - 
+          - [chop, oscar]
+          -
+          - [techno-kick, chop]
+          - 
+          - chop
+          - 
+
+
+oscar:
+  osc:
+    type: tri
+    duration: 0.1
+    attack: 0.1
+    release: 0.1
+    freq: 5000
+
+
 hihat:
   context:
     v: 1

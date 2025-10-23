@@ -69,3 +69,7 @@ class RenderContext:
         self.node_outputs_by_id.clear()
         self.recursion_depth.clear()
         self.current_chunk += 1
+    
+    def clear_node_instances(self):
+        """Clear cached node instances (used during hot reload to break stale references)"""
+        self.node_instances.clear()

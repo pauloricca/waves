@@ -44,6 +44,12 @@ class SequencerNode(BaseNode):
             self.state.all_active_sounds = []  # List of (sound_node, render_args, sound_duration, samples_rendered, step_index) tuples
             self.state.step_triggered = set()  # Set of (repeat, step) tuples that have been triggered
             self.state.sequence_complete = False  # Flag to indicate when sequence playback is done
+        else:
+            # On hot reload, always clear active sounds to prevent mixing old/new node trees
+            # This prevents memory corruption from stale node references
+            self.state.all_active_sounds = []
+            self.state.step_triggered = set()
+            self.state.sequence_complete = False
         
         # Non-persistent attributes
         self._last_chunk_samples = None

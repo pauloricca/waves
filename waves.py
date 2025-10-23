@@ -28,15 +28,17 @@ hot_reload_lock = threading.Lock()  # Protects access to current_sound_node and 
 current_sound_node = None  # Currently playing node
 current_sound_model = None  # Currently loaded model
 yaml_changed = False  # Flag to signal that YAML has changed
+hot_reload_pending_node = None  # Tuple of (new_node, old_node) waiting to be swapped in
+hot_reload_in_progress = False  # True while hot reload thread is running
 
 # Global recording buffer (thread-safe deque)
 recording_buffer = None
 recording_active = False
 current_sound_name = None  # Track current sound name for recording
 
-def perform_hot_reload(sound_name_to_play: str, params: dict = None):
+def perform_hot_reload_background(sound_name_to_play: str, params: dict = None):
     """
-    Perform a hot reload of the sound model, preserving node state.
+    Perform a hot reload of the sound model on a background thread.
     
     This function:
     1. Captures state from the current node tree
@@ -44,58 +46,66 @@ def perform_hot_reload(sound_name_to_play: str, params: dict = None):
     3. Applies any parameters
     4. Instantiates the new tree with hot_reload flags
     5. Restores captured state to matching nodes
-    6. Cleans up orphaned state from nodes that no longer exist
-    7. Returns the new node tree
+    6. Stores the new tree in hot_reload_pending_node for atomic swap
+    
+    This is designed to run on a separate thread to avoid blocking audio rendering.
     
     Args:
         sound_name_to_play: The sound identifier in the YAML file
         params: Optional parameter overrides to apply to the model
-    
-    Returns:
-        A newly instantiated node tree with preserved state
     """
-    global current_sound_node, current_sound_model
+    global hot_reload_pending_node, hot_reload_in_progress
     
-    # Capture state from current tree
-    old_state = None
-    old_ids = set()
-    if current_sound_node:
-        old_state = hot_reload_manager.capture_state(current_sound_node)
-        old_ids = hot_reload_manager.get_all_node_ids(current_sound_node)
+    try:
+        # Capture state from current tree (also capture old node to be cleaned up)
+        old_state = None
+        old_ids = set()
+        old_node = None
+        with hot_reload_lock:
+            if current_sound_node:
+                old_state = hot_reload_manager.capture_state(current_sound_node)
+                old_ids = hot_reload_manager.get_all_node_ids(current_sound_node)
+                old_node = current_sound_node  # Keep reference for cleanup
+        
+        # Reload sound library and get new model (outside the lock - this is slow)
+        load_sound_library(YAML_FILE)
+        new_model = get_sound_model(sound_name_to_play)
+        
+        # Apply parameters if provided
+        if params:
+            from nodes.node_utils.node_string_parser import apply_params_to_model
+            new_model = apply_params_to_model(new_model, params)
+        
+        # Instantiate new tree with hot_reload context (outside the lock - this is slow)
+        new_node = instantiate_node_tree(new_model, hot_reload=True, previous_ids=old_ids)
+        
+        # Get the set of node IDs that still exist in the new tree
+        new_ids = hot_reload_manager.get_all_node_ids(new_node)
+        
+        # Restore state to new tree (only for nodes that still exist)
+        if old_state:
+            hot_reload_manager.restore_state(new_node, old_state)
+        
+        # Clean up orphaned state entries from nodes that no longer exist
+        orphaned_ids = old_ids - new_ids
+        if orphaned_ids and old_state:
+            for orphaned_id in orphaned_ids:
+                if orphaned_id in old_state:
+                    del old_state[orphaned_id]
+            if DISPLAY_HOT_RELOAD_CLEANUP:
+                print(f"[HOT RELOAD] Cleaned up orphaned state from {len(orphaned_ids)} removed node(s): {orphaned_ids}")
+        
+        # Store the new node for atomic swap on next audio chunk
+        with hot_reload_lock:
+            hot_reload_pending_node = (new_node, old_node)  # Store both new and old for cleanup
+            print("[HOT RELOAD] Successfully reloaded sound definition (ready for swap)")
     
-    # Reload sound library and get new model
-    load_sound_library(YAML_FILE)
-    new_model = get_sound_model(sound_name_to_play)
+    except Exception as e:
+        print(f"Hot reload error: {e}")
+        traceback.print_exc()
     
-    # Apply parameters if provided
-    if params:
-        from nodes.node_utils.node_string_parser import apply_params_to_model
-        new_model = apply_params_to_model(new_model, params)
-    
-    # Instantiate new tree with hot_reload context
-    new_node = instantiate_node_tree(new_model, hot_reload=True, previous_ids=old_ids)
-    
-    # Get the set of node IDs that still exist in the new tree
-    new_ids = hot_reload_manager.get_all_node_ids(new_node)
-    
-    # Restore state to new tree (only for nodes that still exist)
-    if old_state:
-        hot_reload_manager.restore_state(new_node, old_state)
-    
-    # Clean up orphaned state entries from nodes that no longer exist
-    orphaned_ids = old_ids - new_ids
-    if orphaned_ids and old_state:
-        for orphaned_id in orphaned_ids:
-            if orphaned_id in old_state:
-                del old_state[orphaned_id]
-        if DISPLAY_HOT_RELOAD_CLEANUP:
-            print(f"[HOT RELOAD] Cleaned up orphaned state from {len(orphaned_ids)} removed node(s): {orphaned_ids}")
-    
-    # Update global state
-    current_sound_node = new_node
-    current_sound_model = new_model
-    
-    return new_node
+    finally:
+        hot_reload_in_progress = False
 
 # Global recording buffer (thread-safe deque)
 recording_buffer = None
@@ -190,25 +200,42 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
     render_context.is_realtime = True
 
     def audio_callback(outdata, frames, sdtime, status):
-        global yaml_changed
+        global yaml_changed, hot_reload_pending_node, hot_reload_in_progress, current_sound_node, current_sound_model
         nonlocal should_stop, last_render_time, active_sound_node, render_context
         rendering_start_time = time.time()
         
-        # Check if YAML has changed and perform hot reload if needed
-        if yaml_changed:
+        # Check if a hot reload has finished and swap in the new node
+        if hot_reload_pending_node is not None:
             with hot_reload_lock:
-                try:
-                    # Perform hot reload with the original sound name
-                    active_sound_node = perform_hot_reload(stored_sound_name, params=None)
-                    # Reset render context to restart state tracking
-                    render_context = RenderContext()
-                    render_context.is_realtime = True
-                    yaml_changed = False
-                    print("[HOT RELOAD] Successfully reloaded sound definition")
-                except Exception as e:
-                    print(f"Hot reload error: {e}")
-                    traceback.print_exc()
-                    # Continue with old node on error
+                if hot_reload_pending_node is not None:
+                    # Atomically swap in the new node
+                    new_node, old_node = hot_reload_pending_node
+                    active_sound_node = new_node
+                    current_sound_node = new_node
+                    hot_reload_pending_node = None
+                    
+                    # Clear stale node instance references in the render context
+                    # This prevents segfaults from keeping pointers to deleted nodes
+                    render_context.clear_node_instances()
+                    
+                    # Explicitly delete the old node to break circular references
+                    del old_node
+                    # Force garbage collection to clean up freed memory
+                    gc.collect()
+                    print("[HOT RELOAD] Swapped to new node tree")
+        
+        # Check if YAML has changed and start background hot reload if not already in progress
+        if yaml_changed and not hot_reload_in_progress:
+            yaml_changed = False
+            hot_reload_in_progress = True
+            print("[HOT RELOAD] YAML file changed, reloading in background...")
+            # Start hot reload on a separate thread
+            reload_thread = threading.Thread(
+                target=perform_hot_reload_background,
+                args=(stored_sound_name, None),
+                daemon=True
+            )
+            reload_thread.start()
 
         audio_data = active_sound_node.render(frames, context=render_context) 
 
