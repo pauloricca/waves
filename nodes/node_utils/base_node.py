@@ -230,23 +230,19 @@ class BaseNode:
         Returns:
             A float value
         """
-        if isinstance(value, str):
-            # It's an expression
-            from expression_globals import get_expression_context
+        if isinstance(value, (str, int, float)):
+            # It's an expression or numeric constant
+            from expression_globals import get_expression_context, evaluate_expression
             eval_context = get_expression_context(render_params, self.time_since_start, 1)
             
-            # Evaluate
-            try:
-                compiled = compile(value, '<expression>', 'eval')
-                result = eval(compiled, {"__builtins__": {}}, eval_context)
-                
-                # Extract scalar from result
-                if isinstance(result, np.ndarray):
-                    return float(result[0] if len(result) > 0 else 0)
-                else:
-                    return float(result)
-            except Exception as e:
-                raise ValueError(f"Error evaluating scalar expression '{value}': {e}")
+            # Evaluate using centralized function
+            result = evaluate_expression(value, eval_context, num_samples=None)
+            
+            # Extract scalar from result
+            if isinstance(result, np.ndarray):
+                return float(result[0] if len(result) > 0 else 0)
+            else:
+                return float(result)
         else:
             # Already a scalar
             return float(value)

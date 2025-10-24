@@ -16,7 +16,7 @@ class InterpolationTypes(str, Enum):
     STEP = "STEP"
 
 
-WavableValue = Union[float, List[Union[float, List[float]]], BaseNodeModel, str]
+WavableValue = Union[float, int, List[Union[float, List[float]]], BaseNodeModel, str]
 
 class WavableValueModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
@@ -27,6 +27,7 @@ class WavableValueModel(BaseNodeModel):
 class WavableValueNode(BaseNode):
     def __init__(self, model: WavableValueModel, state=None, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
+        from expression_globals import compile_expression
         super().__init__(model, state, hot_reload)
         self.value = model.value
         self.interpolation_type = model.interpolation
@@ -37,8 +38,8 @@ class WavableValueNode(BaseNode):
             self.wave_node = instantiate_node(model.value, hot_reload=hot_reload)
             self.value_type = 'node'
         elif isinstance(model.value, str):
-            # String = expression
-            self.compiled_expr = compile(model.value, '<expression>', 'eval')
+            # String = expression - compile it and store the info
+            self.compiled_info = compile_expression(model.value)
             self.value_type = 'expression'
         elif isinstance(model.value, (float, int)):
             self.wave_node = None
@@ -51,7 +52,7 @@ class WavableValueNode(BaseNode):
             self.value_type = 'unknown'
 
     def _do_render(self, num_samples=None, context=None, **params):
-        from expression_globals import get_expression_context
+        from expression_globals import get_expression_context, evaluate_compiled
         
         if self.value_type == 'node':
             # Existing node rendering logic
@@ -73,7 +74,7 @@ class WavableValueNode(BaseNode):
                 return wave
         
         elif self.value_type == 'expression':
-            # Expression evaluation
+            # Expression evaluation using centralized function
             if num_samples is None:
                 duration = params.get(RenderArgs.DURATION, 0)
                 if duration == 0:
@@ -82,21 +83,10 @@ class WavableValueNode(BaseNode):
                 self._last_chunk_samples = num_samples
             
             eval_context = get_expression_context(params, self.time_since_start, num_samples, context)
-            result = eval(self.compiled_expr, {"__builtins__": {}}, eval_context)
+            result = evaluate_compiled(self.compiled_info, eval_context, num_samples)
             
-            # Handle result type
-            if isinstance(result, np.ndarray):
-                if len(result) != num_samples:
-                    if len(result) == 1:
-                        return np.full(num_samples, result[0], dtype=np.float32)
-                    elif len(result) < num_samples:
-                        padding = np.full(num_samples - len(result), result[-1])
-                        return np.concatenate([result, padding]).astype(np.float32)
-                    else:
-                        return result[:num_samples].astype(np.float32)
-                return result.astype(np.float32)
-            else:
-                return np.full(num_samples, float(result), dtype=np.float32)
+            # Result is already properly formatted by evaluate_compiled
+            return result.astype(np.float32) if isinstance(result, np.ndarray) else np.full(num_samples, result, dtype=np.float32)
         
         elif self.value_type == 'scalar':
             # Scalar values

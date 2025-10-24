@@ -1,5 +1,6 @@
 from __future__ import annotations
 import numpy as np
+from typing import Union
 from pydantic import ConfigDict
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
@@ -7,39 +8,40 @@ from nodes.node_utils.node_definition_type import NodeDefinition
 
 class ExpressionNodeModel(BaseNodeModel):
     model_config = ConfigDict(extra='allow')  # Allow arbitrary named parameters
-    exp: str  # The expression to evaluate
+    exp: Union[str, int, float]  # The expression to evaluate (string expression or numeric constant)
 
 
 class ExpressionNode(BaseNode):
     def __init__(self, model: ExpressionNodeModel, state=None, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
+        from expression_globals import compile_expression
         super().__init__(model, state, hot_reload)
-        self.exp_string = model.exp
         
-        # Compile once for performance
-        self.compiled_exp = compile(self.exp_string, '<expression>', 'eval')
+        # Compile the main expression using centralized function
+        self.compiled_exp, self.exp_value, self.is_constant = compile_expression(model.exp)
         
         # Store all extra arguments (both nodes and raw values)
         # Pydantic with extra='allow' stores them in __pydantic_extra__
         self.args = {}
-        self.compiled_string_args = {}  # Pre-compile string expressions
+        self.compiled_args = {}  # Pre-compiled expressions (string or numeric)
         if hasattr(model, '__pydantic_extra__') and model.__pydantic_extra__:
             for field_name, field_value in model.__pydantic_extra__.items():
                 if isinstance(field_value, BaseNodeModel):
                     self.args[field_name] = instantiate_node(field_value, hot_reload=hot_reload)
-                elif isinstance(field_value, str):
-                    # String (expression) - compile it once
-                    self.compiled_string_args[field_name] = compile(field_value, '<expression>', 'eval')
-                elif isinstance(field_value, (int, float)):
-                    # Scalar - store as-is
-                    self.args[field_name] = field_value
+                else:
+                    # String expression or numeric constant - compile it once
+                    self.compiled_args[field_name] = compile_expression(field_value)
     
     def _do_render(self, num_samples=None, context=None, **params):
-        from expression_globals import get_expression_context
+        from expression_globals import get_expression_context, evaluate_compiled
         
         num_samples = self.resolve_num_samples(num_samples)
         if num_samples is None:
             raise ValueError("Expression node requires explicit duration")
+        
+        # Handle constant case - no need to evaluate anything
+        if self.is_constant:
+            return np.full(num_samples, self.exp_value, dtype=np.float32)
         
         # Build base context
         eval_context = get_expression_context(
@@ -62,9 +64,7 @@ class ExpressionNode(BaseNode):
                 # Track if child returned fewer samples
                 if len(wave) < actual_num_samples:
                     actual_num_samples = len(wave)
-            else:
-                # Scalar (int/float)
-                eval_context[name] = value
+            # Note: scalar values are handled below in compiled_args
         
         # If any child returned fewer samples, we need to handle completion
         if actual_num_samples < num_samples:
@@ -86,18 +86,13 @@ class ExpressionNode(BaseNode):
                 if isinstance(value, np.ndarray) and len(value) > num_samples:
                     eval_context[name] = value[:num_samples]
         
-        # Evaluate compiled string arguments
-        for name, compiled_expr in self.compiled_string_args.items():
-            result = eval(compiled_expr, {"__builtins__": {}}, eval_context)
-            if isinstance(result, np.ndarray):
-                eval_context[name] = result
-            elif isinstance(result, (int, float, np.number)):
-                eval_context[name] = np.full(num_samples, float(result), dtype=np.float32)
-            else:
-                eval_context[name] = result
+        # Evaluate compiled arguments (expressions and constants)
+        for name, compiled_info in self.compiled_args.items():
+            result = evaluate_compiled(compiled_info, eval_context, num_samples)
+            eval_context[name] = result
         
         # Evaluate main expression
-        result = eval(self.compiled_exp, {"__builtins__": {}}, eval_context)
+        result = evaluate_compiled((self.compiled_exp, self.exp_value, self.is_constant), eval_context, num_samples)
         
         # Convert result to appropriate array
         if isinstance(result, np.ndarray):

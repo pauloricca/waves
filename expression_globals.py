@@ -121,25 +121,84 @@ def get_expression_context(render_params: dict, time: float, num_samples: int, r
     
     return context
 
-def evaluate_expression(expr_string: str, context: dict, num_samples: int = None):
+def compile_expression(expr):
     """
-    Evaluate an expression string.
-    Returns scalar or array depending on expression result.
+    Compile an expression for evaluation.
+    
+    Args:
+        expr: Can be a string (expression to compile), numeric value (returns as-is),
+              or already compiled code object (returns as-is)
+    
+    Returns:
+        Tuple of (compiled_code_or_None, numeric_value_or_None, is_constant)
+        - If numeric: (None, value, True)
+        - If expression: (compiled, None, False)
+    """
+    if isinstance(expr, (int, float)):
+        # Numeric constant - no compilation needed
+        return (None, float(expr), True)
+    elif isinstance(expr, str):
+        # String expression - compile it
+        return (compile(expr, '<expression>', 'eval'), None, False)
+    elif hasattr(expr, 'co_code'):
+        # Already compiled
+        return (expr, None, False)
+    else:
+        raise ValueError(f"Cannot compile expression of type {type(expr)}")
+
+
+def evaluate_compiled(compiled_info, context: dict, num_samples: int = None):
+    """
+    Evaluate a pre-compiled expression info tuple.
+    
+    Args:
+        compiled_info: Tuple from compile_expression (compiled_code, const_value, is_constant)
+        context: Dictionary of variables available during evaluation
+        num_samples: If provided, convert scalar results to arrays of this length
+    
+    Returns:
+        Scalar or array depending on expression result and num_samples.
+    """
+    compiled, const_value, is_constant = compiled_info
+    
+    # If it's a constant, return it directly
+    if is_constant:
+        if num_samples is not None:
+            return np.full(num_samples, const_value, dtype=np.float32)
+        return const_value
+    
+    # Evaluate the compiled expression
+    result = eval(compiled, {"__builtins__": {}}, context)
+    
+    # Convert result
+    if isinstance(result, np.ndarray):
+        return result
+    elif isinstance(result, (int, float, np.number)):
+        if num_samples is not None:
+            return np.full(num_samples, float(result), dtype=np.float32)
+        return float(result)
+    else:
+        # Let it through - might be used in further expressions
+        return result
+
+
+def evaluate_expression(expr, context: dict, num_samples: int = None):
+    """
+    Evaluate an expression (compiles if needed).
+    
+    Args:
+        expr: Can be a string, numeric value, or compiled code object
+        context: Dictionary of variables available during evaluation
+        num_samples: If provided, convert scalar results to arrays of this length
+    
+    Returns:
+        Scalar or array depending on expression result and num_samples.
     """
     try:
-        compiled = compile(expr_string, '<expression>', 'eval')
-        result = eval(compiled, {"__builtins__": {}}, context)
-        
-        # Convert result
-        if isinstance(result, np.ndarray):
-            return result
-        elif isinstance(result, (int, float, np.number)):
-            if num_samples is not None:
-                return np.full(num_samples, float(result), dtype=np.float32)
-            return float(result)
-        else:
-            # Let it through - might be used in further expressions
-            return result
+        # Compile and evaluate
+        compiled_info = compile_expression(expr)
+        return evaluate_compiled(compiled_info, context, num_samples)
             
     except Exception as e:
-        raise ValueError(f"Error evaluating expression '{expr_string}': {e}")
+        expr_str = expr if isinstance(expr, str) else repr(expr)
+        raise ValueError(f"Error evaluating expression '{expr_str}': {e}")
