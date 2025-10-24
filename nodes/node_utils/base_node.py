@@ -66,6 +66,15 @@ class BaseNode:
                     return np.array([], dtype=np.float32)
                 return np.zeros(num_samples, dtype=np.float32)
             
+            # Check if this node has already been rendered in this chunk (for nodes with explicit IDs)
+            # This prevents stateful nodes from being rendered multiple times when referenced
+            has_explicit_id = hasattr(self, 'model') and hasattr(self.model, 'id') and self.model.id is not None
+            if has_explicit_id and recursion_depth == 0:
+                cached_output = context.get_output(instance_id)
+                if cached_output is not None:
+                    # Already rendered this chunk, return cached output
+                    return self._adjust_output_length(cached_output, num_samples)
+            
             # Increment recursion, render, decrement, cache (if top level)
             context.increment_recursion(instance_id)
             try:
@@ -73,7 +82,6 @@ class BaseNode:
                 if recursion_depth == 0:  # Only cache at top level
                     # Only write cache for nodes with explicit IDs (not auto-generated)
                     # Cache is only meant to be read by reference nodes
-                    has_explicit_id = hasattr(self, 'model') and hasattr(self.model, 'id') and self.model.id is not None
                     if has_explicit_id:
                         context.store_output(instance_id, self.node_id, wave)
                 return wave

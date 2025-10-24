@@ -34,11 +34,11 @@ hihat:
     v: 1
     signal:
       expression:
+        duration: 0.25
         exp: v * signal
         signal:
           filter:
-            duration: 0.25
-            cutoff: [20000, 200]
+            cutoff: [20000, 200, 100]
             signal:
               osc:
                 type: noise
@@ -115,7 +115,7 @@ kick:
 kick2:
   map:
     from: [-1, 1]
-    to: [-2, 2]
+    to: [-1.5, 1.5]
     clip: [-1, 1]
     signal:
       mix:

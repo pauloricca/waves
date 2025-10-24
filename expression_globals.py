@@ -62,6 +62,22 @@ GLOBAL_CONSTANTS = {
     'np': np,
 }
 
+# Musical note constants (C0 to G10)
+def _generate_note_constants():
+    notes = {}
+    note_names = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b']
+    # MIDI note 12 = C0, MIDI note 127 = G9, but let's go up to G10 for completeness
+    for midi in range(12, 128 + 12):  # 12 to 139 (G10)
+        octave = (midi // 12) - 1
+        name = note_names[midi % 12] + str(octave)
+        freq = 440.0 * 2 ** ((midi - 69) / 12)
+        notes[name] = freq
+        # Also add uppercase variant for convenience
+        notes[name.upper()] = freq
+    return notes
+
+GLOBAL_CONSTANTS.update(_generate_note_constants())
+
 # User-defined variables (loaded from YAML vars: section)
 USER_VARIABLES = {}
 

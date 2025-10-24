@@ -722,3 +722,64 @@ test-snap-midi:
                     channel: 0
                     cc: 23
                     range: [200, 600]
+
+# Test envelope follower
+test-follow:
+  tempo:
+    bpm: 130
+    signal:
+      mix:
+        signals:
+          - sequencer:
+              interval: sixteenth
+              repeat: 1000
+              sequence:
+                -
+                - 
+                - chop c10
+                -
+                - hihat
+                - 
+                - chop
+                -
+                - 
+                - 
+                - chop c3
+                -
+                - hihat
+                - 
+                - chop
+                -
+          - sequencer:
+              id: kick-drum
+              interval: sixteenth
+              repeat: 1000
+              sequence:
+                - kick
+                - 
+                - 
+                -
+                - kick
+                - 
+                -
+                -
+                - kick
+                - 
+                -
+                -
+                - kick
+                - 
+                -
+                -
+          - osc:
+              type: tri
+              freq: 60
+              amp:
+                follow:
+                  attack: 0.002
+                  release: 0.3
+                  range: [1, 0]
+                  signal:
+                    reference:
+                      ref: kick-drum
+
