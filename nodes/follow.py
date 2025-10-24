@@ -60,10 +60,9 @@ class FollowModel(BaseNodeModel):
 class FollowNode(BaseNode):
     def __init__(self, model: FollowModel, state=None, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model)
+        super().__init__(model, state, hot_reload)
         self.model = model
-        self.state = state if state is not None else type('obj', (object,), {})()
-        self.signal_node = instantiate_node(model.signal)
+        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
         self.range_min_node = wavable_value_node_factory(model.range[0])
         self.range_max_node = wavable_value_node_factory(model.range[1])
         

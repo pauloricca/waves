@@ -33,9 +33,8 @@ class SampleModel(BaseNodeModel):
 
 class SampleNode(BaseNode):
     def __init__(self, model: SampleModel, state, hot_reload=False):
-        super().__init__(model)
+        super().__init__(model, state, hot_reload)
         self.model = model
-        self.state = state
         # Only persistent playback state is kept in self.state
         if not hot_reload:
             self.state.last_playhead_position = 0

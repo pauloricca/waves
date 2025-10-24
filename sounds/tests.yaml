@@ -726,7 +726,7 @@ test-snap-midi:
 # Test envelope follower
 test-follow:
   tempo:
-    bpm: 130
+    bpm: 119.9
     signal:
       mix:
         signals:
@@ -742,7 +742,7 @@ test-follow:
                 - 
                 - chop
                 -
-                - 
+                -
                 - 
                 - chop c3
                 -
@@ -756,9 +756,9 @@ test-follow:
               repeat: 1000
               sequence:
                 - kick
-                - 
-                - 
-                -
+                - kick
+                - kick
+                - kick
                 - kick
                 - 
                 -
@@ -771,15 +771,49 @@ test-follow:
                 - 
                 -
                 -
-          - osc:
-              type: tri
-              freq: 60
-              amp:
+          - context:
+              freq:
                 follow:
                   attack: 0.002
                   release: 0.3
-                  range: [1, 0]
+                  range: [80, 40]
                   signal:
                     reference:
                       ref: kick-drum
+              signal:
+                expression:
+                    exp: amp * (osc1 + osc2)
+                    amp:
+                      follow:
+                        attack: 0.002
+                        release: 0.3
+                        range: [1, 0]
+                        signal:
+                          reference:
+                            ref: kick-drum
+                    osc1:
+                      osc:
+                        type: tri
+                        freq: freq
+                    osc2:
+                      osc:
+                        type: tri
+                        amp: 0.5
+                        freq: freq * 2
+                
 
+test-2:
+  tempo:
+    bpm: 119.9
+    signal:
+      mix:
+        signals:
+          - sequencer:
+              id: kick-drum
+              interval: sixteenth
+              repeat: 1000
+              sequence:
+                - kick
+                - 
+                - 
+                - 

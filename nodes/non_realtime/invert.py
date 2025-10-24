@@ -11,10 +11,10 @@ class InvertModel(BaseNodeModel):
     signal: BaseNodeModel = None
 
 class InvertNode(BaseNode):
-    def __init__(self, model: InvertModel):
+    def __init__(self, model: InvertModel, state=None, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
         super().__init__(model)
-        self.signal_node = instantiate_node(model.signal)
+        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
 
     def _do_render(self, num_samples, context=None, **params):
         signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))

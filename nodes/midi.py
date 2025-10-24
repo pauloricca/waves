@@ -24,12 +24,11 @@ class MidiModel(BaseNodeModel):
 
 
 class MidiNode(BaseNode):
-    def __init__(self, model: MidiModel, state, hot_reload=False):
-        super().__init__(model)
+    def __init__(self, model: MIDINodeModel, state=None, hot_reload=False):
+        super().__init__(model, state, hot_reload)
         self.channel = model.channel
         self.signal_model = model.signal
         self.max_voices = model.voices
-        self.state = state
         
         # Persistent state for active notes (survives hot reload)
         if not hot_reload:
@@ -80,7 +79,8 @@ class MidiNode(BaseNode):
                 print(f"Voice stealing: removed note {oldest_note_number} (id {oldest_note_id}) to make room")
         
         # Create a new instance of the signal node for this note
-        sound_node = instantiate_node(self.signal_model)
+        # This is a new voice, not a hot reload, so hot_reload=False
+        sound_node = instantiate_node(self.signal_model, hot_reload=False)
         
         # Setup render args - pass frequency and amplitude with aliases
         render_args = {

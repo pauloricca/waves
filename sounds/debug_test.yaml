@@ -1,0 +1,36 @@
+# Simple test to debug state management
+simple_osc:
+  osc:
+    type: sin
+    freq: 440
+    amp: 0.5
+    duration: 2
+
+two_osc:
+  mix:
+    signals:
+      - osc:
+          type: sin
+          freq: 440
+          amp: 0.3
+      - osc:
+          type: sin
+          freq: 880
+          amp: 0.3
+    duration: 2
+
+seq_test:
+  sequencer:
+    duration: 4
+    interval: 0.5
+    sequence:
+      - osc:
+          type: sin
+          freq: 440
+          amp: 0.5
+          duration: 0.4
+      - osc:
+          type: sin
+          freq: 550
+          amp: 0.5
+          duration: 0.4

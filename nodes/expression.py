@@ -11,9 +11,9 @@ class ExpressionNodeModel(BaseNodeModel):
 
 
 class ExpressionNode(BaseNode):
-    def __init__(self, model: ExpressionNodeModel):
+    def __init__(self, model: ExpressionNodeModel, state=None, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model)
+        super().__init__(model, state, hot_reload)
         self.exp_string = model.exp
         
         # Compile once for performance
@@ -26,7 +26,7 @@ class ExpressionNode(BaseNode):
         if hasattr(model, '__pydantic_extra__') and model.__pydantic_extra__:
             for field_name, field_value in model.__pydantic_extra__.items():
                 if isinstance(field_value, BaseNodeModel):
-                    self.args[field_name] = instantiate_node(field_value)
+                    self.args[field_name] = instantiate_node(field_value, hot_reload=hot_reload)
                 elif isinstance(field_value, str):
                     # String (expression) - compile it once
                     self.compiled_string_args[field_name] = compile(field_value, '<expression>', 'eval')

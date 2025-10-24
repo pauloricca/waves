@@ -18,12 +18,11 @@ class ContextNode(BaseNode):
     def __init__(self, model: ContextNodeModel, state, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
         from nodes.wavable_value import WavableValueNode, WavableValueModel
-        super().__init__(model)
+        super().__init__(model, state, hot_reload)
         self.model = model
-        self.state = state
         
         # Instantiate the signal node
-        self.signal_node = instantiate_node(model.signal)
+        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
         
         # Store all extra arguments as WavableValue nodes
         self.context_args = {}
@@ -31,7 +30,7 @@ class ContextNode(BaseNode):
             for field_name, field_value in model.__pydantic_extra__.items():
                 if isinstance(field_value, BaseNodeModel):
                     # Already a node, instantiate it
-                    self.context_args[field_name] = instantiate_node(field_value)
+                    self.context_args[field_name] = instantiate_node(field_value, hot_reload=hot_reload)
                 else:
                     # Wrap in WavableValue (handles scalars, expressions, lists)
                     wavable_model = WavableValueModel(value=field_value)

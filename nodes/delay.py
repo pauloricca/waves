@@ -30,12 +30,10 @@ class DelayModel(BaseNodeModel):
 class DelayNode(BaseNode):
     def __init__(self, model: DelayModel, state, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model)
+        super().__init__(model, state, hot_reload)
         self.model = model
         self.time_node = wavable_value_node_factory(model.time)
-        self.signal_node = instantiate_node(model.signal)
-        
-        self.state = state
+        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
         
         # Circular buffer for storing delayed samples
         # Calculate buffer size based on the delay time parameter

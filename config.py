@@ -29,8 +29,8 @@ DO_PLAY_IN_REAL_TIME = True
 DO_RECORD_REAL_TIME = False  # Enable to save real-time playback to file
 
 # Visualisation settings
-DO_VISUALISE_OUTPUT = True
-DISPLAY_RENDER_TIME_PERCENTAGE = True
+DO_VISUALISE_OUTPUT = False
+DISPLAY_RENDER_TIME_PERCENTAGE = False
 DO_ONLY_VISUALISE_ONE_BUFFER = False
 VISUALISATION_FPS = 20  # Lower FPS reduces CPU usage and audio interference
 

@@ -17,15 +17,19 @@ class BaseNodeModel(BaseModel):
 
 
 class BaseNode:
-    def __init__(self, model: BaseNodeModel):
+    def __init__(self, model: BaseNodeModel, state=None, hot_reload=False):
         self.duration = model.duration
         self.time_since_start = 0
         self.number_of_chunks_rendered = 0
         self._last_chunk_samples = 0
         
+        # State is always provided by instantiate_node now (guaranteed non-None)
+        self.state = state
+        
         # Get the effective ID (explicit or auto-generated)
         from nodes.node_utils.auto_id_generator import AutoIDGenerator
         self.node_id = AutoIDGenerator.get_effective_id(model)  # Store node id for caching
+
 
 
     def render(self, num_samples: int = None, context = None, **params) -> np.ndarray:

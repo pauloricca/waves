@@ -20,11 +20,11 @@ class ShuffleModel(BaseNodeModel):
     seed: int | None = None  # Add seed parameter
 
 class ShuffleNode(BaseNode):
-    def __init__(self, model: ShuffleModel):
+    def __init__(self, model: ShuffleModel, state=None, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model)
+        super().__init__(model, state, hot_reload)
         self.model = model
-        self.signal_node = instantiate_node(model.signal)
+        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
         self.crossfade_node = wavable_value_node_factory(model.crossfade)
         self.rng = np.random.default_rng(model.seed)  # Use a random generator with seed
         

@@ -20,11 +20,10 @@ class EnvelopeModel(BaseNodeModel):
 class EnvelopeNode(BaseNode):
     def __init__(self, model: EnvelopeModel, state, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model)
+        super().__init__(model, state, hot_reload)
         self.model = model
-        self.signal_node = instantiate_node(model.signal) if model.signal is not None else None
+        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload) if model.signal is not None else None
         self.gate_node = wavable_value_node_factory(model.gate) if model.gate is not None else None
-        self.state = state
 
         # If no gate or end is defined, set end to True for envelope completion
         if model.end is None:

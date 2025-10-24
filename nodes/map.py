@@ -105,11 +105,11 @@ class MapModel(BaseNodeModel):
         return data
 
 class MapNode(BaseNode):
-    def __init__(self, model: MapModel):
+    def __init__(self, model: MapModel, state=None, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model)
+        super().__init__(model, state, hot_reload)
         self.model = model
-        self.signal_node = instantiate_node(model.signal)
+        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
         
         # Initialize from range (default to [0, 1])
         if self.model.from_ is None:

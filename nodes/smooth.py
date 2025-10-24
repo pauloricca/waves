@@ -11,11 +11,11 @@ class SmoothModel(BaseNodeModel):
     signal: BaseNodeModel = None
 
 class SmoothNode(BaseNode):
-    def __init__(self, model: SmoothModel):
+    def __init__(self, model: SmoothModel, state=None, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model)
+        super().__init__(model, state, hot_reload)
         self.model = model
-        self.signal_node = instantiate_node(model.signal)
+        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
 
     def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, get the full child signal

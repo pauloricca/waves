@@ -24,7 +24,7 @@ Example:
 """
 
 from __future__ import annotations
-from typing import Optional, Union, List, Dict, Any
+from typing import Optional, Any
 
 
 class AutoIDGenerator:

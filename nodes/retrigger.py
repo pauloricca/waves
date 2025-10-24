@@ -17,10 +17,9 @@ class RetriggerModel(BaseNodeModel):
 class RetriggerNode(BaseNode):
     def __init__(self, model: RetriggerModel, state, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model)
+        super().__init__(model, state, hot_reload)
         self.model = model
-        self.signal_node = instantiate_node(model.signal)
-        self.state = state
+        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
         
         # Persistent state for carry over samples (survives hot reload)
         if not hot_reload:

@@ -38,11 +38,11 @@ class SnapNodeModel(BaseNodeModel):
 
 
 class SnapNode(BaseNode):
-    def __init__(self, model: SnapNodeModel):
+    def __init__(self, model: SnapNodeModel, state=None, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
         from nodes.wavable_value import WavableValueNode, WavableValueModel
-        super().__init__(model)
-        self.signal_node = instantiate_node(model.signal)
+        super().__init__(model, state, hot_reload)
+        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
         
         # Determine if we're using explicit values or range + interval
         self.use_explicit_values = model.values is not None
@@ -55,7 +55,7 @@ class SnapNode(BaseNode):
             
             for val in model.values:
                 if isinstance(val, BaseNodeModel):
-                    self.value_nodes.append(instantiate_node(val))
+                    self.value_nodes.append(instantiate_node(val, hot_reload=hot_reload))
                     self.values_are_static = False
                 elif isinstance(val, (str, list)):
                     # Expression or interpolation - wrap in WavableValue

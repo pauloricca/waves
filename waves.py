@@ -17,13 +17,11 @@ from sound_library import get_sound_model, load_all_sound_libraries, reload_soun
 from nodes.node_utils.base_node import BaseNode
 from nodes.node_utils.instantiate_node import instantiate_node, instantiate_node_tree
 from nodes.node_utils.render_context import RenderContext
-from nodes.node_utils.hot_reload_manager import HotReloadManager
 from utils import look_for_duration, play, save, visualise_wave
 
 rendered_sounds: dict[np.ndarray] = {}
 
 # Hot reload state management
-hot_reload_manager = HotReloadManager()
 hot_reload_lock = threading.Lock()  # Protects access to current_sound_node and model during reload
 current_sound_node = None  # Currently playing node
 current_sound_model = None  # Currently loaded model
@@ -42,13 +40,13 @@ def perform_hot_reload_background(sound_name_to_play: str, changed_filename: str
     Perform a hot reload of the sound model on a background thread.
     
     This function:
-    1. Captures state from the current node tree
-    2. Reloads only the changed YAML file
-    3. Gets the new model
-    4. Applies any parameters
-    5. Instantiates the new tree with hot_reload flags
-    6. Restores captured state to matching nodes
-    7. Stores the new tree in hot_reload_pending_node for atomic swap
+    1. Reloads only the changed YAML file
+    2. Gets the new model
+    3. Applies any parameters
+    4. Instantiates the new tree with hot_reload=True
+       (States are automatically preserved via global state registry)
+    5. Orphaned states are automatically cleaned up by instantiate_node_tree
+    6. Stores the new tree in hot_reload_pending_node for atomic swap
     
     This is designed to run on a separate thread to avoid blocking audio rendering.
     
@@ -60,15 +58,10 @@ def perform_hot_reload_background(sound_name_to_play: str, changed_filename: str
     global hot_reload_pending_node, hot_reload_in_progress
     
     try:
-        # Capture state from current tree (also capture old node to be cleaned up)
-        old_state = None
-        old_ids = set()
+        # Keep reference to old node for cleanup
         old_node = None
         with hot_reload_lock:
-            if current_sound_node:
-                old_state = hot_reload_manager.capture_state(current_sound_node)
-                old_ids = hot_reload_manager.get_all_node_ids(current_sound_node)
-                old_node = current_sound_node  # Keep reference for cleanup
+            old_node = current_sound_node
         
         # Reload only the changed file, or the file containing the sound if unknown
         if changed_filename:
@@ -85,22 +78,11 @@ def perform_hot_reload_background(sound_name_to_play: str, changed_filename: str
             from nodes.node_utils.node_string_parser import apply_params_to_model
             new_model = apply_params_to_model(new_model, params)
         
-        # Instantiate new tree with hot_reload context (outside the lock - this is slow)
-        new_node = instantiate_node_tree(new_model, hot_reload=True, previous_ids=old_ids)
-        
-        # Get the set of node IDs that still exist in the new tree
-        new_ids = hot_reload_manager.get_all_node_ids(new_node)
-        
-        # Restore state to new tree (only for nodes that still exist)
-        if old_state:
-            hot_reload_manager.restore_state(new_node, old_state)
-        
-        # Clean up orphaned state entries from nodes that no longer exist
-        orphaned_ids = old_ids - new_ids
-        if orphaned_ids and old_state:
-            for orphaned_id in orphaned_ids:
-                if orphaned_id in old_state:
-                    del old_state[orphaned_id]
+        # Instantiate new tree with hot_reload=True (outside the lock - this is slow)
+        # The global state registry will automatically:
+        # - Preserve states for nodes whose IDs still exist
+        # - Clean up orphaned states for deleted nodes
+        new_node = instantiate_node_tree(new_model, hot_reload=True)
         
         # Store the new node for atomic swap on next audio chunk
         with hot_reload_lock:

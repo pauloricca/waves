@@ -22,16 +22,15 @@ class SequencerNode(BaseNode):
     def __init__(self, model: SequencerModel, state, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
         from nodes.wavable_value import WavableValueNode, WavableValueModel
-        super().__init__(model)
+        super().__init__(model, state, hot_reload)
         self.model = model
-        self.state = state
         self.sequence = model.sequence
         self.chain = model.chain
         self.repeat = model.repeat
         
         # Wrap interval in WavableValue
         if isinstance(model.interval, BaseNodeModel):
-            self.interval_node = instantiate_node(model.interval)
+            self.interval_node = instantiate_node(model.interval, hot_reload=hot_reload)
         else:
             wavable_model = WavableValueModel(value=model.interval)
             self.interval_node = WavableValueNode(wavable_model)
@@ -44,12 +43,7 @@ class SequencerNode(BaseNode):
             self.state.all_active_sounds = []  # List of (sound_node, render_args, sound_duration, samples_rendered, step_index) tuples
             self.state.step_triggered = set()  # Set of (repeat, step) tuples that have been triggered
             self.state.sequence_complete = False  # Flag to indicate when sequence playback is done
-        else:
-            # On hot reload, always clear active sounds to prevent mixing old/new node trees
-            # This prevents memory corruption from stale node references
-            self.state.all_active_sounds = []
-            self.state.step_triggered = set()
-            self.state.sequence_complete = False
+            self.state.sound_instance_counter = 0  # Counter for unique sound instances
         
         # Non-persistent attributes
         self._last_chunk_samples = None
@@ -60,6 +54,8 @@ class SequencerNode(BaseNode):
 
     def create_sound_nodes_for_step(self, step_index, **params):
         """Create sound nodes for a given step in the sequence."""
+        from nodes.node_utils.instantiate_node import set_runtime_id_prefix, instantiate_node
+        
         # Get the sounds for this step
         sequence = self.sequence or self.chain
         if step_index >= len(sequence):
@@ -79,18 +75,30 @@ class SequencerNode(BaseNode):
         sound_nodes_data = []
         for sound in sounds_in_step:
             if sound:
-                if isinstance(sound, str):
-                    main_sound_name = sound.split()[0]
-                    sound_model = get_sound_model(main_sound_name)
-                    sound_node, render_args = self.instantiate_sound_node(sound_model, sound, **params)
-                    # Calculate the duration of this sound
-                    sound_duration = look_for_duration(sound_model) or 1
-                    sound_nodes_data.append((sound_node, render_args, sound_duration, 0, step_index))  # (node, args, duration, samples_rendered, step_index)
-                else:
-                    from nodes.node_utils.instantiate_node import instantiate_node
-                    sound_node = instantiate_node(sound)
-                    sound_duration = look_for_duration(sound) or 1
-                    sound_nodes_data.append((sound_node, {}, sound_duration, 0, step_index))
+                # Generate unique prefix for this sound instance
+                instance_id = self.state.sound_instance_counter
+                self.state.sound_instance_counter += 1
+                
+                # Set prefix so all nodes created for this sound get unique IDs
+                prefix = f"{self.node_id}.sound_{instance_id}"
+                set_runtime_id_prefix(prefix)
+                
+                try:
+                    if isinstance(sound, str):
+                        main_sound_name = sound.split()[0]
+                        sound_model = get_sound_model(main_sound_name)
+                        sound_node, render_args = self.instantiate_sound_node(sound_model, sound, **params)
+                        # Calculate the duration of this sound
+                        sound_duration = look_for_duration(sound_model) or 1
+                        sound_nodes_data.append((sound_node, render_args, sound_duration, 0, step_index))  # (node, args, duration, samples_rendered, step_index)
+                    else:
+                        # These are dynamically created sound nodes for sequence steps, so hot_reload=False
+                        sound_node = instantiate_node(sound, hot_reload=False)
+                        sound_duration = look_for_duration(sound) or 1
+                        sound_nodes_data.append((sound_node, {}, sound_duration, 0, step_index))
+                finally:
+                    # Clear the prefix after creating this sound
+                    set_runtime_id_prefix(None)
         
         return sound_nodes_data
     

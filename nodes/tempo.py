@@ -24,16 +24,16 @@ class TempoNodeModel(BaseNodeModel):
 
 
 class TempoNode(BaseNode):
-    def __init__(self, model: TempoNodeModel):
+    def __init__(self, model: TempoNodeModel, state=None, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
         from nodes.wavable_value import WavableValueNode, WavableValueModel
-        super().__init__(model)
-        self.signal_node = instantiate_node(model.signal)
+        super().__init__(model, state, hot_reload)
+        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
         
         # Wrap bpm in WavableValue if provided
         if model.bpm is not None:
             if isinstance(model.bpm, BaseNodeModel):
-                self.bpm_node = instantiate_node(model.bpm)
+                self.bpm_node = instantiate_node(model.bpm, hot_reload=hot_reload)
             else:
                 wavable_model = WavableValueModel(value=model.bpm)
                 self.bpm_node = WavableValueNode(wavable_model)

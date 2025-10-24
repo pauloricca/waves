@@ -25,16 +25,16 @@ class WavableValueModel(BaseNodeModel):
 
 
 class WavableValueNode(BaseNode):
-    def __init__(self, model: WavableValueModel):
+    def __init__(self, model: WavableValueModel, state=None, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model)
+        super().__init__(model, state, hot_reload)
         self.value = model.value
         self.interpolation_type = model.interpolation
         self.interpolated_values = None
         
         # Determine value type
         if isinstance(model.value, BaseNodeModel):
-            self.wave_node = instantiate_node(model.value)
+            self.wave_node = instantiate_node(model.value, hot_reload=hot_reload)
             self.value_type = 'node'
         elif isinstance(model.value, str):
             # String = expression
@@ -134,7 +134,21 @@ class WavableValueNode(BaseNode):
 
 
 def wavable_value_node_factory(value: WavableValue, interpolation: InterpolationTypes = InterpolationTypes.LINEAR):
-    return WavableValueNode(WavableValueModel(value=value, interpolation=interpolation))
+    from nodes.node_utils.instantiate_node import get_next_runtime_id
+    from nodes.node_utils.node_state_registry import get_state_registry
+    
+    # Create model
+    model = WavableValueModel(value=value, interpolation=interpolation)
+    
+    # Generate runtime ID for this node
+    node_id = get_next_runtime_id()
+    
+    # Get state from global registry
+    state_registry = get_state_registry()
+    state = state_registry.get_or_create_state(node_id, hot_reload=False)
+    
+    # Create node with state
+    return WavableValueNode(model, state=state, hot_reload=False)
 
 
 # Interpolates a list of values or a list of lists with relative positions

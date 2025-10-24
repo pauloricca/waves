@@ -31,12 +31,11 @@ class FilterModel(BaseNodeModel):
 class FilterNode(BaseNode):
     def __init__(self, model: FilterModel, state, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model)
+        super().__init__(model, state, hot_reload)
         self.model = model
         self.cutoff_node = wavable_value_node_factory(model.cutoff)
         self.peak_node = wavable_value_node_factory(model.peak)
-        self.signal_node = instantiate_node(model.signal)
-        self.state = state
+        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
         
         # Persistent state for continuity between chunks (survives hot reload)
         if not hot_reload:
