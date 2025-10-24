@@ -772,14 +772,25 @@ test-follow:
                 -
                 -
           - context:
+              # freq:
+              #   follow:
+              #     attack: 0.002
+              #     release: 0.3
+              #     range: [40, 80]
+              #     signal:
+              #       reference:
+              #         ref: kick-drum
               freq:
-                follow:
-                  attack: 0.002
-                  release: 0.3
-                  range: [40, 80]
-                  signal:
-                    reference:
-                      ref: kick-drum
+                automation:
+                  mode: overlap
+                  interval: bar * 2
+                  overlap: 0.5
+                  repeat: 100
+                  steps:
+                  - 60
+                  - 90
+                  - 75
+                  - 110
               signal:
                 expression:
                     exp: amp * (osc1 + osc2)
@@ -816,3 +827,77 @@ test-2:
                 - 
                 - 
                 - 
+
+# Test automation node
+test-automation-step:
+  osc:
+    type: sin
+    duration: 5
+    freq:
+      automation:
+        interval: 0.5
+        mode: step
+        repeat: 2
+        steps:
+          - 220
+          - 
+          - 440
+          - 
+          - 880
+
+test-automation-ramp:
+  osc:
+    type: sin
+    duration: 5
+    freq:
+      automation:
+        interval: 0.5
+        mode: ramp
+        repeat: 2
+        steps:
+          - 220
+          - 
+          - 440
+          - 
+          - 880
+
+test-automation-overlap:
+  osc:
+    type: sin
+    duration: 5
+    freq:
+      automation:
+        interval: 0.5
+        mode: overlap
+        overlap: 0.1
+        repeat: 2
+        steps:
+          - 220
+          - 
+          - 440
+          - 
+          - 880
+
+test-automation-nodes:
+  osc:
+    type: sin
+    duration: 10
+    freq:
+      automation:
+        interval: 1
+        mode: step
+        repeat: 1
+        steps:
+          - 
+          -
+          -
+          - osc:
+              type: sin
+              freq: 2
+              range: [200, 400]
+          - 
+          - osc:
+              type: sin
+              freq: 5
+              range: [400, 800]
+ 

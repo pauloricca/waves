@@ -1,3 +1,4 @@
+from nodes.automation import AUTOMATION_DEFINITION
 from nodes.context import CONTEXT_DEFINITION
 from nodes.delay import DELAY_DEFINITION
 from nodes.retrigger import RETRIGGER_DEFINITION
@@ -21,6 +22,7 @@ from nodes.snap import SNAP_DEFINITION
 from nodes.tempo import TEMPO_DEFINITION
 
 NODE_REGISTRY = [
+    AUTOMATION_DEFINITION,
     OSCILLATOR_DEFINITION,
     SEQUENCER_DEFINITION,
     DELAY_DEFINITION,
