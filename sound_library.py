@@ -103,7 +103,7 @@ def load_yaml_file(file_path: str) -> SoundLibraryModel:
         # Generate automatic hierarchical IDs for all nodes
         from nodes.node_utils.auto_id_generator import AutoIDGenerator
         for sound_name, sound_model in library.root.items():
-            AutoIDGenerator.generate_ids(sound_model, param_path=sound_name)
+            AutoIDGenerator.generate_ids(sound_model, param_path=sound_name, is_root=True)
         
         return library
     

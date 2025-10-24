@@ -1,37 +1,50 @@
 """
-Automatic ID generation for nodes based on parameter path.
+Automatic ID generation for nodes based on parameter path and node type.
 
-IDs are generated based on the parameter path where a node is connected:
+IDs are generated based on the parameter path AND node type where a node is connected:
 - Manual IDs (provided in YAML): "my_node"
-- Auto IDs (no manual ID): "root.freq", "root.mix.signals.0", etc.
+- Auto IDs (no manual ID): "root.osc.freq.select", "root.mix.signals.0.osc", etc.
 
-This creates stable, unique IDs that survive tree structure changes because:
-1. IDs are tied to WHERE a node is used (parameter name), not WHERE it is positioned
+This creates stable, unique IDs that survive tree structure changes and prevent type mismatches:
+1. IDs are tied to WHERE a node is used (parameter name) AND WHAT TYPE it is
 2. Adding/removing sibling nodes doesn't affect other nodes' IDs
-3. Swapping different node types preserves state only if types match (safer)
+3. Swapping different node types creates different IDs (prevents wrong state being restored)
 
 Example:
-  test-ids-2:
-    mix:                          <- ID: root
-      signals:
-        - osc:                    <- ID: root.mix.signals.0
-            freq: 200
-        - osc:                    <- ID: root.mix.signals.1
-            freq: 400
+  test_select_snap:
+    osc:                          <- ID: test_select_snap (root)
+      freq:
+        select:                   <- ID: test_select_snap.osc.freq.select
+          test:
+            snap:                 <- ID: test_select_snap.osc.freq.select.test.snap
+              signal:
+                osc:              <- ID: test_select_snap.osc.freq.select.test.snap.signal.osc
   
-  Reordering the oscs just swaps which gets .signals.0 vs .signals.1
-  Their state moves with them because it's based on parameter path.
+  If you swap the select for a different node type (e.g., osc), the ID changes to
+  test_select_snap.osc.freq.osc, preventing the select node's state from being restored.
 """
 
 from __future__ import annotations
 from typing import Optional, Any
 
 
+def _get_node_type_from_model(model: Any) -> Optional[str]:
+    """
+    Get the node type name from a Pydantic model by looking it up in NODE_REGISTRY.
+    Returns None if the model is not found in the registry.
+    """
+    from nodes.node_utils.node_registry import NODE_REGISTRY
+    for node_def in NODE_REGISTRY:
+        if isinstance(model, node_def.model):
+            return node_def.name
+    return None
+
+
 class AutoIDGenerator:
     """Generates parameter-path-based IDs for nodes that don't have explicit IDs."""
     
     @staticmethod
-    def generate_ids(obj: Any, param_path: str = "root") -> None:
+    def generate_ids(obj: Any, param_path: str = "root", is_root: bool = False) -> None:
         """
         Recursively traverse an object and generate parameter-path-based IDs for all nodes
         that don't already have explicit IDs.
@@ -40,7 +53,8 @@ class AutoIDGenerator:
         
         Args:
             obj: The object to process (typically a model, dict, or list)
-            param_path: The parameter path to reach this object (e.g., "root.freq.osc")
+            param_path: The parameter path to reach this object (e.g., "root.freq")
+            is_root: True if this is the root node of a sound definition (omit node type for root)
         """
         # Skip None, primitives, and already processed objects
         if obj is None or isinstance(obj, (str, int, float, bool)):
@@ -51,7 +65,10 @@ class AutoIDGenerator:
             # Extract the node type and parameters
             for node_type, params in obj.items():
                 if isinstance(params, dict):
-                    AutoIDGenerator._process_node_dict(node_type, params, param_path)
+                    # Include node type in the path
+                    # param_path could be a sound name (e.g., "test_select_snap") or a parameter path
+                    path_with_type = f"{param_path}.{node_type}" if param_path else node_type
+                    AutoIDGenerator._process_node_dict(node_type, params, path_with_type)
                 elif isinstance(params, list):
                     for i, item in enumerate(params):
                         AutoIDGenerator.generate_ids(item, f"{param_path}.{i}")
@@ -64,29 +81,36 @@ class AutoIDGenerator:
         # Handle Pydantic models
         elif hasattr(obj, '__pydantic_extra__'):
             # This is a Pydantic model with extra fields (like expression node)
-            AutoIDGenerator._process_pydantic_model(obj, param_path)
+            AutoIDGenerator._process_pydantic_model(obj, param_path, is_root)
         
         # Handle objects with model_dump or __dict__
         elif hasattr(obj, '__dict__'):
-            AutoIDGenerator._process_pydantic_model(obj, param_path)
+            AutoIDGenerator._process_pydantic_model(obj, param_path, is_root)
     
     @staticmethod
     def _process_node_dict(node_type: str, params: dict, param_path: str) -> None:
-        """Process a node definition dict and generate IDs for its parameters."""
+        """
+        Process a node definition dict and generate IDs for its parameters.
+        
+        The param_path includes the node type, so when we process parameters,
+        we append them to the path that already includes the node type.
+        """
         # Recursively process nested nodes in parameters
         for param_name, param_value in params.items():
             if param_name == 'id':
                 # Skip the id field itself
                 continue
             
-            # Build the param path for this parameter
+            # Build the param path for this parameter (already includes node type from parent)
             child_path = f"{param_path}.{param_name}"
             
             if isinstance(param_value, dict) and len(param_value) == 1:
                 # This looks like a nested node (single key dict with node type)
                 child_node_type, child_params = next(iter(param_value.items()))
                 if isinstance(child_params, dict):
-                    AutoIDGenerator._process_node_dict(child_node_type, child_params, child_path)
+                    # Include the node type in the path
+                    child_path_with_type = f"{child_path}.{child_node_type}"
+                    AutoIDGenerator._process_node_dict(child_node_type, child_params, child_path_with_type)
             
             elif isinstance(param_value, list):
                 # List of nodes or values
@@ -95,17 +119,29 @@ class AutoIDGenerator:
                     if isinstance(item, dict) and len(item) == 1:
                         child_node_type, child_params = next(iter(item.items()))
                         if isinstance(child_params, dict):
-                            AutoIDGenerator._process_node_dict(child_node_type, child_params, item_path)
+                            # Include the node type in the path
+                            item_path_with_type = f"{item_path}.{child_node_type}"
+                            AutoIDGenerator._process_node_dict(child_node_type, child_params, item_path_with_type)
                     else:
                         AutoIDGenerator.generate_ids(item, item_path)
             else:
                 AutoIDGenerator.generate_ids(param_value, child_path)
     
     @staticmethod
-    def _process_pydantic_model(model: Any, param_path: str) -> None:
-        """Process a Pydantic model and generate IDs for nested nodes."""
+    def _process_pydantic_model(model: Any, param_path: str, is_root: bool = False) -> None:
+        """
+        Process a Pydantic model and generate IDs for nested nodes.
+        
+        Args:
+            model: The Pydantic model to process
+            param_path: The parameter path to this model
+            is_root: True if this is the root node of a sound (omit node type for root)
+        """
         # Check if model already has an explicit ID
         explicit_id = getattr(model, 'id', None)
+        
+        # Get the node type for this model
+        node_type = _get_node_type_from_model(model)
         
         # Determine the current node's ID
         if explicit_id:
@@ -113,8 +149,16 @@ class AutoIDGenerator:
             # (explicit IDs are "roots" of their own subtree)
             current_path = explicit_id
         else:
-            # Use the parameter path as the auto ID
-            current_path = param_path
+            # Include the node type in the path UNLESS this is the root node
+            if is_root:
+                # For root nodes, use the sound name as-is (e.g., "test_select_snap")
+                current_path = param_path
+            elif node_type:
+                # For nested nodes, include the node type (e.g., "test_select_snap.freq.select")
+                current_path = f"{param_path}.{node_type}" if param_path else node_type
+            else:
+                # Fallback to just param_path if node type not found
+                current_path = param_path
             # Store the auto-generated ID
             model.__auto_id__ = current_path
         
@@ -133,15 +177,15 @@ class AutoIDGenerator:
                 # Build the path for this field
                 field_path = f"{current_path}.{field_name}"
                 
-                # Recursively process nested structures
+                # Recursively process nested structures (never is_root for children)
                 if isinstance(field_value, dict):
                     AutoIDGenerator._process_dict_recursively(field_value, field_path)
                 elif isinstance(field_value, list):
                     for i, item in enumerate(field_value):
-                        AutoIDGenerator.generate_ids(item, f"{field_path}.{i}")
+                        AutoIDGenerator.generate_ids(item, f"{field_path}.{i}", is_root=False)
                 elif hasattr(field_value, '__dict__') and not isinstance(field_value, (str, int, float, bool)):
                     # Recursively process nested models
-                    AutoIDGenerator.generate_ids(field_value, field_path)
+                    AutoIDGenerator.generate_ids(field_value, field_path, is_root=False)
             
             except (AttributeError, TypeError):
                 # Some attributes might not be accessible, skip them

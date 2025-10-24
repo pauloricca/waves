@@ -35,7 +35,7 @@ class WavableValueNode(BaseNode):
         
         # Determine value type
         if isinstance(model.value, BaseNodeModel):
-            self.wave_node = instantiate_node(model.value, hot_reload=hot_reload)
+            self.wave_node = instantiate_node(model.value, hot_reload=True)
             self.value_type = 'node'
         elif isinstance(model.value, str):
             # String = expression - compile it and store the info
@@ -124,9 +124,15 @@ class WavableValueNode(BaseNode):
 
 
 def wavable_value_node_factory(value: WavableValue, interpolation: InterpolationTypes = InterpolationTypes.LINEAR):
-    from nodes.node_utils.instantiate_node import get_next_runtime_id
+    from nodes.node_utils.instantiate_node import instantiate_node, get_next_runtime_id
     from nodes.node_utils.node_state_registry import get_state_registry
     
+    # If the value is already a BaseNodeModel, instantiate it directly
+    # Don't wrap it in a WavableValueModel - it already has its own auto-ID
+    if isinstance(value, BaseNodeModel):
+        return instantiate_node(value, hot_reload=True)
+    
+    # For scalar values, expressions, or interpolation lists, wrap in WavableValueModel
     # Create model
     model = WavableValueModel(value=value, interpolation=interpolation)
     

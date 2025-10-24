@@ -15,40 +15,20 @@ test_select_snap:
   osc:
     freq:
       select:
-        duration: 3  # test hot reload
+        duration: 30  # test hot reload
         test:
           snap:
             values: [-1, 0, 1]
-            glide: 0.01
+            glide: 1
             signal:
               osc:
                 type: tri
-                freq: 1
+                freq: 5
                 range: [-1, 1]
         "-1": 200
         "0": 300
         "1": 500
 
-
-test_select_fast_switching:
-  # Test mid-chunk transitions with fast oscillations
-  select:
-    duration: 1
-    test:
-      osc:
-        type: sqr
-        freq: 20  # Fast switching (20 Hz)
-        range: [0, 1]
-    "true":
-      osc:
-        type: sin
-        freq: 800
-        amp: 0.2
-    "false":
-      osc:
-        type: sin
-        freq: 400
-        amp: 0.2
 
 loop:
   # osc:
