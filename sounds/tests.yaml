@@ -776,7 +776,7 @@ test-follow:
                 follow:
                   attack: 0.002
                   release: 0.3
-                  range: [80, 40]
+                  range: [40, 80]
                   signal:
                     reference:
                       ref: kick-drum
@@ -787,7 +787,6 @@ test-follow:
                       follow:
                         attack: 0.002
                         release: 0.3
-                        range: [1, 0]
                         signal:
                           reference:
                             ref: kick-drum

@@ -63,8 +63,9 @@ class FollowNode(BaseNode):
         super().__init__(model, state, hot_reload)
         self.model = model
         self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
-        self.range_min_node = wavable_value_node_factory(model.range[0])
-        self.range_max_node = wavable_value_node_factory(model.range[1])
+        # Note: range[0] is high, range[1] is low (swapped from typical convention)
+        self.range_min_node = wavable_value_node_factory(model.range[1])
+        self.range_max_node = wavable_value_node_factory(model.range[0])
         
         # Persistent state for realtime rendering (survives hot reload)
         if not hot_reload:
