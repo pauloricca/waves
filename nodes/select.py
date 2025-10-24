@@ -33,20 +33,32 @@ class SelectNodeModel(BaseNodeModel):
 class SelectNode(BaseNode):
     def __init__(self, model: SelectNodeModel, state=None, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
+        from nodes.wavable_value import WavableValueNode, WavableValueModel
+        from nodes.node_utils.auto_id_generator import AutoIDGenerator
         super().__init__(model, state, hot_reload)
         
+        # Get this node's effective ID to build stable child IDs
+        my_id = AutoIDGenerator.get_effective_id(model)
+        if my_id is None:
+            my_id = "select"  # Fallback if no ID
+        
         # Instantiate the test node
-        self.test_node = instantiate_node(model.test, hot_reload=hot_reload)
+        # Always pass True for hot_reload to allow child nodes to check their own state
+        self.test_node = instantiate_node(model.test, hot_reload=True)
         
         # Store all path nodes (arbitrary named arguments from extra fields)
         self.path_nodes: Dict[str, Optional[BaseNode]] = {}
         if hasattr(model, '__pydantic_extra__') and model.__pydantic_extra__:
             for field_name, field_value in model.__pydantic_extra__.items():
                 if isinstance(field_value, BaseNodeModel):
-                    self.path_nodes[field_name] = instantiate_node(field_value, hot_reload=hot_reload)
+                    # Always pass True for hot_reload to allow child nodes to check their own state
+                    self.path_nodes[field_name] = instantiate_node(field_value, hot_reload=True)
                 else:
-                    # Non-node values are not supported as paths
-                    self.path_nodes[field_name] = None
+                    # Wrap scalars, expressions, and other values in WavableValue
+                    # Assign a stable auto-ID based on the field name so state is preserved during hot reload
+                    wavable_model = WavableValueModel(value=field_value)
+                    wavable_model.__auto_id__ = f"{my_id}.{field_name}"
+                    self.path_nodes[field_name] = WavableValueNode(wavable_model)
     
     def _normalize_key(self, value) -> str:
         """Convert a value to a normalized string key for path lookup."""
