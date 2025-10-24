@@ -389,6 +389,99 @@ Then we need to add the new node to the NODE_REGISTRY in nodes/node_utils/node_r
 - When `num_samples` is None, render the full signal (or raise an error if the node needs explicit duration)
 - For stateful nodes that support hot reload, accept `state` and `hot_reload` parameters (see Hot Reload section above)
 
+### Critical Rules for Node Implementation with Hot Reload Support
+
+**ALWAYS follow these rules when creating or modifying nodes:**
+
+1. **Child Node Instantiation - ALWAYS pass `hot_reload=True`**:
+   ```python
+   # ✅ CORRECT - Always pass True to allow children to check their own state
+   self.child_node = instantiate_node(model.child, hot_reload=True)
+   
+   # ❌ WRONG - Don't pass the parent's hot_reload flag
+   self.child_node = instantiate_node(model.child, hot_reload=hot_reload)
+   ```
+   
+   **Why**: The `instantiate_node` function checks if THAT SPECIFIC node had state before and sets `hot_reload=True` only for that node. By always passing `hot_reload=True`, we allow each child to check its own state in the global registry. If we pass `hot_reload=hot_reload` (parent's flag), children won't check for their own state.
+
+2. **WavableValue Wrapping - Use WavableValueNode for non-node values**:
+   ```python
+   # ✅ CORRECT - Wrap scalars/expressions in WavableValue
+   from nodes.wavable_value import WavableValueNode, WavableValueModel
+   
+   if isinstance(model.param, BaseNodeModel):
+       self.param_node = instantiate_node(model.param, hot_reload=True)
+   else:
+       # Scalar, expression, or interpolation list
+       wavable_model = WavableValueModel(value=model.param)
+       self.param_node = WavableValueNode(wavable_model)
+   
+   # ❌ WRONG - Don't store scalars directly
+   self.param = model.param  # Won't work with dynamic values!
+   ```
+
+3. **Assigning Auto-IDs to Programmatically Created Nodes**:
+   ```python
+   # ✅ CORRECT - Assign stable auto-IDs to programmatically created nodes
+   from nodes.node_utils.auto_id_generator import AutoIDGenerator
+   
+   my_id = AutoIDGenerator.get_effective_id(model)
+   wavable_model = WavableValueModel(value=scalar_value)
+   wavable_model.__auto_id__ = f"{my_id}.{param_name}"
+   self.param_node = WavableValueNode(wavable_model)
+   
+   # ❌ WRONG - Don't create nodes without IDs
+   wavable_model = WavableValueModel(value=scalar_value)
+   self.param_node = WavableValueNode(wavable_model)  # Gets runtime ID, won't preserve state!
+   ```
+   
+   **Why**: Nodes defined in YAML get auto-IDs during parsing, but nodes created programmatically in Python need manual ID assignment for state preservation during hot reload.
+
+4. **Dynamic Node Creation with Runtime IDs** (for sequencer-like nodes):
+   ```python
+   # ✅ CORRECT - Use set_runtime_id_prefix for dynamically created instances
+   from nodes.node_utils.instantiate_node import set_runtime_id_prefix
+   
+   # When creating multiple instances of the same sound at runtime
+   prefix = f"{my_id}.instance_{counter}"
+   set_runtime_id_prefix(prefix)
+   try:
+       sound_node = instantiate_node(sound_model, hot_reload=False)
+   finally:
+       set_runtime_id_prefix(None)  # Always clear!
+   ```
+   
+   **When to use**: Only for nodes that create multiple instances at runtime (like sequencer creating a kick on each beat). Most nodes don't need this.
+
+5. **Nodes with ConfigDict(extra='allow') - Handle extra fields properly**:
+   ```python
+   # ✅ CORRECT - Process __pydantic_extra__ for arbitrary parameters
+   if hasattr(model, '__pydantic_extra__') and model.__pydantic_extra__:
+       for field_name, field_value in model.__pydantic_extra__.items():
+           if isinstance(field_value, BaseNodeModel):
+               self.fields[field_name] = instantiate_node(field_value, hot_reload=True)
+           else:
+               # Wrap in WavableValue with stable ID
+               wavable_model = WavableValueModel(value=field_value)
+               wavable_model.__auto_id__ = f"{my_id}.{field_name}"
+               self.fields[field_name] = WavableValueNode(wavable_model)
+   ```
+   
+   **Examples**: Expression node, select node - any node that accepts arbitrary named parameters.
+
+**Quick Checklist for New Nodes:**
+- [ ] Child nodes instantiated with `hot_reload=True`? 
+- [ ] Non-node parameters wrapped in WavableValueNode?
+- [ ] Programmatically created nodes have `__auto_id__` assigned?
+- [ ] State attributes only initialized when `not hot_reload`?
+- [ ] Node accepts `state` and `hot_reload` parameters in `__init__`?
+
+**See Also:**
+- `nodes/select.py` - Example of handling extra fields with proper ID assignment
+- `nodes/expression.py` - Example of ConfigDict(extra='allow') with child nodes
+- `nodes/sequencer.py` - Example of runtime ID generation for dynamic instances
+- `nodes/sample.py` - Example of stateful node with hot reload support
+
 ## Configuration
 
 In config.py we can set some global parameters for the project, such as the sample rate, the buffer size, the sounds directory (`SOUNDS_DIR`), etc. but also some options on the mode of operating like whether we play the sound in realtime (render in chunks) or pre-render the whole sound and play it back (non-realtime).
