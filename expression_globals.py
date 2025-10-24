@@ -172,7 +172,16 @@ def evaluate_compiled(compiled_info, context: dict, num_samples: int = None):
     
     # Convert result
     if isinstance(result, np.ndarray):
+        # Handle boolean arrays by converting to float
+        if result.dtype == bool or result.dtype == np.bool_:
+            return result.astype(np.float32)
         return result
+    elif isinstance(result, (bool, np.bool_)):
+        # Convert boolean to float (True->1.0, False->0.0)
+        value = 1.0 if result else 0.0
+        if num_samples is not None:
+            return np.full(num_samples, value, dtype=np.float32)
+        return value
     elif isinstance(result, (int, float, np.number)):
         if num_samples is not None:
             return np.full(num_samples, float(result), dtype=np.float32)

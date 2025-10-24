@@ -15,6 +15,7 @@ from nodes.mix import MIX_DEFINITION
 from nodes.oscillator import OSCILLATOR_DEFINITION
 from nodes.reference import REFERENCE_DEFINITION
 from nodes.sample import SAMPLE_DEFINITION
+from nodes.select import SELECT_DEFINITION
 from nodes.sequencer import SEQUENCER_DEFINITION
 from nodes.shuffle import SHUFFLE_DEFINITION
 from nodes.smooth import SMOOTH_DEFINITION
@@ -32,6 +33,7 @@ NODE_REGISTRY = [
     MAP_DEFINITION,
     SMOOTH_DEFINITION,
     SNAP_DEFINITION,
+    SELECT_DEFINITION,
     TEMPO_DEFINITION,
     INVERT_DEFINITION,
     SAMPLE_DEFINITION,
