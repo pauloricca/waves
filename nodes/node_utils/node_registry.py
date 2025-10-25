@@ -7,6 +7,7 @@ from nodes.expression import EXPRESSION_DEFINITION
 from nodes.filter import FILTER_DEFINITION
 from nodes.follow import FOLLOW_DEFINITION
 from nodes.hold import HOLD_DEFINITION
+from nodes.input import INPUT_DEFINITION
 from nodes.non_realtime.invert import INVERT_DEFINITION
 from nodes.map import MAP_DEFINITION
 from nodes.midi import MIDI_DEFINITION
@@ -46,4 +47,5 @@ NODE_REGISTRY = [
     REFERENCE_DEFINITION,
     HOLD_DEFINITION,
     FOLLOW_DEFINITION,
+    INPUT_DEFINITION,
 ]

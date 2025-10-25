@@ -1,3 +1,41 @@
+# Test the input node with simple passthrough
+test_input:
+  input:
+    duration: 50
+    amp: 1.0
+
+test_input_phase:
+  retrigger:
+    repeats: 5
+    time: 0.3
+    feedback: 0.5
+    signal:
+      delay:
+        mode: digital
+        time:
+          osc:
+            freq: 5
+            range: [1, 1.011]
+        signal:
+          input: {}
+
+# Test input with amplitude modulation
+test_input_with_lfo:
+  osc:
+    # freq: 200
+    phase:
+      input: {}
+    freq:
+      follow:
+        range: [500, 1]
+        signal:
+          retrigger:
+            repeats: 5
+            time: 0.3
+            feedback: 0.5
+            signal:
+              input: {}
+
 # test_select_bool:
 #   select:
 #     duration: 2
@@ -19,7 +57,7 @@ test_select_snap:
         test:
           snap:
             values: [-1, 0, 1]
-            glide: 0.01
+            glide: 0.4
             signal:
               osc:
                 type: tri

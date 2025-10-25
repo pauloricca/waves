@@ -19,12 +19,11 @@ class MidiModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     channel: int = 0  # MIDI channel to listen to (0-15)
     signal: BaseNodeModel  # The sound/signal to play when a note is triggered
-    duration: float = math.inf  # MIDI nodes run indefinitely
     voices: int = 16  # Maximum number of simultaneous voices (polyphony limit)
 
 
 class MidiNode(BaseNode):
-    def __init__(self, model: MIDINodeModel, state=None, hot_reload=False):
+    def __init__(self, model: MidiModel, state=None, hot_reload=False):
         super().__init__(model, state, hot_reload)
         self.channel = model.channel
         self.signal_model = model.signal

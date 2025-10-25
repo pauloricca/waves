@@ -24,7 +24,7 @@ class HoldNode(BaseNode):
     Note: Change detection is chunk-level: if trigger changes anywhere within the chunk,
           we resample once for the whole chunk.
     """
-    def __init__(self, model: HoldNodeModel, state=None, hot_reload=False):
+    def __init__(self, model: HoldModel, state=None, hot_reload=False):
         super().__init__(model, state, hot_reload)
         self.model = model
         self.signal_node = wavable_value_node_factory(model.signal)

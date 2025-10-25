@@ -16,7 +16,6 @@ class SampleModel(BaseNodeModel):
     loop: bool = False
     overlap: float = 0.0
     speed: WavableValue = 1.0
-    duration: float = None
     base_freq: float = None
 
 

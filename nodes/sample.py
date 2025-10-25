@@ -22,7 +22,6 @@ class SampleModel(BaseNodeModel):
     loop: bool = False
     overlap: float = 0.0  # 0.0-1.0 (normalized fraction of sample length)
     speed: WavableValue = 1.0  # playback speed multiplier (1.0 = normal speed)
-    duration: float = None  # seconds
     base_freq: float = None  # Hz (base frequency for freq parameter)
     freq: WavableValue = None  # Hz (target frequency - modulates speed based on base_freq)
     offset: WavableValue = 0.0  # seconds (shift playhead position)
