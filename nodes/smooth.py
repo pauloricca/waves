@@ -11,8 +11,8 @@ class SmoothModel(BaseNodeModel):
     signal: BaseNodeModel = None
 
 class SmoothNode(BaseNode):
-    def __init__(self, model: SmoothModel, node_id: str, state=None, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: SmoothModel, node_id: str, state=None, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
 

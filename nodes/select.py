@@ -31,9 +31,9 @@ class SelectNodeModel(BaseNodeModel):
 
 
 class SelectNode(BaseNode):
-    def __init__(self, model: SelectNodeModel, node_id: str, state=None, hot_reload=False):
+    def __init__(self, model: SelectNodeModel, node_id: str, state=None, do_initialise_state=True):
         from nodes.wavable_value import WavableValueNode, WavableValueModel
-        super().__init__(model, node_id, state, hot_reload)
+        super().__init__(model, node_id, state, do_initialise_state)
         
         # Get this node's effective ID to build stable child IDs
         my_id = AutoIDGenerator.get_effective_id(model)
@@ -48,7 +48,7 @@ class SelectNode(BaseNode):
         self.path_nodes: Dict[str, Optional[BaseNode]] = {}
         if hasattr(model, '__pydantic_extra__') and model.__pydantic_extra__:
             for field_name, field_value in model.__pydantic_extra__.items():
-                self.path_nodes[field_name] = self.instantiate_child_node(field_value, field_name, hot_reload=True)
+                self.path_nodes[field_name] = self.instantiate_child_node(field_value, field_name, do_initialise_state=True)
     
     def _normalize_key(self, value) -> str:
         """Convert a value to a normalized string key for path lookup."""

@@ -26,9 +26,9 @@ class WavableValueModel(BaseNodeModel):
 
 
 class WavableValueNode(BaseNode):
-    def __init__(self, model: WavableValueModel, node_id: str, state=None, hot_reload=False):
+    def __init__(self, model: WavableValueModel, node_id: str, state=None, do_initialise_state=True):
         from expression_globals import compile_expression
-        super().__init__(model, node_id, state, hot_reload)
+        super().__init__(model, node_id, state, do_initialise_state)
         self.value: WavableValueNotModel = model.value
         self.interpolation_type = model.interpolation
         self.interpolated_values = None

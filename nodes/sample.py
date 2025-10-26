@@ -31,11 +31,11 @@ class SampleModel(BaseNodeModel):
 
 
 class SampleNode(BaseNode):
-    def __init__(self, model: SampleModel, node_id: str, state, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: SampleModel, node_id: str, state, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         # Only persistent playback state is kept in self.state
-        if not hot_reload:
+        if do_initialise_state:
             self.state.last_playhead_position = 0
             self.state.total_samples_rendered = 0
             self.state.current_chop_index = None

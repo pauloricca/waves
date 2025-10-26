@@ -18,8 +18,8 @@ class EnvelopeModel(BaseNodeModel):
 
 
 class EnvelopeNode(BaseNode):
-    def __init__(self, model: EnvelopeModel, node_id: str, state, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: EnvelopeModel, node_id: str, state, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         self.signal_node = self.instantiate_child_node(model.signal, "signal") if model.signal is not None else None
         self.gate_node = self.instantiate_child_node(model.gate, "gate") if model.gate is not None else None
@@ -31,7 +31,7 @@ class EnvelopeNode(BaseNode):
             self.end = model.end
         
         # Persistent state for real-time rendering (survives hot reload)
-        if not hot_reload:
+        if do_initialise_state:
             self.state.fade_in_multiplier = None  # Attack envelope
             self.state.decay_multiplier = None  # Decay envelope
             self.state.fade_out_multiplier = None  # Release envelope

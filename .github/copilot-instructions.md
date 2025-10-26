@@ -270,18 +270,18 @@ The system supports hot reloading of YAML sound definition files during playback
 **Creating a Stateful Node (Example: SampleNode):**
 ```python
 class MyNode(BaseNode):
-    def __init__(self, model, state, hot_reload=False):
-        super().__init__(model)
+    def __init__(self, model, node_id: str, state, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
-        self.state = state  # Assign the state object
+        # self.state is assigned in BaseNode.__init__
         
-        # Only initialize persistent state if not hot reloading
-        if not hot_reload:
+        # Only initialize persistent state if we should initialise
+        if do_initialise_state:
             self.state.playhead_position = 0
             self.state.total_samples_rendered = 0
         
-        # Child nodes are regular attributes (not in state)
-        self.child_node = wavable_value_node_factory(model.param)
+        # Child nodes are regular attributes - use instantiate_child_node helper
+        self.child_node = self.instantiate_child_node(model.param, "param")
     
     def _do_render(self, num_samples=None, context=None, **params):
         # Access persistent state
@@ -292,42 +292,47 @@ class MyNode(BaseNode):
 ```
 
 **Key Rules:**
-1. All stateful nodes must accept `state` and `hot_reload` parameters in `__init__`
-2. Only truly persistent state goes in `self.state` (e.g., playback position, sample count)
-3. Child nodes, helpers, and ephemeral state are regular instance attributes
-4. When `hot_reload=False`, initialize all state attributes on `self.state`
-5. When `hot_reload=True`, skip initialization (state will be restored from the old tree)
-6. Use attribute access for state: `self.state.attr_name` (not dict keys)
-7. Node IDs are now automatically generated (see Automatic ID Generation below)
+1. All stateful nodes must accept `node_id: str`, `state` and `do_initialise_state` parameters in `__init__`
+2. All nodes must call `super().__init__(model, node_id, state, do_initialise_state)` first
+3. Only truly persistent state goes in `self.state` (e.g., playback position, sample count)
+4. Child nodes, helpers, and ephemeral state are regular instance attributes
+5. When `do_initialise_state=True`, initialize all state attributes on `self.state`
+6. When `do_initialise_state=False`, skip initialization (state will be restored from previous instance)
+7. Use attribute access for state: `self.state.attr_name` (not dict keys)
+8. Use `self.instantiate_child_node(value, "attribute_name")` to create child nodes
+9. Node IDs are automatically generated based on the parameter path where they're used
    - Explicit `id` fields still work and take priority
-   - Nodes without `id` still get state preservation via auto-generated IDs
    - You only need to set explicit `id` for nodes you want to reference or need stable IDs across structural changes
 
 ### Automatic ID Generation
 
-All nodes now automatically get hierarchical IDs for state preservation. You no longer need to manually assign IDs to every node!
+All nodes now automatically get **parameter-path based IDs** for state preservation. You no longer need to manually assign IDs to every node!
 
 **How it works:**
 - Explicit IDs: If you set `id: "my_node"`, that ID is used (priority)
-- Auto IDs: Nodes without explicit IDs get hierarchical IDs like `"0"`, `"root.0"`, `"my_node.1"`
+- Auto IDs: Nodes without explicit IDs get hierarchical IDs based on their parameter path: `"root.freq"`, `"root.mix.signals.0"`, `"root.mix.signals.1"`
 - **Both types get state preservation!** No more need for manual IDs everywhere
+- IDs are generated at instantiation time based on `parent_id + attribute_name + attribute_index`
 
 **Example YAML:**
 ```yaml
 my_sound:
-  sample:
-    # No id needed - gets auto ID "root.0"
-    file: kick.wav
-  osc:
-    # No id needed - gets auto ID "root.1"  
-    type: sin
-    freq: 440
-  sample:
-    id: snare    # Explicit ID takes priority
-    file: snare.wav
+  osc:                    # Root node gets ID "root"
+    freq:                 # freq parameter
+      osc:                # This node gets auto ID "root.freq"
+        type: sin
+        freq: 1
+        range: [10, 50]
+  mix:                    # Root node still "root"
+    signals:
+      - osc:              # Auto ID "root.signals.0"
+          freq: 200
+      - sample:           # Auto ID "root.signals.1"
+          id: snare       # Explicit ID takes priority - this is just "snare"
+          file: snare.wav
 ```
 
-All three nodes will preserve their playback state during hot reloads, whether they have explicit or auto-generated IDs.
+All nodes will preserve their state during hot reloads, whether they have explicit or parameter-path auto-generated IDs.
 
 **When to use explicit IDs:**
 - ✅ When you need to reference a node from another node (`reference: {ref: my_lfo}`)
@@ -337,17 +342,11 @@ All three nodes will preserve their playback state during hot reloads, whether t
 **See:** `HIERARCHICAL_AUTO_IDS.md` for detailed documentation on the auto-ID system
 
 **Hot Reload Mechanism:**
-- `HotReloadManager` (nodes/node_utils/hot_reload_manager.py) handles capture and restoration:
-  - Works with both explicit and auto-generated node IDs
-  - `capture_state(node)` - Captures state from all nodes (uses `AutoIDGenerator.get_effective_id()`)
-  - `restore_state(node, state_dict)` - Restores captured state to matching nodes in new tree
-  - `get_all_node_ids(node)` - Gets all node IDs (explicit + auto-generated) for determining which existed before reload
-- `AutoIDGenerator` (nodes/node_utils/auto_id_generator.py) generates hierarchical IDs:
-  - Auto ID generation happens at parse time (in sound_library.py) after YAML is loaded
-  - `get_effective_id(model)` returns explicit ID if present, otherwise auto-generated ID
-  - Enables state preservation for all nodes automatically
-- `instantiate_node()` accepts `hot_reload` and `previous_ids` parameters for coordinating the reload process
-- The main loop detects YAML changes and calls `perform_hot_reload()` to coordinate the full cycle
+- State is managed globally via `node_state_registry.py` - a centralized registry indexed by node ID
+- `instantiate_node()` now generates IDs based on parameter paths (parent_id + attribute_name + index)
+- All nodes get a `node_id` parameter in their constructor
+- `BaseNode.instantiate_child_node(child, attribute_name, attribute_index)` helper method simplifies child node creation with proper ID generation
+- The main loop detects YAML changes and re-instantiates the entire node tree, with state preserved in the global registry
 
 **Example Usage in waves.yaml:**
 ```yaml
@@ -367,9 +366,9 @@ When you edit this YAML file and save it, the system will:
 5. Resume playback from the preserved position
 
 ### References
-- See `docs/HOT_RELOAD_PLAN.md` for detailed architecture documentation
 - See `nodes/sample.py` for a complete reference implementation
-- See `nodes/node_utils/hot_reload_manager.py` for the state capture/restore mechanism
+- See `nodes/node_utils/node_state_registry.py` for the global state management
+- See `nodes/node_utils/instantiate_node.py` for the ID generation and node instantiation logic
 
 ## Creating a new type of Node
 
@@ -387,100 +386,66 @@ Then we need to add the new node to the NODE_REGISTRY in nodes/node_utils/node_r
 - Ensure the node works correctly in both realtime and non-realtime modes
 - In realtime mode, the node renders in chunks; in non-realtime, it may render the entire signal at once
 - When `num_samples` is None, render the full signal (or raise an error if the node needs explicit duration)
-- For stateful nodes that support hot reload, accept `state` and `hot_reload` parameters (see Hot Reload section above)
+- For stateful nodes, accept `state` and `do_initialise_state` parameters (see Hot Reload section above)
 
 ### Critical Rules for Node Implementation with Hot Reload Support
 
 **ALWAYS follow these rules when creating or modifying nodes:**
 
-1. **Child Node Instantiation - ALWAYS pass `hot_reload=True`**:
+1. **Child Node Instantiation - Use instantiate_child_node helper**:
    ```python
-   # ✅ CORRECT - Always pass True to allow children to check their own state
-   self.child_node = instantiate_node(model.child, hot_reload=True)
+   # ✅ CORRECT - Use the helper method provided by BaseNode
+   self.child_node = self.instantiate_child_node(model.child, "child")
    
-   # ❌ WRONG - Don't pass the parent's hot_reload flag
-   self.child_node = instantiate_node(model.child, hot_reload=hot_reload)
+   # For list items, pass the index
+   self.signals = [
+       self.instantiate_child_node(signal, "signals", i)
+       for i, signal in enumerate(model.signals)
+   ]
+   
+   # ❌ WRONG - Don't call instantiate_node directly
+   self.child_node = instantiate_node(model.child, ...)  # Missing parent_id context!
    ```
    
-   **Why**: The `instantiate_node` function checks if THAT SPECIFIC node had state before and sets `hot_reload=True` only for that node. By always passing `hot_reload=True`, we allow each child to check its own state in the global registry. If we pass `hot_reload=hot_reload` (parent's flag), children won't check for their own state.
+   **Why**: The `instantiate_child_node()` helper automatically uses this node's ID as the parent_id for proper hierarchical ID generation.
 
-2. **WavableValue Wrapping - Use WavableValueNode for non-node values**:
+2. **Node Constructor Signature**:
    ```python
-   # ✅ CORRECT - Wrap scalars/expressions in WavableValue
-   from nodes.wavable_value import WavableValueNode, WavableValueModel
+   # ✅ CORRECT - Accept all required parameters
+   def __init__(self, model: MyNodeModel, node_id: str, state=None, do_initialise_state=True):
+       super().__init__(model, node_id, state, do_initialise_state)
+       # ... rest of initialization
    
-   if isinstance(model.param, BaseNodeModel):
-       self.param_node = instantiate_node(model.param, hot_reload=True)
-   else:
-       # Scalar, expression, or interpolation list
-       wavable_model = WavableValueModel(value=model.param)
-       self.param_node = WavableValueNode(wavable_model)
-   
-   # ❌ WRONG - Don't store scalars directly
-   self.param = model.param  # Won't work with dynamic values!
+   # ❌ WRONG - Missing node_id parameter
+   def __init__(self, model: MyNodeModel, state=None, do_initialise_state=True):
+       super().__init__(model)  # Missing node_id!
    ```
 
-3. **Assigning Auto-IDs to Programmatically Created Nodes**:
+3. **State Attributes**:
    ```python
-   # ✅ CORRECT - Assign stable auto-IDs to programmatically created nodes
-   from nodes.node_utils.auto_id_generator import AutoIDGenerator
-   
-   my_id = AutoIDGenerator.get_effective_id(model)
-   wavable_model = WavableValueModel(value=scalar_value)
-   wavable_model.__auto_id__ = f"{my_id}.{param_name}"
-   self.param_node = WavableValueNode(wavable_model)
-   
-   # ❌ WRONG - Don't create nodes without IDs
-   wavable_model = WavableValueModel(value=scalar_value)
-   self.param_node = WavableValueNode(wavable_model)  # Gets runtime ID, won't preserve state!
+   # ✅ CORRECT - Only initialize state when we should initialise
+   def __init__(self, model: MyNodeModel, node_id: str, state=None, do_initialise_state=True):
+       super().__init__(model, node_id, state, do_initialise_state)
+       
+       if do_initialise_state:
+           self.state.playhead_position = 0
+           self.state.sample_count = 0
+       
+       # Regular attributes always initialized
+       self.signals = [self.instantiate_child_node(s, "signals", i) 
+                      for i, s in enumerate(model.signals)]
    ```
-   
-   **Why**: Nodes defined in YAML get auto-IDs during parsing, but nodes created programmatically in Python need manual ID assignment for state preservation during hot reload.
-
-4. **Dynamic Node Creation with Runtime IDs** (for sequencer-like nodes):
-   ```python
-   # ✅ CORRECT - Use set_runtime_id_prefix for dynamically created instances
-   from nodes.node_utils.instantiate_node import set_runtime_id_prefix
-   
-   # When creating multiple instances of the same sound at runtime
-   prefix = f"{my_id}.instance_{counter}"
-   set_runtime_id_prefix(prefix)
-   try:
-       sound_node = instantiate_node(sound_model, hot_reload=False)
-   finally:
-       set_runtime_id_prefix(None)  # Always clear!
-   ```
-   
-   **When to use**: Only for nodes that create multiple instances at runtime (like sequencer creating a kick on each beat). Most nodes don't need this.
-
-5. **Nodes with ConfigDict(extra='allow') - Handle extra fields properly**:
-   ```python
-   # ✅ CORRECT - Process __pydantic_extra__ for arbitrary parameters
-   if hasattr(model, '__pydantic_extra__') and model.__pydantic_extra__:
-       for field_name, field_value in model.__pydantic_extra__.items():
-           if isinstance(field_value, BaseNodeModel):
-               self.fields[field_name] = instantiate_node(field_value, hot_reload=True)
-           else:
-               # Wrap in WavableValue with stable ID
-               wavable_model = WavableValueModel(value=field_value)
-               wavable_model.__auto_id__ = f"{my_id}.{field_name}"
-               self.fields[field_name] = WavableValueNode(wavable_model)
-   ```
-   
-   **Examples**: Expression node, select node - any node that accepts arbitrary named parameters.
 
 **Quick Checklist for New Nodes:**
-- [ ] Child nodes instantiated with `hot_reload=True`? 
-- [ ] Non-node parameters wrapped in WavableValueNode?
-- [ ] Programmatically created nodes have `__auto_id__` assigned?
-- [ ] State attributes only initialized when `not hot_reload`?
-- [ ] Node accepts `state` and `hot_reload` parameters in `__init__`?
+- [ ] Child nodes instantiated with `self.instantiate_child_node()`?
+- [ ] Node constructor accepts `node_id: str` parameter?
+- [ ] State attributes only initialized when `do_initialise_state=True`?
+- [ ] Node calls `super().__init__(model, node_id, state, do_initialise_state)`?
 
 **See Also:**
-- `nodes/select.py` - Example of handling extra fields with proper ID assignment
-- `nodes/expression.py` - Example of ConfigDict(extra='allow') with child nodes
-- `nodes/sequencer.py` - Example of runtime ID generation for dynamic instances
 - `nodes/sample.py` - Example of stateful node with hot reload support
+- `nodes/sequencer.py` - Example of complex node with child instantiation
+- `nodes/expression.py` - Example of ConfigDict(extra='allow') with child nodes
 
 ## Configuration
 
@@ -514,6 +479,7 @@ When adding new features we should consider the following ideas for future work 
 - We don't need to write detailed instructions of usage or changes in .md files, if there is anything non-trivial we can just add a comment on the node file, just above the node model class.
 - For neatness, we try to keep node parameters as one word, but if we can't find a good name, we can use underscores to separate words. Feel free to suggest better names for parameters if you think of any.
 - When passing positional arguments to functions or methods and the arguments have the same name as the variables, we should just pass them without specifying the name to avoid "name=name" argument passing.
-- Very important:Use vectorised numpy operations when possible, avoid "for" loops over numpy arrays because this is a realtime application dealing with very large arrays.
+- **Boolean naming convention**: All boolean variables in Python code (not model parameters) should be named with a prefix: `is_`, `do_`, `are_`, or `has_`. Examples: `is_active`, `do_loop`, `are_nodes_ready`, `has_state`. Model parameters can have simpler names for cleaner YAML (e.g., `loop: true`).
+- Very important: Use vectorised numpy operations when possible, avoid "for" loops over numpy arrays because this is a realtime application dealing with very large arrays.
 - The timeout and gtimeout commands are not available on my system, avoid using them.
 - Don't bother doing intensive testing, just run a basic check after each task to check that the code compilies.

@@ -20,7 +20,7 @@ class BaseNodeModel(BaseModel):
 
 
 class BaseNode:
-    def __init__(self, model: BaseNodeModel, node_id: str, state=None, hot_reload=False):
+    def __init__(self, model: BaseNodeModel, node_id: str, state=None, do_initialise_state=True):
         self.node_id = node_id  # Set ID immediately so it's available for child instantiation
         self.duration = model.duration
         self.time_since_start = 0

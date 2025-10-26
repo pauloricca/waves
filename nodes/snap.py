@@ -38,10 +38,10 @@ class SnapNodeModel(BaseNodeModel):
 
 
 class SnapNode(BaseNode):
-    def __init__(self, model: SnapNodeModel, node_id: str, state=None, hot_reload=False):
+    def __init__(self, model: SnapNodeModel, node_id: str, state=None, do_initialise_state=True):
         from nodes.node_utils.instantiate_node import instantiate_node
         from nodes.wavable_value import WavableValueNode, WavableValueModel
-        super().__init__(model, node_id, state, hot_reload)
+        super().__init__(model, node_id, state, do_initialise_state)
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
         
         # Determine if we're using explicit values or range + interval

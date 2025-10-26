@@ -15,13 +15,13 @@ class RetriggerModel(BaseNodeModel):
     signal: BaseNodeModel = None
 
 class RetriggerNode(BaseNode):
-    def __init__(self, model: RetriggerModel, node_id: str, state, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: RetriggerModel, node_id: str, state, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
         
         # Persistent state for carry over samples (survives hot reload)
-        if not hot_reload:
+        if do_initialise_state:
             self.state.carry_over = np.array([], dtype=np.float32)
 
     def _do_render(self, num_samples=None, context=None, **params):

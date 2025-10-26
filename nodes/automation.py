@@ -88,8 +88,8 @@ class AutomationModel(BaseNodeModel):
 
 
 class AutomationNode(BaseNode):
-    def __init__(self, model: AutomationModel, node_id: str, state, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: AutomationModel, node_id: str, state, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         self.mode = model.mode
         self.overlap_time = model.overlap
@@ -100,7 +100,7 @@ class AutomationNode(BaseNode):
 
         
         # Persistent state for realtime playback (survives hot reload)
-        if not hot_reload:
+        if do_initialise_state:
             self.state.current_repeat = 0
             self.state.current_step = 0
             self.state.time_in_current_step = 0  # Time elapsed in current step (seconds)

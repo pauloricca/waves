@@ -1,43 +1,36 @@
 # Hot Reload Implementation Summary
 
 ## Overview
-Successfully implemented a complete hot-reload system for the waves project, enabling live YAML editing during playback without interrupting audio. The system preserves node state while allowing real-time sound definition updates.
+Successfully implemented a complete hot-reload system for the waves project, enabling live YAML editing during playback without interrupting audio. The system preserves node state across reloads using a global state registry indexed by parameter-path based node IDs.
 
 ## Architecture Components
 
-### 1. **HotReloadManager** (`nodes/node_utils/hot_reload_manager.py`)
-Manages state capture and restoration across YAML reloads.
+### 1. **Global State Registry** (`nodes/node_utils/node_state_registry.py`)
+Centralized state management for all nodes.
 
 **Key Methods:**
-- `capture_state(node)` - Recursively captures persistent state from all nodes with IDs
-- `restore_state(node, state_dict)` - Recursively restores captured state to matching nodes
-- `get_all_node_ids(node)` - Returns set of all node IDs in the tree
+- `get_state(node_id)` - Returns existing state or None
+- `create_state(node_id)` - Creates and stores new SimpleNamespace for a node
+- `clear()` - Clears all states (for testing/cleanup)
 
 **How it works:**
-```
-1. Traverse entire node tree recursively
-2. For each node with an `id` field, capture its `self.state` object
-3. Store mapping of node_id → state object
-4. During restore, match nodes by ID and restore their state
-```
+- Global singleton stores state objects indexed by node ID
+- State persists across hot reloads automatically
+- On reload, nodes with the same ID get their previous state back
 
-### 2. **Enhanced instantiate_node Pipeline** (`nodes/node_utils/instantiate_node.py`)
-Updated to support hot reload context and state initialization.
+### 2. **Enhanced instantiate_node()** (`nodes/node_utils/instantiate_node.py`)
+Central function for node instantiation with automatic ID generation and state management.
 
-**Key Changes:**
-- Added `hot_reload: bool` parameter - indicates this is a hot reload scenario
-- Added `previous_ids: Set[str]` parameter - IDs from the previous tree
-- Automatic creation of `SimpleNamespace` state objects for nodes with IDs
-
-**State Initialization Logic:**
+**Signature:**
 ```python
-node_hot_reload = hot_reload and (obj.id in previous_ids if obj.id else False)
-state = SimpleNamespace() if (obj.id) else None
-
-# Try calling with state/hot_reload (new pattern)
-node_definition.node(obj, state=state, hot_reload=node_hot_reload)
-# Fall back to old pattern if not supported
+def instantiate_node(node_model_or_value, parent_id, attribute_name, attribute_index=None)
 ```
+
+**Key Features:**
+- Generates hierarchical IDs based on parameter path: `parent_id.attribute_name[.index].ClassName`
+- Explicit IDs in models take priority over auto-generated IDs
+- Retrieves or creates state from global registry for each node
+- Passes `hot_reload=True` to node constructor if state existed before
 
 ### 3. **State Management Pattern**
 All stateful nodes follow a consistent pattern for hot reload support.
@@ -45,50 +38,47 @@ All stateful nodes follow a consistent pattern for hot reload support.
 **Node Implementation Pattern:**
 ```python
 class MyNode(BaseNode):
-    def __init__(self, model, state, hot_reload=False):
-        super().__init__(model)
+    def __init__(self, model, node_id: str, state, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
-        self.state = state
+        # self.state is assigned in BaseNode.__init__
         
         # Initialize persistent state only if not hot reloading
-        if not hot_reload:
+        if do_initialise_state:
             self.state.playhead_position = 0
             self.state.samples_rendered = 0
         
         # Child nodes are regular attributes (recreated each time)
-        self.speed_node = wavable_value_node_factory(model.speed)
-        self.freq_node = wavable_value_node_factory(model.freq)
+        self.child_node = self.instantiate_child_node(model.child, "child")
 ```
 
 **Key Rules:**
-1. Accept `state` and `hot_reload` parameters in `__init__`
-2. Only store persistent state in `self.state` (playback position, counters)
-3. Child nodes, helpers, and ephemeral data are regular attributes
+1. Accept `node_id: str`, `state` and `hot_reload` parameters in `__init__`
+2. Call `super().__init__(model, node_id, state, do_initialise_state)` first
+3. Only store persistent state in `self.state` (playback position, counters)
+4. Child nodes, helpers, and ephemeral data are regular attributes
+5. Initialize state attributes only when `not hot_reload`
+6. Use `self.instantiate_child_node()` to create child nodes with proper IDs
 4. Use attribute access: `self.state.attr_name` (not dict keys)
 5. Always give important nodes an `id` field for state preservation
 
 ### 4. **Enhanced waves.py** (`waves.py`)
-Refactored for hot reload support during real-time playback.
+Main playback controller with hot reload support.
 
-**Key Additions:**
-- `hot_reload_manager` - Global instance of HotReloadManager
+**Key Components:**
 - `hot_reload_lock` - Threading lock for thread-safe state updates
 - `current_sound_node` - Tracks currently playing node for reloads
 - `yaml_changed` - Flag signaling YAML file changes
-- `perform_hot_reload()` - Orchestrates the full reload cycle with state cleanup
 
 **Hot Reload Flow:**
 ```
 1. File watcher detects YAML change → sets yaml_changed = True
 2. Audio callback checks yaml_changed flag
-3. If true, acquires lock and calls perform_hot_reload()
-4. perform_hot_reload():
-   - Captures state from current node tree
-   - Reloads YAML and instantiates new tree
-   - Restores captured state to matching nodes
-   - Identifies orphaned nodes (present before, removed after)
-   - Cleans up state entries for removed nodes (memory hygiene)
-   - Updates current_sound_node reference
+3. If true, re-instantiates the entire node tree
+4. State is preserved automatically via global registry:
+   - Nodes with same IDs get their previous state back
+   - New nodes get fresh state
+   - Removed nodes' state remains in registry (not cleaned up)
 5. Playback continues with new tree and preserved state
 ```
 
@@ -133,24 +123,17 @@ my_sound:
 ## Technical Details
 
 ### State Preservation Mechanism
-- Only nodes with explicit `id` fields have their state preserved
+- All nodes get state objects from the global registry (indexed by node ID)
+- Explicit IDs take priority; otherwise hierarchical IDs are auto-generated
 - Each state object is a `SimpleNamespace` with arbitrary attributes
 - File caching (`utils.py`) prevents unnecessary I/O when nodes recreate references
 - RenderContext is reset after reload to clear audio cache
-- **Orphaned state cleanup**: State entries for removed nodes are automatically deleted to prevent memory leaks
-  - Compares node IDs before reload (old_ids) with node IDs after instantiation (new_ids)
-  - Removes state entries for nodes in old_ids - new_ids
-  - Can optionally log cleanup via `DISPLAY_HOT_RELOAD_CLEANUP` config
+- State accumulates over time (not automatically cleaned up for now)
 
 ### Thread Safety
 - `hot_reload_lock` protects access to `current_sound_node` during reload
 - Audio callback holds lock while performing hot reload
 - Lock acquisition is brief (just state operations, not rendering)
-
-### Backward Compatibility
-- Old nodes without state/hot_reload support still work
-- `instantiate_node()` tries new pattern, falls back to old signature
-- Graceful degradation if hot reload fails (continues with old node)
 
 ## Files Modified/Created
 
@@ -178,11 +161,11 @@ WAIT_FOR_CHANGES_IN_WAVES_YAML = True  # Enable YAML file watching
 
 1. **Basic Reload:**
    - Start playback with a sample node
-   - Edit `waves.yaml` to change a parameter
+   - Edit YAML to change a parameter
    - Verify smooth reload without audio interruption
 
 2. **State Preservation:**
-   - Use a sample player with `chop: true`
+   - Use a sample player with looping or long audio
    - Edit YAML and verify playhead continues from same position
    - Verify audio buffer switches as expected
 
@@ -191,75 +174,16 @@ WAIT_FOR_CHANGES_IN_WAVES_YAML = True  # Enable YAML file watching
    - Edit different node parameters
    - Verify state preserved for all nodes
 
-4. **New vs Existing Nodes:**
-   - Add a new node to existing tree
-   - Verify new node initializes state (not hot reloaded)
-   - Verify existing nodes preserve their state
-
-## Auto ID Generation
-
-### 6. **AutoIDGenerator** (`nodes/node_utils/auto_id_generator.py`)
-Automatically generates hierarchical IDs for all nodes, eliminating the need for manual `id` assignments while maintaining state preservation.
-
-**Key Features:**
-- **Explicit IDs have priority**: If you provide `id: "my_node"` in YAML, that's used
-- **Auto-generated IDs for others**: Nodes without explicit IDs get hierarchical IDs like "0", "0.1", "my_lfo.0"
-- **Recursive tree traversal**: Processes entire node hierarchy during sound library loading
-- **Integration at parse time**: IDs are generated immediately after YAML parsing
-
-**ID Format:**
-- Root node: `"root"` or `"0"` (depending on context)
-- Child at index 0: `"0"` or `"parent_id.0"`
-- Nested children: `"0.1.2"` or `"my_lfo.0.child_name"`
-
-**Example:**
-```yaml
-my_sound:
-  mix:
-    signals:
-      - osc:           # Auto ID: "0" → "root.0"
-          type: sin
-          freq: 440
-      - osc:           # Auto ID: "1" → "root.1"
-          id: my_lfo   # Explicit: "my_lfo" (takes priority)
-          type: sin
-          freq: 2
-```
-
-**Key Methods:**
-- `generate_ids(obj, parent_id="", index_in_parent=None)` - Recursively assign auto IDs
-- `get_effective_id(model)` - Returns explicit ID or auto-generated ID
-- `get_auto_id(model)` - Returns only auto-generated ID
-- `_build_id(parent_id, index, node_name)` - Constructs hierarchical ID string
-
-**How it works:**
-1. After YAML is parsed into models in `sound_library.py`
-2. `AutoIDGenerator.generate_ids()` is called on each sound model
-3. Recursively traverses the model tree (handles dicts, lists, Pydantic models)
-4. For each node without explicit ID, generates and stores auto ID in `__auto_id__` attribute
-5. During instantiation/hot reload, `get_effective_id()` returns the appropriate ID
-
-**Benefits:**
-- ✅ State preservation without manual IDs
-- ✅ Automatic ID stability for added/removed nodes with explicit IDs
-- ✅ Works seamlessly with explicit IDs (explicit takes priority)
-- ✅ Supports deeply nested structures and lists
-- ✅ No breaking changes (explicit IDs work exactly as before)
-
-**See Also:** `HIERARCHICAL_AUTO_IDS.md` for detailed usage guide
-
-## Future Enhancements
-
-1. **Stable list indices:** Use node types or identifiers instead of numeric indices
-2. **Selective Reload:** Option to reload only specific branches of the node tree
-3. **State Versioning:** Handle state migrations when node model changes
-4. **Reload History:** Keep track of reload history for debugging
-5. **Performance Metrics:** Log hot reload timing and impact on audio
-6. **ID visualization:** Show generated IDs in CLI/UI for debugging
+4. **Auto-Generated IDs:**
+   - Create nodes without explicit IDs
+   - Edit YAML and verify state is still preserved
+   - Check that IDs are stable across minor edits
 
 ## References
 
-- `docs/HOT_RELOAD_PLAN.md` - Detailed architecture documentation
 - `nodes/sample.py` - Reference node implementation
-- `nodes/node_utils/hot_reload_manager.py` - State manager implementation
+- `nodes/node_utils/instantiate_node.py` - ID generation and instantiation
+- `nodes/node_utils/node_state_registry.py` - Global state management
+- `nodes/node_utils/base_node.py` - BaseNode with instantiate_child_node()
 - `.github/copilot-instructions.md` - API documentation for node authors
+- `HIERARCHICAL_AUTO_IDS.md` - Detailed auto-ID system documentation

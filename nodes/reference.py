@@ -12,8 +12,8 @@ class ReferenceNodeModel(BaseNodeModel):
 
 
 class ReferenceNode(BaseNode):
-    def __init__(self, model: ReferenceNodeModel, node_id: str, state=None, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: ReferenceNodeModel, node_id: str, state=None, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.ref_id = model.ref
     
     def _do_render(self, num_samples: int = None, context: RenderContext = None, **params) -> np.ndarray:

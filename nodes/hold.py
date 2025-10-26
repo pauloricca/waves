@@ -24,14 +24,14 @@ class HoldNode(BaseNode):
     Note: Change detection is chunk-level: if trigger changes anywhere within the chunk,
           we resample once for the whole chunk.
     """
-    def __init__(self, model: HoldModel, node_id: str, state=None, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: HoldModel, node_id: str, state=None, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
         self.trigger_node = self.instantiate_child_node(model.trigger, "trigger") if model.trigger is not None else None
         
         # Persistent state for held value and trigger tracking (survives hot reload)
-        if not hot_reload:
+        if do_initialise_state:
             self.state.held_value = None
             self.state.last_trigger_value = None
 

@@ -34,14 +34,14 @@ class MidiCCModel(BaseNodeModel):
 
 
 class MidiCCNode(BaseNode):
-    def __init__(self, model: MIDICCNodeModel, node_id: str, state=None, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: MIDICCNodeModel, node_id: str, state=None, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.channel = model.channel
         self.cc_number = model.cc
         self.min_value, self.max_value = model.range
         
         # Persistent state for CC tracking (survives hot reload)
-        if not hot_reload:
+        if do_initialise_state:
             # Convert initial value from min-max range to normalized (0-1)
             value_range = self.max_value - self.min_value
             if value_range != 0:

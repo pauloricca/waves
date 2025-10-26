@@ -44,8 +44,8 @@ class MixModel(BaseNodeModel):
 
 
 class MixNode(BaseNode):
-    def __init__(self, model: MixModel, node_id: str, state=None, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: MixModel, node_id: str, state=None, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         self.signal_nodes = [self.instantiate_child_node(signal, "signals", i) for i, signal in enumerate(model.signals)]
 

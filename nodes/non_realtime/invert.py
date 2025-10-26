@@ -11,7 +11,7 @@ class InvertModel(BaseNodeModel):
     signal: BaseNodeModel = None
 
 class InvertNode(BaseNode):
-    def __init__(self, model: InvertModel, state=None, hot_reload=False):
+    def __init__(self, model: InvertModel, state=None, do_initialise_state=True):
         super().__init__(model)
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
 

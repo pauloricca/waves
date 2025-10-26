@@ -23,14 +23,14 @@ class MidiModel(BaseNodeModel):
 
 
 class MidiNode(BaseNode):
-    def __init__(self, model: MidiModel, node_id: str, state=None, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: MidiModel, node_id: str, state=None, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.channel = model.channel
         self.signal_model = model.signal
         self.max_voices = model.voices
         
         # Persistent state for active notes (survives hot reload)
-        if not hot_reload:
+        if do_initialise_state:
             self.state.active_notes = {}
             self.state.note_id_counter = 0
             self.state.note_number_to_ids = {}  # {note_number: [id1, id2, ...]}

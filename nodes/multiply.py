@@ -56,8 +56,8 @@ class MultiplyNodeModel(BaseNodeModel):
 
 
 class MultiplyNode(BaseNode):
-    def __init__(self, model: MultiplyNodeModel, node_id: str, state=None, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: MultiplyNodeModel, node_id: str, state=None, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         
         # Validate that either number or items is provided, but not both

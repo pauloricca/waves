@@ -19,8 +19,8 @@ class SequencerModel(BaseNodeModel):
 
 
 class SequencerNode(BaseNode):
-    def __init__(self, model: SequencerModel, node_id: str, state, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: SequencerModel, node_id: str, state, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         self.sequence = model.sequence
         self.chain = model.chain
@@ -28,7 +28,7 @@ class SequencerNode(BaseNode):
         self.interval_node = self.instantiate_child_node(model.interval, "interval")
         
         # Persistent state for realtime playback (survives hot reload)
-        if not hot_reload:
+        if do_initialise_state:
             self.state.current_repeat = 0
             self.state.current_step = 0
             self.state.time_in_current_step = 0  # Time elapsed in current step (seconds)
@@ -81,7 +81,6 @@ class SequencerNode(BaseNode):
                     sound_duration = look_for_duration(sound_model) or 1
                     sound_nodes_data.append((sound_node, render_args, sound_duration, 0, step_index))  # (node, args, duration, samples_rendered, step_index)
                 else:
-                    # These are dynamically created sound nodes for sequence steps, so hot_reload=False
                     sound_node = self.instantiate_child_node(sound, attribute_name, attribute_index)
                     sound_duration = look_for_duration(sound) or 1
                     sound_nodes_data.append((sound_node, {}, sound_duration, 0, step_index))

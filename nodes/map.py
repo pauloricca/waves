@@ -105,8 +105,8 @@ class MapModel(BaseNodeModel):
         return data
 
 class MapNode(BaseNode):
-    def __init__(self, model: MapModel, node_id: str, state=None, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: MapModel, node_id: str, state=None, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
         

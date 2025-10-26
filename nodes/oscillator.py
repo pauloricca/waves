@@ -66,8 +66,8 @@ class OscillatorModel(BaseNodeModel):
 
 
 class OscillatorNode(BaseNode):
-    def __init__(self, model: OscillatorModel, node_id: str, state=None, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: OscillatorModel, node_id: str, state=None, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         self.freq = self.instantiate_child_node(model.freq, "freq") if model.freq else None
         self.amp = self.instantiate_child_node(model.amp, "amp")
@@ -75,7 +75,7 @@ class OscillatorNode(BaseNode):
         self.seed = self.model.seed or random.randint(0, 10000)
         
         # Persistent state (survives hot reload)
-        if not hot_reload:
+        if do_initialise_state:
             self.state.phase_acc = 0  # Phase accumulator to maintain continuity between render calls
             self.state.wander_position = 0.0  # Current position for wander oscillator
             self.state.wander_velocity = 0.0  # Current velocity for wander oscillator

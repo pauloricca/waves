@@ -94,15 +94,15 @@ def _stop_input_stream():
 
 
 class InputNode(BaseNode):
-    def __init__(self, model: InputModel, node_id: str, state=None, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: InputModel, node_id: str, state=None, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         
         # Child nodes
         self.amp_node = self.instantiate_child_node(model.amp, "amp")
         
         # Persistent state (survives hot reload)
-        if not hot_reload:
+        if do_initialise_state:
             self.state.total_samples_rendered = 0
         
         # Start the shared input stream

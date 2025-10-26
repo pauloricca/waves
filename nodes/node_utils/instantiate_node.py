@@ -15,7 +15,6 @@ def instantiate_node(node_model_or_value: WavableValue, parent_id: str, attribut
         parent_id: The parent node's ID for runtime ID generation.
         attribute_name: The attribute name in the parent on which this node is defined.
         attribute_index: Index in the attribute if it's a list, else None.
-        hot_reload: If True, this is a hot reload scenario.
     
     Returns:
         An instantiated BaseNode.
@@ -43,24 +42,22 @@ def instantiate_node(node_model_or_value: WavableValue, parent_id: str, attribut
     state = state_registry.get_state(node_id)
 
     if state is None:
-        old_state_existed = False
+        do_initialise_state = True
         state = state_registry.create_state(node_id)
     else:
-        old_state_existed = True
+        do_initialise_state = False
     
     node: BaseNode | None = None
 
     if isinstance(node_model_or_value, BaseNodeModel):
         for node_definition in NODE_REGISTRY:
             if isinstance(node_model_or_value, node_definition.model):
-                node = node_definition.node(node_model_or_value, node_id=node_id, state=state, hot_reload=old_state_existed)
+                node = node_definition.node(node_model_or_value, node_id=node_id, state=state, do_initialise_state=do_initialise_state)
     else:
-        node = WavableValueNode(WavableValueModel(value=node_model_or_value), node_id=node_id, state=state, hot_reload=old_state_existed)
+        node = WavableValueNode(WavableValueModel(value=node_model_or_value), node_id=node_id, state=state, do_initialise_state=do_initialise_state)
     
     if node is None:
         raise ValueError(f"Unknown model type: {type(node_model_or_value)}")
-
-    print("Node", node.__class__.__name__, "initialized with id:", node_id)
 
     return node
 

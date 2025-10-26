@@ -29,15 +29,15 @@ class FilterModel(BaseNodeModel):
     signal: BaseNodeModel = None
 
 class FilterNode(BaseNode):
-    def __init__(self, model: FilterModel, node_id: str, state, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: FilterModel, node_id: str, state, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         self.cutoff_node = self.instantiate_child_node(model.cutoff, "cutoff")
         self.peak_node = self.instantiate_child_node(model.peak, "peak")
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
         
         # Persistent state for continuity between chunks (survives hot reload)
-        if not hot_reload:
+        if do_initialise_state:
             self.state.x1 = 0.0
             self.state.x2 = 0.0
             self.state.y1 = 0.0

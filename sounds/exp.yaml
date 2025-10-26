@@ -235,8 +235,9 @@ test_multiply_advanced:
             osc:
               osc:
                 type: saw
-                freq: "50 * (1 + i * 0.001)"  # Spread frequencies
+                freq: "50 * (1 + i * 0.0001)"  # Spread frequencies
                 phase: "i / n"                 # Phase spread
+
 
 # Test foreach mode with items list
 test_multiply_foreach:

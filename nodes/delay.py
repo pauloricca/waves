@@ -28,8 +28,8 @@ class DelayModel(BaseNodeModel):
     signal: BaseNodeModel = None
 
 class DelayNode(BaseNode):
-    def __init__(self, model: DelayModel, node_id: str, state, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: DelayModel, node_id: str, state, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         self.time_node = self.instantiate_child_node(model.time, "time")
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
@@ -48,7 +48,7 @@ class DelayNode(BaseNode):
         self.buffer_size = max_delay_samples
         
         # Persistent state for buffer and positions (survives hot reload)
-        if not hot_reload:
+        if do_initialise_state:
             self.state.buffer = np.zeros(self.buffer_size, dtype=np.float32)
             self.state.write_position = 0
             self.state.read_position = 0.0  # Can be fractional for tape speed changes

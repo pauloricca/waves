@@ -12,9 +12,9 @@ class ExpressionNodeModel(BaseNodeModel):
 
 
 class ExpressionNode(BaseNode):
-    def __init__(self, model: ExpressionNodeModel, node_id: str, state=None, hot_reload=False):
+    def __init__(self, model: ExpressionNodeModel, node_id: str, state=None, do_initialise_state=True):
         from expression_globals import compile_expression
-        super().__init__(model, node_id, state, hot_reload)
+        super().__init__(model, node_id, state, do_initialise_state)
         
         # Compile the main expression using centralized function
         self.compiled_exp, self.exp_value, self.is_constant = compile_expression(model.exp)

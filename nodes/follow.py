@@ -58,15 +58,15 @@ class FollowModel(BaseNodeModel):
 
 
 class FollowNode(BaseNode):
-    def __init__(self, model: FollowModel, node_id: str, state=None, hot_reload=False):
-        super().__init__(model, node_id, state, hot_reload)
+    def __init__(self, model: FollowModel, node_id: str, state=None, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
         self.range_min_node = self.instantiate_child_node(model.range[0], "range_min")
         self.range_max_node = self.instantiate_child_node(model.range[1], "range_max")
         
         # Persistent state for realtime rendering (survives hot reload)
-        if not hot_reload:
+        if do_initialise_state:
             self.state.envelope_value = 0.0  # Current envelope follower value
 
     def _do_render(self, num_samples=None, context=None, **params):

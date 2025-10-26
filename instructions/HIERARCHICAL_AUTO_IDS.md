@@ -2,13 +2,18 @@
 
 ## Overview
 
-The waves project now automatically generates IDs for all nodes based on the **parameter path** where they're connected, enabling state preservation across hot reloads even for nodes without explicit IDs.
+The waves project automatically generates IDs for all nodes based on the **parameter path** where they're used in the node tree, enabling state preservation across hot reloads even for nodes without explicit IDs.
 
-IDs are generated based on WHERE a node is used (the parameter name), not WHERE it sits in the tree. This means:
+IDs are generated at **node instantiation time** based on:
+- Parent node's ID
+- Parameter name where the child is used
+- Index if the parameter is a list
+
+This means:
 
 - **Explicit IDs**: `"my_oscillator"` (manually provided in YAML)
-- **Auto-generated IDs**: `"root.freq"`, `"root.mix.signals.0"`, `"root.mix.signals.1"`
-- **Benefits**: State preserved when adding/removing/reordering siblings; no state confusion when swapping node types
+- **Auto-generated IDs**: `"root.freq"`, `"root.signals.0.WavableValueModel"`, `"root.signals.1.OscillatorModel"`
+- **Benefits**: State preserved across hot reloads; IDs are stable and predictable
 
 ## ID Priority
 
@@ -155,19 +160,37 @@ This makes it obvious what each node is connected to, reducing confusion.
 
 ## Implementation Details
 
-### AutoIDGenerator (`nodes/node_utils/auto_id_generator.py`)
+### instantiate_node() (`nodes/node_utils/instantiate_node.py`)
 
-**Key Methods:**
-- `generate_ids(obj, param_path="root")` - Recursively generate IDs based on parameter paths
-- `get_effective_id(model)` - Get ID (explicit or auto-generated)
-- `get_auto_id(model)` - Get only auto-generated ID
+IDs are now generated **at instantiation time** using a simple hierarchical pattern:
+
+```python
+def instantiate_node(node_model_or_value, parent_id, attribute_name, attribute_index=None):
+    # Generate ID based on parameter path
+    if node_model_or_value.id is not None:
+        node_id = node_model_or_value.id  # Explicit ID takes priority
+    else:
+        node_id = f"{parent_id}.{attribute_name}"
+        if attribute_index is not None:
+            node_id += f".{attribute_index}"
+        node_id += f".{node_model_or_value.__class__.__name__}"
+```
 
 **How It Works:**
-1. Traverses the entire YAML/model tree recursively
-2. For each parameter, builds a path string (e.g., "root.mix.signals")
-3. For list items, appends the index (e.g., "root.mix.signals.0")
-4. If a node has no explicit `id`, stores the parameter path in `__auto_id__`
-5. If a node has explicit `id`, uses that instead (takes priority)
+1. Every node receives its parent's ID, the attribute name, and optionally an index
+2. IDs are built hierarchically: `parent_id.attribute_name[.index].ClassName`
+3. Explicit IDs in YAML always take priority
+4. For WavableValues (scalars, expressions), a random ID is generated
+
+### BaseNode.instantiate_child_node()
+
+Helper method that simplifies child node creation with proper ID generation:
+
+```python
+def instantiate_child_node(self, child, attribute_name, attribute_index=None):
+    """Uses this node's ID as parent_id for stable runtime ID generation."""
+    return instantiate_node(child, self.node_id, attribute_name, attribute_index)
+```
 
 ## Usage Examples
 
@@ -260,39 +283,30 @@ DEBUG_AUTO_ID_GENERATION = False  # Set to True to see generated IDs
 
 ## Gotchas & Notes
 
-1. **Swapping Node Types with Same Explicit ID**
-   - ❌ Don't do this: Replace sample with osc but keep `id: drum1`
-   - Different node types have different internal state
-   - State from one type can't be used by another type
-   - ✅ Solution: Use type-specific IDs or rely on auto-IDs
+1. **Auto-Generated IDs Include Class Names**
+   - Auto IDs include the model class name: `root.freq.OscillatorModel`
+   - This makes IDs unique even when swapping node types at the same parameter
+   - Different node types have different internal state, so this prevents state confusion
 
 2. **List Index Changes When Items Are Added/Removed**
    - When you add an item to a list, items after it shift indices
    - Their auto-IDs change (e.g., `root.signals.0` → `root.signals.1`)
-   - But their state still moves with them (tied to the parameter path)
-   - ✅ This is actually good! State follows the node naturally
+   - State is NOT automatically migrated - new indices get fresh state
+   - Use explicit IDs if you need state to follow a specific node through restructuring
 
 3. **Explicit IDs Must Be Unique**
    - Each explicit ID should be used only once in the sound tree
-   - Using the same ID twice causes undefined behavior
-   - ✅ Auto-IDs are always unique (tied to parameter path)
+   - Using the same ID twice will cause the second node to overwrite the state of the first
+   - Auto-IDs are always unique (based on full parameter path + class name)
 
-4. **Explicit IDs Break Parameter-Path Hierarchy**
-   - When you use explicit ID, children's parameter paths start from that ID
-   - Not from the original parameter path
-   - This is intentional - explicit IDs are "local roots"
-   - ✅ Good for organizing state around important nodes
-
-## Future Enhancements
-
-1. **Stable list indices**: Could use node types or other identifiers instead of numeric indices
-2. **ID migration**: Support migration when tree structure changes
-3. **ID validation**: Warn about ID collisions or instability
-4. **Debug visualization**: Show generated IDs in CLI/UI
+4. **Explicit IDs Create New ID Hierarchy**
+   - When you use explicit ID, children's IDs start from that ID
+   - Example: `my_delay` → child at signal becomes `my_delay.signal.OscillatorModel`
+   - This is intentional - explicit IDs are "local roots" for their subtrees
 
 ## References
 
-- `nodes/node_utils/auto_id_generator.py` - ID generation implementation
-- `sound_library.py` - Integration point for YAML loading
-- `nodes/node_utils/instantiate_node.py` - Node instantiation with ID support
-- `nodes/node_utils/hot_reload_manager.py` - State capture/restore with ID support
+- `nodes/node_utils/instantiate_node.py` - ID generation and node instantiation logic
+- `nodes/node_utils/base_node.py` - BaseNode with instantiate_child_node() helper
+- `nodes/node_utils/node_state_registry.py` - Global state management indexed by node ID
+- `sound_library.py` - YAML parsing that creates the initial model tree
