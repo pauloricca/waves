@@ -272,7 +272,7 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
         while not should_stop:
             if len(visualised_wave_buffer) > 0:
                 try:
-                    render_time_text = f"Render time: {100 * last_render_time / (BUFFER_SIZE / SAMPLE_RATE):.2f}%"
+                    render_time_text = f"CPU usage: {100 * last_render_time / (BUFFER_SIZE / SAMPLE_RATE):.2f}%"
                     
                     if DO_VISUALISE_OUTPUT:
                         visualise_wave(np.array(visualised_wave_buffer), do_normalise=False, replace_previous=True, extra_lines=1)

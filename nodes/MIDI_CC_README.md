@@ -176,7 +176,6 @@ The `midi_cc` node uses the same MIDI input manager as the `midi` node, so the M
 
 ## Tips
 
-1. **Range Mapping**: Use the `normalise` node to map the 0.0-1.0 output to your desired parameter range
 2. **Smoothing**: Consider using the `smooth` node if CC changes are too abrupt
 3. **Initial Values**: Set appropriate initial values so parameters have sensible defaults before you move the controller
-4. **Testing**: Use `list_midi_devices.py` to identify available MIDI controllers and their CC outputs
+4. **Testing**: Use `midi_testing.py` to identify available MIDI controllers and their CC outputs
