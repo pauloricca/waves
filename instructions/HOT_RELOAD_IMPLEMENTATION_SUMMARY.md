@@ -28,7 +28,6 @@ Updated to support hot reload context and state initialization.
 - Added `hot_reload: bool` parameter - indicates this is a hot reload scenario
 - Added `previous_ids: Set[str]` parameter - IDs from the previous tree
 - Automatic creation of `SimpleNamespace` state objects for nodes with IDs
-- New `instantiate_node_tree()` convenience wrapper for root-level instantiation
 
 **State Initialization Logic:**
 ```python

@@ -1,35 +1,20 @@
 from __future__ import annotations
-from nodes.node_utils.base_node import BaseNode
+from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_registry import NODE_REGISTRY
-from nodes.node_utils.auto_id_generator import AutoIDGenerator
 from nodes.node_utils.node_state_registry import get_state_registry
+from nodes.wavable_value import WavableValue, WavableValueModel, WavableValueNode
+from random import random
 
-# Runtime ID generation context (thread-local would be better for multi-threading)
-_runtime_id_counter = 0
-_runtime_id_prefix = None
 
-def set_runtime_id_prefix(prefix: str = None):
-    """Set the prefix for runtime ID generation. Used when creating nodes dynamically."""
-    global _runtime_id_prefix, _runtime_id_counter
-    _runtime_id_prefix = prefix
-    _runtime_id_counter = 0
-
-def get_next_runtime_id() -> str:
-    """Generate the next runtime ID based on current prefix and counter."""
-    global _runtime_id_counter
-    if _runtime_id_prefix:
-        runtime_id = f"{_runtime_id_prefix}.runtime_{_runtime_id_counter}"
-    else:
-        runtime_id = f"runtime_{_runtime_id_counter}"
-    _runtime_id_counter += 1
-    return runtime_id
-
-def instantiate_node(obj, hot_reload: bool = False) -> BaseNode:
+def instantiate_node(node_model_or_value: WavableValue, parent_id: str, attribute_name: str, attribute_index: int | None = None) -> BaseNode:
     """
     Instantiate a node from a model.
     
     Args:
-        obj: The node model to instantiate.
+        node_model: The node model to instantiate.
+        parent_id: The parent node's ID for runtime ID generation.
+        attribute_name: The attribute name in the parent on which this node is defined.
+        attribute_index: Index in the attribute if it's a list, else None.
         hot_reload: If True, this is a hot reload scenario.
     
     Returns:
@@ -39,48 +24,44 @@ def instantiate_node(obj, hot_reload: bool = False) -> BaseNode:
     - ALL nodes get an ID (explicit, auto-generated, or runtime-generated)
     - ALL nodes get state from the global registry
     - States are preserved across hot reloads
-    - States accumulate over time (not cleaned up)
+    - States accumulate over time for now (not cleaned up)
     """
     # Get or generate effective ID for this node
-    effective_id = AutoIDGenerator.get_effective_id(obj)
-    
-    # If no explicit or auto ID, generate a runtime ID
-    if effective_id is None:
-        effective_id = get_next_runtime_id()
-        # Store it as auto_id for future reference
-        obj.__auto_id__ = effective_id
+    if isinstance(node_model_or_value, (int, float, str, list)):
+        node_id = random().hex()
+    elif node_model_or_value.id is not None:
+        node_id = node_model_or_value.id
     else:
-        # If there's a runtime prefix, prepend it to the ID
-        # This ensures sequencer-created sounds get unique IDs
-        if _runtime_id_prefix:
-            effective_id = f"{_runtime_id_prefix}.{effective_id}"
+        node_id = f"{parent_id}.{attribute_name}"
+        if attribute_index is not None:
+            node_id += f".{attribute_index}"
+        node_id += f".{node_model_or_value.__class__.__name__}"
     
     # Get state from global registry - ALL nodes get state now
     state_registry = get_state_registry()
-    old_state_existed = effective_id in state_registry._states
-    state = state_registry.get_or_create_state(effective_id, hot_reload=hot_reload)
     
-    # Node should hot_reload only if it had state before
-    node_hot_reload = hot_reload and old_state_existed
-    
-    for node_definition in NODE_REGISTRY:
-        if isinstance(obj, node_definition.model):
-            # All nodes now accept state and hot_reload parameters
-            return node_definition.node(obj, state=state, hot_reload=node_hot_reload)
+    state = state_registry.get_state(node_id)
 
-    raise ValueError(f"Unknown model type: {type(obj)}")
-
-
-def instantiate_node_tree(model, hot_reload: bool = False) -> BaseNode:
-    """
-    Instantiate a complete tree of nodes with hot reload support.
+    if state is None:
+        old_state_existed = False
+        state = state_registry.create_state(node_id)
+    else:
+        old_state_existed = True
     
-    Args:
-        model: The root node model to instantiate.
-        hot_reload: If True, this is a hot reload scenario.
+    node: BaseNode | None = None
+
+    if isinstance(node_model_or_value, BaseNodeModel):
+        for node_definition in NODE_REGISTRY:
+            if isinstance(node_model_or_value, node_definition.model):
+                node = node_definition.node(node_model_or_value, node_id=node_id, state=state, hot_reload=old_state_existed)
+    else:
+        node = WavableValueNode(WavableValueModel(value=node_model_or_value), node_id=node_id, state=state, hot_reload=old_state_existed)
     
-    Returns:
-        The root node of the newly instantiated tree.
-    """
-    # Simply instantiate the tree - states are managed by the global registry
-    return instantiate_node(model, hot_reload=hot_reload)
+    if node is None:
+        raise ValueError(f"Unknown model type: {type(node_model_or_value)}")
+
+    print("Node", node.__class__.__name__, "initialized with id:", node_id)
+
+    return node
+
+    

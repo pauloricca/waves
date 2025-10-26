@@ -5,7 +5,7 @@ from pydantic import ConfigDict
 from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import WavableValue, wavable_value_node_factory
+from nodes.wavable_value import WavableValue
 
 class DelayMode(str, Enum):
     DIGITAL = "DIGITAL"
@@ -28,12 +28,11 @@ class DelayModel(BaseNodeModel):
     signal: BaseNodeModel = None
 
 class DelayNode(BaseNode):
-    def __init__(self, model: DelayModel, state, hot_reload=False):
-        from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model, state, hot_reload)
+    def __init__(self, model: DelayModel, node_id: str, state, hot_reload=False):
+        super().__init__(model, node_id, state, hot_reload)
         self.model = model
-        self.time_node = wavable_value_node_factory(model.time)
-        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
+        self.time_node = self.instantiate_child_node(model.time, "time")
+        self.signal_node = self.instantiate_child_node(model.signal, "signal")
         
         # Circular buffer for storing delayed samples
         # Calculate buffer size based on the delay time parameter

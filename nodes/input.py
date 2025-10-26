@@ -8,7 +8,7 @@ from pydantic import ConfigDict
 from config import SAMPLE_RATE, BUFFER_SIZE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import WavableValue, wavable_value_node_factory
+from nodes.wavable_value import WavableValue
 
 
 class InputModel(BaseNodeModel):
@@ -94,12 +94,12 @@ def _stop_input_stream():
 
 
 class InputNode(BaseNode):
-    def __init__(self, model: InputModel, state=None, hot_reload=False):
-        super().__init__(model, state, hot_reload)
+    def __init__(self, model: InputModel, node_id: str, state=None, hot_reload=False):
+        super().__init__(model, node_id, state, hot_reload)
         self.model = model
         
         # Child nodes
-        self.amp_node = wavable_value_node_factory(model.amp)
+        self.amp_node = self.instantiate_child_node(model.amp, "amp")
         
         # Persistent state (survives hot reload)
         if not hot_reload:

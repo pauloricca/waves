@@ -6,7 +6,7 @@ from pydantic import ConfigDict, field_validator, model_validator
 from config import *
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import WavableValue, wavable_value_node_factory
+from nodes.wavable_value import WavableValue
 
 """
 Map Node
@@ -105,23 +105,22 @@ class MapModel(BaseNodeModel):
         return data
 
 class MapNode(BaseNode):
-    def __init__(self, model: MapModel, state=None, hot_reload=False):
-        from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model, state, hot_reload)
+    def __init__(self, model: MapModel, node_id: str, state=None, hot_reload=False):
+        super().__init__(model, node_id, state, hot_reload)
         self.model = model
-        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
+        self.signal_node = self.instantiate_child_node(model.signal, "signal")
         
         # Initialize from range (default to [0, 1])
         if self.model.from_ is None:
-            self.from_min = wavable_value_node_factory(0)
-            self.from_max = wavable_value_node_factory(1)
+            self.from_min = self.instantiate_child_node(0, "from_min")
+            self.from_max = self.instantiate_child_node(1, "from_max")
         else:
-            self.from_min = wavable_value_node_factory(self.model.from_[0])
-            self.from_max = wavable_value_node_factory(self.model.from_[1])
+            self.from_min = self.instantiate_child_node(self.model.from_[0], "from_min")
+            self.from_max = self.instantiate_child_node(self.model.from_[1], "from_max")
         
         # Initialize to range (required)
-        self.to_min = wavable_value_node_factory(self.model.to[0])
-        self.to_max = wavable_value_node_factory(self.model.to[1])
+        self.to_min = self.instantiate_child_node(self.model.to[0], "to_min")
+        self.to_max = self.instantiate_child_node(self.model.to[1], "to_max")
         
         # Initialize clip range (optional)
         if self.model.clip is not None:

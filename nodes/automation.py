@@ -69,7 +69,7 @@ from pydantic import ConfigDict
 from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import WavableValue, wavable_value_node_factory, InterpolationTypes
+from nodes.wavable_value import WavableValue
 
 
 class AutomationMode(str, Enum):
@@ -88,25 +88,16 @@ class AutomationModel(BaseNodeModel):
 
 
 class AutomationNode(BaseNode):
-    def __init__(self, model: AutomationModel, state, hot_reload=False):
-        super().__init__(model, state, hot_reload)
+    def __init__(self, model: AutomationModel, node_id: str, state, hot_reload=False):
+        super().__init__(model, node_id, state, hot_reload)
         self.model = model
         self.mode = model.mode
         self.overlap_time = model.overlap
         self.repeat = model.repeat
         
         # Create interval node
-        self.interval_node = wavable_value_node_factory(model.interval)
-        
-        # Create wavable value nodes for each step
-        # We only create nodes for steps that are not None
-        self.step_nodes = []
-        for step_value in model.steps:
-            if step_value is not None:
-                step_node = wavable_value_node_factory(step_value)
-                self.step_nodes.append(step_node)
-            else:
-                self.step_nodes.append(None)
+        self.interval_node = self.instantiate_child_node(model.interval, "interval")
+
         
         # Persistent state for realtime playback (survives hot reload)
         if not hot_reload:
@@ -118,6 +109,14 @@ class AutomationNode(BaseNode):
             self.state.prev_step_buffer = None  # Buffer to store previous step's output during crossfade
             self.state.prev_step_index = None
             self.state.crossfade_progress = 0  # Samples rendered in current crossfade
+
+        self.step_nodes = []
+        for step_index, step_value in enumerate(model.steps):
+            if step_value is not None:
+                step_node = self.instantiate_child_node(step_value, f"step_{step_index}", self.state.current_repeat)
+                self.step_nodes.append(step_node)
+            else:
+                self.step_nodes.append(None)
 
     def _find_next_non_none_step(self, start_index):
         """Find the next step index that has a value (not None)."""

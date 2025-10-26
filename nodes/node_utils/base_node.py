@@ -4,10 +4,13 @@ from __future__ import annotations
 import numpy as np
 
 from config import *
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from pydantic import BaseModel
 
 from constants import RenderArgs
+
+if TYPE_CHECKING:
+    from nodes.wavable_value import WavableValue
 
 
 class BaseNodeModel(BaseModel):
@@ -17,7 +20,8 @@ class BaseNodeModel(BaseModel):
 
 
 class BaseNode:
-    def __init__(self, model: BaseNodeModel, state=None, hot_reload=False):
+    def __init__(self, model: BaseNodeModel, node_id: str, state=None, hot_reload=False):
+        self.node_id = node_id  # Set ID immediately so it's available for child instantiation
         self.duration = model.duration
         self.time_since_start = 0
         self.number_of_chunks_rendered = 0
@@ -25,11 +29,19 @@ class BaseNode:
         
         # State is always provided by instantiate_node now (guaranteed non-None)
         self.state = state
-        
-        # Get the effective ID (explicit or auto-generated)
-        from nodes.node_utils.auto_id_generator import AutoIDGenerator
-        self.node_id = AutoIDGenerator.get_effective_id(model)  # Store node id for caching
 
+
+    def instantiate_child_node(self, child: WavableValue, attribute_name: str, attribute_index: int | None = None) -> BaseNode:
+        """
+        Helper to instantiate a child node with proper ID generation.
+        Uses this node's ID as parent_id for stable runtime ID generation.
+        """
+        from nodes.node_utils.instantiate_node import instantiate_node
+
+        return instantiate_node(child, self.node_id, attribute_name, attribute_index)
+
+        
+        
 
 
     def render(self, num_samples: int = None, context = None, **params) -> np.ndarray:

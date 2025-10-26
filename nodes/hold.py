@@ -4,7 +4,7 @@ import numpy as np
 from config import BUFFER_SIZE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import WavableValue, wavable_value_node_factory
+from nodes.wavable_value import WavableValue
 
 
 class HoldModel(BaseNodeModel):
@@ -24,11 +24,11 @@ class HoldNode(BaseNode):
     Note: Change detection is chunk-level: if trigger changes anywhere within the chunk,
           we resample once for the whole chunk.
     """
-    def __init__(self, model: HoldModel, state=None, hot_reload=False):
-        super().__init__(model, state, hot_reload)
+    def __init__(self, model: HoldModel, node_id: str, state=None, hot_reload=False):
+        super().__init__(model, node_id, state, hot_reload)
         self.model = model
-        self.signal_node = wavable_value_node_factory(model.signal)
-        self.trigger_node = wavable_value_node_factory(model.trigger) if model.trigger is not None else None
+        self.signal_node = self.instantiate_child_node(model.signal, "signal")
+        self.trigger_node = self.instantiate_child_node(model.trigger, "trigger") if model.trigger is not None else None
         
         # Persistent state for held value and trigger tracking (survives hot reload)
         if not hot_reload:

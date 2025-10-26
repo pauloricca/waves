@@ -7,7 +7,7 @@ from pydantic import ConfigDict, field_validator
 
 from config import DO_NORMALISE_EACH_SOUND, OSC_ENVELOPE_TYPE, SAMPLE_RATE
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import InterpolationTypes, WavableValue, wavable_value_node_factory
+from nodes.wavable_value import InterpolationTypes, WavableValue
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from vnoise import Noise
 
@@ -66,12 +66,12 @@ class OscillatorModel(BaseNodeModel):
 
 
 class OscillatorNode(BaseNode):
-    def __init__(self, model: OscillatorModel, state=None, hot_reload=False):
-        super().__init__(model, state, hot_reload)
+    def __init__(self, model: OscillatorModel, node_id: str, state=None, hot_reload=False):
+        super().__init__(model, node_id, state, hot_reload)
         self.model = model
-        self.freq = wavable_value_node_factory(model.freq, model.freq_interpolation) if model.freq else None
-        self.amp = wavable_value_node_factory(model.amp, model.amp_interpolation)
-        self.phase_mod = wavable_value_node_factory(model.phase) if model.phase else None
+        self.freq = self.instantiate_child_node(model.freq, "freq") if model.freq else None
+        self.amp = self.instantiate_child_node(model.amp, "amp")
+        self.phase_mod = self.instantiate_child_node(model.phase, "phase_mod") if model.phase else None
         self.seed = self.model.seed or random.randint(0, 10000)
         
         # Persistent state (survives hot reload)
@@ -83,6 +83,7 @@ class OscillatorNode(BaseNode):
         
         self.fase_in_multiplier: np.ndarray = None
         self.fase_out_multiplier: np.ndarray = None
+
 
     def _do_render(self, num_samples=None, context=None, **params):
         # Resolve num_samples from duration if None

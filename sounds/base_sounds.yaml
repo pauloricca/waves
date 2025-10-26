@@ -23,7 +23,7 @@ chop:
         c: rand(0, 14)
         signal:
           sample:
-            speed: 1
+            speed: 2
             file: output/chopped9
             chop: 
               hold:
@@ -37,12 +37,12 @@ hihat:
         duration: 0.25
         exp: v * signal
         signal:
-          filter:
-            cutoff: [20000, 200, 100]
-            signal:
+          # filter:
+          #   cutoff: [20000, 200, 100]
+          #   signal:
               osc:
                 type: noise
-                amp: [0.2, [0.1, 0.005], [0, 0.15]]
+                amp: [0.2, [0.07, 0.005], [0, 0.15]]
                 attack: 0.001
                 release: 1
 

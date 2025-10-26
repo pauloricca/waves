@@ -44,11 +44,10 @@ class MixModel(BaseNodeModel):
 
 
 class MixNode(BaseNode):
-    def __init__(self, model: MixModel, state=None, hot_reload=False):
-        from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model, state, hot_reload)
+    def __init__(self, model: MixModel, node_id: str, state=None, hot_reload=False):
+        super().__init__(model, node_id, state, hot_reload)
         self.model = model
-        self.signal_nodes = [instantiate_node(signal, hot_reload=hot_reload) for signal in model.signals]
+        self.signal_nodes = [self.instantiate_child_node(signal, "signals", i) for i, signal in enumerate(model.signals)]
 
     def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, we need to render the full signal

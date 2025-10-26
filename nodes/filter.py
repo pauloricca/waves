@@ -6,7 +6,7 @@ from pydantic import ConfigDict
 from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import WavableValue, wavable_value_node_factory
+from nodes.wavable_value import WavableValue
 
 class FilterTypes(str, Enum):
     HIGHPASS = "HIGHPASS"
@@ -29,13 +29,12 @@ class FilterModel(BaseNodeModel):
     signal: BaseNodeModel = None
 
 class FilterNode(BaseNode):
-    def __init__(self, model: FilterModel, state, hot_reload=False):
-        from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model, state, hot_reload)
+    def __init__(self, model: FilterModel, node_id: str, state, hot_reload=False):
+        super().__init__(model, node_id, state, hot_reload)
         self.model = model
-        self.cutoff_node = wavable_value_node_factory(model.cutoff)
-        self.peak_node = wavable_value_node_factory(model.peak)
-        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
+        self.cutoff_node = self.instantiate_child_node(model.cutoff, "cutoff")
+        self.peak_node = self.instantiate_child_node(model.peak, "peak")
+        self.signal_node = self.instantiate_child_node(model.signal, "signal")
         
         # Persistent state for continuity between chunks (survives hot reload)
         if not hot_reload:

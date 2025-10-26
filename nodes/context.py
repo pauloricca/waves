@@ -15,26 +15,19 @@ class ContextNodeModel(BaseNodeModel):
 
 
 class ContextNode(BaseNode):
-    def __init__(self, model: ContextNodeModel, state, hot_reload=False):
-        from nodes.node_utils.instantiate_node import instantiate_node
+    def __init__(self, model: ContextNodeModel, node_id: str, state, hot_reload=False):
         from nodes.wavable_value import WavableValueNode, WavableValueModel
-        super().__init__(model, state, hot_reload)
+        super().__init__(model, node_id, state, hot_reload)
         self.model = model
         
         # Instantiate the signal node
-        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
+        self.signal_node = self.instantiate_child_node(model.signal, "signal")
         
         # Store all extra arguments as WavableValue nodes
         self.context_args = {}
         if hasattr(model, '__pydantic_extra__') and model.__pydantic_extra__:
             for field_name, field_value in model.__pydantic_extra__.items():
-                if isinstance(field_value, BaseNodeModel):
-                    # Already a node, instantiate it
-                    self.context_args[field_name] = instantiate_node(field_value, hot_reload=hot_reload)
-                else:
-                    # Wrap in WavableValue (handles scalars, expressions, lists)
-                    wavable_model = WavableValueModel(value=field_value)
-                    self.context_args[field_name] = WavableValueNode(wavable_model)
+                self.context_args[field_name] = self.instantiate_child_node(field_value, field_name)
     
     def _do_render(self, num_samples=None, context=None, **params):
         num_samples = self.resolve_num_samples(num_samples)

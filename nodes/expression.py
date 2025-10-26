@@ -12,10 +12,9 @@ class ExpressionNodeModel(BaseNodeModel):
 
 
 class ExpressionNode(BaseNode):
-    def __init__(self, model: ExpressionNodeModel, state=None, hot_reload=False):
-        from nodes.node_utils.instantiate_node import instantiate_node
+    def __init__(self, model: ExpressionNodeModel, node_id: str, state=None, hot_reload=False):
         from expression_globals import compile_expression
-        super().__init__(model, state, hot_reload)
+        super().__init__(model, node_id, state, hot_reload)
         
         # Compile the main expression using centralized function
         self.compiled_exp, self.exp_value, self.is_constant = compile_expression(model.exp)
@@ -27,11 +26,12 @@ class ExpressionNode(BaseNode):
         if hasattr(model, '__pydantic_extra__') and model.__pydantic_extra__:
             for field_name, field_value in model.__pydantic_extra__.items():
                 if isinstance(field_value, BaseNodeModel):
-                    self.args[field_name] = instantiate_node(field_value, hot_reload=hot_reload)
+                    self.args[field_name] = self.instantiate_child_node(field_value, field_name)
                 else:
                     # String expression or numeric constant - compile it once
                     self.compiled_args[field_name] = compile_expression(field_value)
     
+
     def _do_render(self, num_samples=None, context=None, **params):
         from expression_globals import get_expression_context, evaluate_compiled
         

@@ -5,7 +5,7 @@ from pydantic import ConfigDict
 from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import WavableValue, wavable_value_node_factory
+from nodes.wavable_value import WavableValue
 
 """
 Follow Node (Envelope Follower)
@@ -58,14 +58,12 @@ class FollowModel(BaseNodeModel):
 
 
 class FollowNode(BaseNode):
-    def __init__(self, model: FollowModel, state=None, hot_reload=False):
-        from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model, state, hot_reload)
+    def __init__(self, model: FollowModel, node_id: str, state=None, hot_reload=False):
+        super().__init__(model, node_id, state, hot_reload)
         self.model = model
-        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
-        # Note: range[0] is high, range[1] is low (swapped from typical convention)
-        self.range_min_node = wavable_value_node_factory(model.range[1])
-        self.range_max_node = wavable_value_node_factory(model.range[0])
+        self.signal_node = self.instantiate_child_node(model.signal, "signal")
+        self.range_min_node = self.instantiate_child_node(model.range[0], "range_min")
+        self.range_max_node = self.instantiate_child_node(model.range[1], "range_max")
         
         # Persistent state for realtime rendering (survives hot reload)
         if not hot_reload:

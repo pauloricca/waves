@@ -17,63 +17,38 @@ class InterpolationTypes(str, Enum):
 
 
 WavableValue = Union[float, int, List[Union[float, List[float]]], BaseNodeModel, str]
+WavableValueNotModel = Union[float, int, List[Union[float, List[float]]], str]
 
 class WavableValueModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
-    value: WavableValue
+    value: WavableValueNotModel
     interpolation: InterpolationTypes = InterpolationTypes.LINEAR
 
 
 class WavableValueNode(BaseNode):
-    def __init__(self, model: WavableValueModel, state=None, hot_reload=False):
-        from nodes.node_utils.instantiate_node import instantiate_node
+    def __init__(self, model: WavableValueModel, node_id: str, state=None, hot_reload=False):
         from expression_globals import compile_expression
-        super().__init__(model, state, hot_reload)
-        self.value = model.value
+        super().__init__(model, node_id, state, hot_reload)
+        self.value: WavableValueNotModel = model.value
         self.interpolation_type = model.interpolation
         self.interpolated_values = None
         
         # Determine value type
-        if isinstance(model.value, BaseNodeModel):
-            self.wave_node = instantiate_node(model.value, hot_reload=hot_reload)
-            self.value_type = 'node'
-        elif isinstance(model.value, str):
+        if isinstance(model.value, str):
             # String = expression - compile it and store the info
             self.compiled_info = compile_expression(model.value)
             self.value_type = 'expression'
         elif isinstance(model.value, (float, int)):
-            self.wave_node = None
             self.value_type = 'scalar'
         elif isinstance(model.value, list):
-            self.wave_node = None
             self.value_type = 'interpolated'
         else:
-            self.wave_node = None
             self.value_type = 'unknown'
 
     def _do_render(self, num_samples=None, context=None, **params):
         from expression_globals import get_expression_context, evaluate_compiled
         
-        if self.value_type == 'node':
-            # Existing node rendering logic
-            if num_samples is None:
-                wave = self.wave_node.render(context=context, **self.get_params_for_children(params))
-                if len(wave) > 0:
-                    self._last_chunk_samples = len(wave)
-                return wave
-            else:
-                wave = self.wave_node.render(num_samples, context, **self.get_params_for_children(params))
-                # If the wave node returns fewer samples than requested, pad with the last value
-                if len(wave) > 0 and len(wave) < num_samples:
-                    last_value = wave[-1] if len(wave) > 0 else 0
-                    padding = np.full(num_samples - len(wave), last_value)
-                    wave = np.concatenate([wave, padding])
-                # Only propagate empty if we have no previous value to use
-                elif len(wave) == 0:
-                    return np.array([], dtype=np.float32)
-                return wave
-        
-        elif self.value_type == 'expression':
+        if self.value_type == 'expression':
             # Expression evaluation using centralized function
             if num_samples is None:
                 duration = params.get(RenderArgs.DURATION, 0)
@@ -122,23 +97,6 @@ class WavableValueNode(BaseNode):
 
             return interpolated_values_section.copy()
 
-
-def wavable_value_node_factory(value: WavableValue, interpolation: InterpolationTypes = InterpolationTypes.LINEAR):
-    from nodes.node_utils.instantiate_node import get_next_runtime_id
-    from nodes.node_utils.node_state_registry import get_state_registry
-    
-    # Create model
-    model = WavableValueModel(value=value, interpolation=interpolation)
-    
-    # Generate runtime ID for this node
-    node_id = get_next_runtime_id()
-    
-    # Get state from global registry
-    state_registry = get_state_registry()
-    state = state_registry.get_or_create_state(node_id, hot_reload=False)
-    
-    # Create node with state
-    return WavableValueNode(model, state=state, hot_reload=False)
 
 
 # Interpolates a list of values or a list of lists with relative positions

@@ -11,13 +11,32 @@ test_input_phase:
     feedback: 0.5
     signal:
       delay:
-        mode: digital
+        mode: tape
         time:
-          osc:
-            freq: 5
-            range: [1, 1.011]
+          smooth:
+            step: 0.01
+            signal:
+              midi_cc:
+                cc: 16
+                range: [1, 2]
+              
         signal:
-          input: {}
+          osc:
+            freq:
+              midi_cc:
+                cc: 17
+                range: [10, 800]
+            phase:
+              osc:
+                amp:
+                  midi_cc:
+                    cc: 18
+                    range: [0, 1]
+                freq: 
+                  midi_cc:
+                    cc: 19
+                    range: [1, 1000]
+
 
 # Test input with amplitude modulation
 test_input_with_lfo:

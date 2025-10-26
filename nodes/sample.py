@@ -5,7 +5,7 @@ from pydantic import ConfigDict
 from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import WavableValue, wavable_value_node_factory
+from nodes.wavable_value import WavableValue
 from utils import load_wav_file
 
 
@@ -31,8 +31,8 @@ class SampleModel(BaseNodeModel):
 
 
 class SampleNode(BaseNode):
-    def __init__(self, model: SampleModel, state, hot_reload=False):
-        super().__init__(model, state, hot_reload)
+    def __init__(self, model: SampleModel, node_id: str, state, hot_reload=False):
+        super().__init__(model, node_id, state, hot_reload)
         self.model = model
         # Only persistent playback state is kept in self.state
         if not hot_reload:
@@ -42,17 +42,17 @@ class SampleNode(BaseNode):
         # All other fields are regular attributes (not in state)
         self.is_in_chop_mode = model.chop is not None
         self._reset_playhead_this_chunk = False
-        self.chop_node = wavable_value_node_factory(model.chop) if self.is_in_chop_mode else None
+        self.chop_node = self.instantiate_child_node(model.chop, "chop") if self.is_in_chop_mode else None
         self.audio_files = None
         if self.is_in_chop_mode:
             self.audio = np.zeros(1, dtype=np.float32)
         else:
             self.audio = load_wav_file(model.file)
-        self.speed_node = wavable_value_node_factory(model.speed)
-        self.freq_node = wavable_value_node_factory(model.freq) if model.freq is not None else None
-        self.start_node = wavable_value_node_factory(model.start)
-        self.end_node = wavable_value_node_factory(model.end)
-        self.offset_node = wavable_value_node_factory(model.offset)
+        self.speed_node = self.instantiate_child_node(model.speed, "speed")
+        self.freq_node = self.instantiate_child_node(model.freq, "freq") if model.freq is not None else None
+        self.start_node = self.instantiate_child_node(model.start, "start")
+        self.end_node = self.instantiate_child_node(model.end, "end")
+        self.offset_node = self.instantiate_child_node(model.offset, "offset")
         # Only persistent playback state is kept in self.state (see above)
 
     def _resolve_project_path(self, path_str: str) -> str:

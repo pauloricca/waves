@@ -38,11 +38,11 @@ class SnapNodeModel(BaseNodeModel):
 
 
 class SnapNode(BaseNode):
-    def __init__(self, model: SnapNodeModel, state=None, hot_reload=False):
+    def __init__(self, model: SnapNodeModel, node_id: str, state=None, hot_reload=False):
         from nodes.node_utils.instantiate_node import instantiate_node
         from nodes.wavable_value import WavableValueNode, WavableValueModel
-        super().__init__(model, state, hot_reload)
-        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
+        super().__init__(model, node_id, state, hot_reload)
+        self.signal_node = self.instantiate_child_node(model.signal, "signal")
         
         # Determine if we're using explicit values or range + interval
         self.use_explicit_values = model.values is not None
@@ -51,34 +51,25 @@ class SnapNode(BaseNode):
             # Setup value nodes
             self.value_nodes = []
             self.static_values = []
-            self.values_are_static = True
+            self.are_all_values_static = True
             
-            for val in model.values:
-                if isinstance(val, BaseNodeModel):
-                    self.value_nodes.append(instantiate_node(val, hot_reload=hot_reload))
-                    self.values_are_static = False
-                elif isinstance(val, (str, list)):
-                    # Expression or interpolation - wrap in WavableValue
-                    wavable_model = WavableValueModel(value=val)
-                    self.value_nodes.append(WavableValueNode(wavable_model))
-                    self.values_are_static = False
-                else:
+            for val_idx, value in enumerate(model.values):
+                if isinstance(value, (int, float)):
                     # Static scalar
-                    self.static_values.append(float(val))
+                    self.static_values.append(float(value))
                     self.value_nodes.append(None)
+                else:
+                    # Dynamic value
+                    self.are_all_values_static = False
+                    self.value_nodes.append(self.instantiate_child_node(value, f"values_{val_idx}"))
             
             # If all values are static, pre-compute snap values
-            if self.values_are_static:
+            if self.are_all_values_static:
                 self.snap_values = np.array(sorted(self.static_values), dtype=np.float32)
         else:
-            # Setup range and interval nodes
-            range_min_model = WavableValueModel(value=model.range[0])
-            range_max_model = WavableValueModel(value=model.range[1])
-            interval_model = WavableValueModel(value=model.interval)
-            
-            self.range_min_node = WavableValueNode(range_min_model)
-            self.range_max_node = WavableValueNode(range_max_model)
-            self.interval_node = WavableValueNode(interval_model)
+            self.range_min_node = self.instantiate_child_node(model.range[0], "range_min")
+            self.range_max_node = self.instantiate_child_node(model.range[1], "range_max")
+            self.interval_node = self.instantiate_child_node(model.interval, "interval")
             
             # Check if range and interval are static
             self.range_interval_static = (
@@ -96,8 +87,7 @@ class SnapNode(BaseNode):
                 self.snap_values = np.array(sorted(snap_values), dtype=np.float32)
         
         # Setup glide node
-        glide_model = WavableValueModel(value=model.glide)
-        self.glide_node = WavableValueNode(glide_model)
+        self.glide_node = self.instantiate_child_node(model.glide, "glide")
         self.glide_is_static = self._is_static_value(model.glide)
         if self.glide_is_static:
             self.static_glide = float(model.glide) if isinstance(model.glide, (int, float)) else 0
@@ -130,7 +120,7 @@ class SnapNode(BaseNode):
         
         # Get snap values for this chunk (static or dynamic)
         if self.use_explicit_values:
-            if self.values_are_static:
+            if self.are_all_values_static:
                 # Use pre-computed static values (fast path)
                 snap_values = self.snap_values
             else:

@@ -23,8 +23,8 @@ class MidiModel(BaseNodeModel):
 
 
 class MidiNode(BaseNode):
-    def __init__(self, model: MidiModel, state=None, hot_reload=False):
-        super().__init__(model, state, hot_reload)
+    def __init__(self, model: MidiModel, node_id: str, state=None, hot_reload=False):
+        super().__init__(model, node_id, state, hot_reload)
         self.channel = model.channel
         self.signal_model = model.signal
         self.max_voices = model.voices
@@ -77,9 +77,12 @@ class MidiNode(BaseNode):
             if MIDI_DEBUG:
                 print(f"Voice stealing: removed note {oldest_note_number} (id {oldest_note_id}) to make room")
         
+        # Generate unique ID for this note instance
+        note_index = self.state.note_id_counter
+        self.state.note_id_counter += 1
+
         # Create a new instance of the signal node for this note
-        # This is a new voice, not a hot reload, so hot_reload=False
-        sound_node = instantiate_node(self.signal_model, hot_reload=False)
+        sound_node = self.instantiate_child_node(self.signal_model, "sounds", note_index)
         
         # Setup render args - pass frequency and amplitude with aliases
         render_args = {
@@ -89,12 +92,8 @@ class MidiNode(BaseNode):
             'a': amplitude,  # Alias
         }
         
-        # Generate unique ID for this note instance
-        note_id = self.state.note_id_counter
-        self.state.note_id_counter += 1
-        
         # Store the active note with unique ID
-        self.state.active_notes[note_id] = {
+        self.state.active_notes[note_index] = {
             'note_number': note_number,
             'node': sound_node,
             'render_args': render_args,
@@ -105,10 +104,10 @@ class MidiNode(BaseNode):
         # Track note ID for this note number (for note off handling)
         if note_number not in self.state.note_number_to_ids:
             self.state.note_number_to_ids[note_number] = []
-        self.state.note_number_to_ids[note_number].append(note_id)
+        self.state.note_number_to_ids[note_number].append(note_index)
         
         if MIDI_DEBUG:
-            print(f"Note ON: {note_number} (freq: {frequency:.2f}Hz, vel: {velocity}, id: {note_id})")
+            print(f"Note ON: {note_number} (freq: {frequency:.2f}Hz, vel: {velocity}, id: {note_index})")
     
     def _handle_note_off(self, note_number):
         """Handle MIDI note off event"""

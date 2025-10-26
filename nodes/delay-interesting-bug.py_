@@ -5,7 +5,7 @@ from pydantic import ConfigDict
 from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import WavableValue, wavable_value_node_factory
+from nodes.wavable_value import WavableValue
 
 class DelayMode(str, Enum):
     DIGITAL = "DIGITAL"
@@ -32,8 +32,8 @@ class DelayNode(BaseNode):
         from nodes.node_utils.instantiate_node import instantiate_node
         super().__init__(model)
         self.model = model
-        self.time_node = wavable_value_node_factory(model.time)
-        self.signal_node = instantiate_node(model.signal)
+        self.time_node = self.instantiate_child_node(model.time, "time")
+        self.signal_node = self.instantiate_child_node(model.signal, "signal")
         
         # Circular buffer for storing delayed samples
         # We allocate enough space for the maximum delay time we might need

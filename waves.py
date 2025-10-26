@@ -15,7 +15,7 @@ import atexit
 from config import *
 from sound_library import get_sound_model, load_all_sound_libraries, reload_sound_library, get_sound_filename
 from nodes.node_utils.base_node import BaseNode
-from nodes.node_utils.instantiate_node import instantiate_node, instantiate_node_tree
+from nodes.node_utils.instantiate_node import instantiate_node
 from nodes.node_utils.render_context import RenderContext
 from utils import look_for_duration, play, save, visualise_wave
 
@@ -45,8 +45,7 @@ def perform_hot_reload_background(sound_name_to_play: str, changed_filename: str
     3. Applies any parameters
     4. Instantiates the new tree with hot_reload=True
        (States are automatically preserved via global state registry)
-    5. Orphaned states are automatically cleaned up by instantiate_node_tree
-    6. Stores the new tree in hot_reload_pending_node for atomic swap
+    5. Stores the new tree in hot_reload_pending_node for atomic swap
     
     This is designed to run on a separate thread to avoid blocking audio rendering.
     
@@ -78,11 +77,7 @@ def perform_hot_reload_background(sound_name_to_play: str, changed_filename: str
             from nodes.node_utils.node_string_parser import apply_params_to_model
             new_model = apply_params_to_model(new_model, params)
         
-        # Instantiate new tree with hot_reload=True (outside the lock - this is slow)
-        # The global state registry will automatically:
-        # - Preserve states for nodes whose IDs still exist
-        # - Clean up orphaned states for deleted nodes
-        new_node = instantiate_node_tree(new_model, hot_reload=True)
+        new_node = instantiate_node(new_model, sound_name_to_play, "root")
         
         # Store the new node for atomic swap on next audio chunk
         with hot_reload_lock:
@@ -325,7 +320,7 @@ def main():
         sound_model_to_play = apply_params_to_model(sound_model_to_play, params)
     
     # Initialize the node (not as hot reload on first load)
-    sound_node_to_play = instantiate_node(sound_model_to_play, hot_reload=False)
+    sound_node_to_play = instantiate_node(sound_model_to_play, sound_name_to_play, "root")
     
     # Store globals for hot reload
     with hot_reload_lock:

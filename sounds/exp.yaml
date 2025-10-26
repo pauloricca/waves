@@ -1,0 +1,299 @@
+exp:
+  tempo:
+    bpm: 130
+    signal:
+      expression:
+        exp: kick * kick_amp + hat * hat_amp + synth * synth_amp
+        kick_amp:
+          midi_cc:
+            cc: 0
+        kick:
+          sequencer:
+            id: kick-drum
+            interval: sixteenth
+            repeat: 1000
+            sequence:
+              - kick
+              - 
+              - hihat v.0
+              - 
+              - kick
+              - 
+              - hihat v.0
+              -
+              - kick
+              - 
+              - hihat v.0
+              -
+              - kick
+              - 
+              - hihat v.0
+              -
+              - kick
+              - 
+              - hihat v.0
+              - 
+              - kick
+              - 
+              - hihat v.0
+              -
+              - kick
+              - 
+              - hihat v.0
+              -
+              - kick
+              - hihat v.05
+              - hihat v.0
+              -
+        hat_amp:
+          midi_cc:
+            cc: 1
+        hat:
+          sequencer:
+            interval: sixteenth
+            repeat: 1000
+            sequence:
+              -
+              - 
+              - # hihat v.2
+              - 
+              - 
+              - chop c2
+              - 
+              - 
+              -
+              - 
+              - hihat v.2
+              - chop
+              - 
+              - 
+        synth_amp:
+          midi_cc:
+            cc: 2
+        synth:
+          expression:
+            exp: signal * duck
+            duck:
+              follow:
+                attack: 0.002
+                release: 0.02
+                signal:
+                  reference:
+                    ref: kick-drum
+            signal:
+              retrigger:
+                repeats: 5
+                time: 0.3
+                feedback: 0.5
+                signal:
+                  osc:
+                    type: sin
+                    freq:
+                      expression:
+                        exp: base * multiplier
+                        multiplier:
+                          automation:
+                            interval: sixteenth
+                            repeat: 1000
+                            steps: [1, 1, 1, 1, 4, 2, 1, 1, 8, 1, 1.2, 1, 1.2, 1, 1, 1]
+                        base:
+                          snap:
+                            values: [c1, c2, c3, c4]
+                            glide: 1
+                            signal:
+                              midi_cc:
+                                initial: 30
+                                cc: 16
+                                range: [30, 260]
+                    phase:
+                      osc:
+                        type: tri
+                        amp:
+                          expression:
+                            exp: auto * multiplier
+                            multiplier:
+                              midi_cc:
+                                initial: 0
+                                cc: 17
+                                range: [0, 1]
+                            auto:
+                              automation:
+                                interval: triplet * 3
+                                repeat: 1000
+                                steps: [0, 0.1, 0, 0.4, 0.1, 0.6, 1, 0, 0, 0.1]
+                        freq: 
+                          snap:
+                            values: [c0, c1, c2, c3]
+                            glide: 2
+                            signal:
+                              midi_cc:
+                                initial: 30
+                                cc: 18
+                                range: [0, 160]
+    
+
+
+synth2:
+  tempo:
+    bpm: 130
+    signal:
+      expression:
+        exp: signal
+        signal:
+          retrigger:
+            repeats: 3
+            time: 0.3
+            feedback: 0.2
+            signal:
+              osc:
+                amp:
+                  midi_cc:
+                    cc: 2
+                type: sin
+                freq:
+                  expression:
+                    exp: base * multiplier * fm
+                    multiplier:
+                      automation:
+                        interval: sixteenth
+                        repeat: 1000
+                        steps: [1, 1, 1, 1, 4, 2, 1, 1, 8, 1, 1.2, 1, 1.2, 1, 1, 1, 1, 1, 1, 1, 1]
+                    base:
+                      snap:
+                        values: [c1, c2, c3, c4]
+                        glide: 1
+                        signal:
+                          midi_cc:
+                            initial: 30
+                            cc: 16
+                            range: [30, 260]
+                    fm:
+                      osc:
+                        range: [0, 2]
+                        amp:
+                          expression:
+                            exp: auto * multiplier
+                            # exp: multiplier
+                            multiplier:
+                              midi_cc:
+                                initial: 0
+                                cc: 17
+                                range: [0, 1]
+                            auto:
+                              automation:
+                                interval: triplet
+                                repeat: 1000
+                                # steps: [0, 0.1, 0, 0.4, 0.1, 0.6, 1, 0, 0, 0.1]
+                                steps: [0, 0.1, 0, 0.4, 0, 0.6, 0, 0.1, 0, 0.1]
+                        freq: 
+                          # snap:
+                          #   values: [c0, c1, c2, c3]
+                          #   glide: 2
+                          #   signal:
+                              midi_cc:
+                                initial: 30
+                                cc: 18
+                                range: [0, 20000]
+
+# Test the multiply node with a simple chorus effect
+test_multiply:
+  tempo:
+    bpm: 120
+    signal:
+      multiply:
+        number: 5
+        signal:
+          osc:
+            type: sin
+            freq: "440 * (1 + i * 0.01)"  # Slightly detune each copy
+            phase: "i / n"                 # Distribute phases evenly
+            amp: "0.2 / n"                 # Normalize amplitude
+
+# Test harmonic stack using multiply
+test_harmonics:
+  tempo:
+    bpm: 120
+    signal:
+      multiply:
+        number: 8
+        signal:
+          osc:
+            type: sin
+            freq: "220 * (i + 1)"  # Create harmonics (220, 440, 660, ...)
+            amp: "0.3 / (i + 1)"   # Reduce amplitude for higher harmonics
+
+# Advanced test: Multiply with envelopes and varying parameters
+test_multiply_advanced:
+  tempo:
+    bpm: 120
+    signal:
+      multiply:
+        number: 10
+        signal:
+          expression:
+            exp: "osc"
+            osc:
+              osc:
+                type: saw
+                freq: "50 * (1 + i * 0.001)"  # Spread frequencies
+                phase: "i / n"                 # Phase spread
+
+# Test foreach mode with items list
+test_multiply_foreach:
+  tempo:
+    bpm: 120
+    signal:
+      multiply:
+        items: [220, 440, 660, 880, 1100]
+        signal:
+          osc:
+            type: sin
+            freq: item  # Use the item value directly
+            amp: "1 / n"
+
+# Test foreach with expressions in items
+test_multiply_foreach_expressions:
+  tempo:
+    bpm: 120
+    signal:
+      multiply:
+        items: ["220 * 1"]
+        signal:
+          osc:
+            type: saw
+            freq: item
+            phase: "i / n"  # Still have access to i and n
+            amp: "0.2 / (i + 1)"  # Fade out higher harmonics
+
+# Test foreach with dynamic items (node output)
+test_multiply_foreach_dynamic:
+  tempo:
+    bpm: 120
+    signal:
+      multiply:
+        items:
+          - 220
+          - 440
+          - "220 * 3"
+          - osc:  # Items can be nodes too!
+              type: sin
+              freq: 2
+              range: [660, 880]
+          - 1100
+        signal:
+          expression:
+            exp: "osc * env"
+            osc:
+              osc:
+                type: tri
+                freq: item
+            env:
+              envelope:
+                attack: 0.01
+                release: "0.1 + i * 0.05"
+                amp: "0.15 / n"
+
+
+
+
+

@@ -4,7 +4,7 @@ from pydantic import ConfigDict
 from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import WavableValue, wavable_value_node_factory
+from nodes.wavable_value import WavableValue
 from utils import load_wav_file
 
 
@@ -24,9 +24,9 @@ class SampleNode(BaseNode):
         super().__init__(model)
         self.model = model
         self.audio = load_wav_file(model.file)
-        self.speed_node = wavable_value_node_factory(model.speed)
-        self.start_node = wavable_value_node_factory(model.start)
-        self.end_node = wavable_value_node_factory(model.end)
+        self.speed_node = self.instantiate_child_node(model.speed, "speed")
+        self.start_node = self.instantiate_child_node(model.start, "start")
+        self.end_node = self.instantiate_child_node(model.end, "end")
         self.last_playhead_position = 0
         self.total_samples_rendered = 0
 

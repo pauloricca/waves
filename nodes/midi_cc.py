@@ -34,8 +34,8 @@ class MidiCCModel(BaseNodeModel):
 
 
 class MidiCCNode(BaseNode):
-    def __init__(self, model: MIDICCNodeModel, state=None, hot_reload=False):
-        super().__init__(model, state, hot_reload)
+    def __init__(self, model: MIDICCNodeModel, node_id: str, state=None, hot_reload=False):
+        super().__init__(model, node_id, state, hot_reload)
         self.channel = model.channel
         self.cc_number = model.cc
         self.min_value, self.max_value = model.range

@@ -96,7 +96,13 @@ def apply_params_to_model(model: BaseNodeModel, params: Dict[str, Any]) -> BaseN
     return model_copy
 
 
-def instantiate_node_from_string(node_string: str, model: Optional[BaseNodeModel] = None) -> Tuple[BaseNode, Dict[str, float]]:
+def instantiate_node_from_string(
+        node_string: str,
+        parent_id: str, 
+        attribute_name: str,
+        attribute_index: str,
+        model: Optional[BaseNodeModel] = None,
+    ) -> Tuple[BaseNode, Dict[str, float]]:
     """
     Instantiate a node from a string specification with parameters.
     
@@ -127,6 +133,6 @@ def instantiate_node_from_string(node_string: str, model: Optional[BaseNodeModel
     model_with_params = apply_params_to_model(model, params)
     
     # Instantiate node
-    node = instantiate_node(model_with_params)
+    node = instantiate_node(model_with_params, parent_id, attribute_name, attribute_index)
     
     return node, params

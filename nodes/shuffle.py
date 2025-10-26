@@ -4,7 +4,7 @@ from pydantic import ConfigDict
 from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import WavableValue, wavable_value_node_factory
+from nodes.wavable_value import WavableValue
 
 # Shuffle node: Randomly rearranges chunks of audio to create glitchy effects.
 # The crossfade parameter smoothly transitions between chunks to avoid clicks and pops.
@@ -20,12 +20,11 @@ class ShuffleModel(BaseNodeModel):
     seed: int | None = None  # Add seed parameter
 
 class ShuffleNode(BaseNode):
-    def __init__(self, model: ShuffleModel, state=None, hot_reload=False):
-        from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model, state, hot_reload)
+    def __init__(self, model: ShuffleModel, node_id: str, state=None, hot_reload=False):
+        super().__init__(model, node_id, state, hot_reload)
         self.model = model
-        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload)
-        self.crossfade_node = wavable_value_node_factory(model.crossfade)
+        self.signal_node = self.instantiate_child_node(model.signal, "signal")
+        self.crossfade_node = self.instantiate_child_node(model.crossfade, "crossfade")
         self.rng = np.random.default_rng(model.seed)  # Use a random generator with seed
         
         # State for chunked rendering

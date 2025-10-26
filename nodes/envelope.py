@@ -4,7 +4,7 @@ import numpy as np
 from config import SAMPLE_RATE, OSC_ENVELOPE_TYPE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.wavable_value import WavableValue, wavable_value_node_factory
+from nodes.wavable_value import WavableValue
 
 
 class EnvelopeModel(BaseNodeModel):
@@ -18,12 +18,11 @@ class EnvelopeModel(BaseNodeModel):
 
 
 class EnvelopeNode(BaseNode):
-    def __init__(self, model: EnvelopeModel, state, hot_reload=False):
-        from nodes.node_utils.instantiate_node import instantiate_node
-        super().__init__(model, state, hot_reload)
+    def __init__(self, model: EnvelopeModel, node_id: str, state, hot_reload=False):
+        super().__init__(model, node_id, state, hot_reload)
         self.model = model
-        self.signal_node = instantiate_node(model.signal, hot_reload=hot_reload) if model.signal is not None else None
-        self.gate_node = wavable_value_node_factory(model.gate) if model.gate is not None else None
+        self.signal_node = self.instantiate_child_node(model.signal, "signal") if model.signal is not None else None
+        self.gate_node = self.instantiate_child_node(model.gate, "gate") if model.gate is not None else None
 
         # If no gate or end is defined, set end to True for envelope completion
         if model.end is None:
