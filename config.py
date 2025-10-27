@@ -10,6 +10,8 @@ MAX_RECURSION_DEPTH = 2  # Maximum recursion depth for feedback loops
 
 # MIDI settings
 MIDI_INPUT_DEVICE_NAME = None  # Set to a specific device name, or None to auto-detect
+DO_PERSIST_MIDI_CC_VALUES = True  # Save MIDI CC values to file for persistence across restarts
+MIDI_CC_SAVE_INTERVAL = 2.0  # Seconds between saving CC values to file
 VISUALISATION_ROW_HEIGHT = 10
 RENDERED_MASTER_GAIN = 0.6
 DO_NORMALISE_EACH_SOUND = False
@@ -26,7 +28,7 @@ DO_PRE_RENDER_WHOLE_SOUND = False
 DO_PLAY_IN_REAL_TIME = True
 
 # Real-time recording settings
-DO_RECORD_REAL_TIME = False  # Enable to save real-time playback to file
+DO_RECORD_REAL_TIME = True  # Enable to save real-time playback to file
 
 # Visualisation settings
 DO_VISUALISE_OUTPUT = False

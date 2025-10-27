@@ -325,7 +325,7 @@ seq-glitch:
                 amp:
                   automation:
                     mode: overlap
-                    overlap: 0.1
+                    overlap: 0.01
                     repeat: 1000
                     interval: sixteenth * 2
                     steps:
