@@ -16,7 +16,7 @@ class SampleModel(BaseNodeModel):
     loop: bool = False
     overlap: float = 0.0
     speed: WavableValue = 1.0
-    base_freq: float = None
+    base_freq: WavableValue = None
 
 
 class SampleNode(BaseNode):
@@ -27,6 +27,7 @@ class SampleNode(BaseNode):
         self.speed_node = self.instantiate_child_node(model.speed, "speed")
         self.start_node = self.instantiate_child_node(model.start, "start")
         self.end_node = self.instantiate_child_node(model.end, "end")
+        self.base_freq_node = self.instantiate_child_node(model.base_freq, "base_freq") if model.base_freq is not None else None
         self.last_playhead_position = 0
         self.total_samples_rendered = 0
 
@@ -91,21 +92,27 @@ class SampleNode(BaseNode):
                 start_indices = start_indices[:num_samples]
                 end_indices = end_indices[:num_samples]
 
-        speed = self.speed_node.render(num_samples, **self.get_params_for_children(params, OSCILLATOR_RENDER_ARGS))
+        speed = self.speed_node.render(num_samples, **self.get_params_for_children(params))
         
         # Ensure speed is an array
         if np.isscalar(speed):
             speed = np.full(num_samples, speed)
         
         # If base_freq is set, modulate speed by frequency parameter
-        if self.model.base_freq is not None:
+        if self.base_freq_node is not None:
             frequency = params.get('frequency', None)
             if frequency is not None:
-                # Ensure frequency is an array
+                # Render base_freq
+                base_freq = self.base_freq_node.render(num_samples, **self.get_params_for_children(params))
+                
+                # Ensure both are arrays
                 if np.isscalar(frequency):
                     frequency = np.full(num_samples, frequency)
+                if np.isscalar(base_freq):
+                    base_freq = np.full(num_samples, base_freq)
+                
                 # Multiply speed by the frequency ratio (current_freq / base_freq)
-                speed = speed * (frequency / self.model.base_freq)
+                speed = speed * (frequency / base_freq)
 
         # Use absolute speed for rate calculation but keep sign for direction
         abs_speed = np.abs(speed)

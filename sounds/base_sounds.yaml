@@ -29,6 +29,21 @@ chop:
               hold:
                 signal: c
 
+glitch:
+  map:
+    from: [-1, 1]
+    to: [-1, 1]
+    signal:
+      context:
+        c: rand(0, 164)
+        signal:
+          sample:
+            speed: 2
+            file: output/hum_chopped
+            chop: 
+              hold:
+                signal: c
+
 hihat:
   context:
     v: 1

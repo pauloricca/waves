@@ -22,7 +22,7 @@ class SampleModel(BaseNodeModel):
     loop: bool = False
     overlap: float = 0.0  # 0.0-1.0 (normalized fraction of sample length)
     speed: WavableValue = 1.0  # playback speed multiplier (1.0 = normal speed)
-    base_freq: WavableValue = None  # Hz (base frequency for freq parameter)
+    base_freq: float = None  # Hz (base frequency for freq parameter)
     freq: WavableValue = None  # Hz (target frequency - modulates speed based on base_freq)
     offset: WavableValue = 0.0  # seconds (shift playhead position)
     # When provided, 'file' is treated as a directory path. The 'chop' selects
@@ -39,9 +39,13 @@ class SampleNode(BaseNode):
             self.state.last_playhead_position = 0
             self.state.total_samples_rendered = 0
             self.state.current_chop_index = None
+            # State for overlap crossfading when looping
+            self.state.overlap_buffer = None  # Buffer to store the remaining fade-out tail
         # All other fields are regular attributes (not in state)
         self.is_in_chop_mode = model.chop is not None
         self._reset_playhead_this_chunk = False
+        self._cached_tail = None  # Cache for the loop tail to avoid recomputing
+        self._cached_tail_for_indices = None  # Track what indices the tail is for
         self.chop_node = self.instantiate_child_node(model.chop, "chop") if self.is_in_chop_mode else None
         self.audio_files = None
         if self.is_in_chop_mode:
@@ -50,7 +54,6 @@ class SampleNode(BaseNode):
             self.audio = load_wav_file(model.file)
         self.speed_node = self.instantiate_child_node(model.speed, "speed")
         self.freq_node = self.instantiate_child_node(model.freq, "freq") if model.freq is not None else None
-        self.base_freq_node = self.instantiate_child_node(model.base_freq, "base_freq") if model.base_freq is not None else None
         self.start_node = self.instantiate_child_node(model.start, "start")
         self.end_node = self.instantiate_child_node(model.end, "end")
         self.offset_node = self.instantiate_child_node(model.offset, "offset")
@@ -192,18 +195,13 @@ class SampleNode(BaseNode):
             speed = np.full(num_samples, speed)
 
         # If freq is set and base_freq is set, modulate speed by frequency ratio
-        if self.freq_node is not None and self.base_freq_node is not None:
+        if self.freq_node is not None and self.model.base_freq is not None:
             freq = self.freq_node.render(num_samples, context, **self.get_params_for_children(params))
-            base_freq = self.base_freq_node.render(num_samples, context, **self.get_params_for_children(params))
-            # Ensure both are arrays
+            # Ensure freq is an array
             if np.isscalar(freq):
                 freq = np.full(num_samples, freq)
-            if np.isscalar(base_freq):
-                base_freq = np.full(num_samples, base_freq)
-            # Avoid division by zero
-            base_freq = np.maximum(base_freq, 1e-6)
             # Multiply speed by the frequency ratio (current_freq / base_freq)
-            speed = speed * (freq / base_freq)
+            speed = speed * (freq / self.model.base_freq)
 
         # Render offset
         offset = self.offset_node.render(num_samples, context, **self.get_params_for_children(params))
@@ -234,6 +232,9 @@ class SampleNode(BaseNode):
         # Save the unmodified playhead for updating last_playhead_position
         playhead_with_offset = playhead_absolute + offset_samples
 
+        # Track which samples wrapped for crossfade purposes
+        did_wrap = None
+        
         if not self.model.loop:
             # Non-looping: find where we exceed the window bounds
             outside_bounds = (playhead_with_offset >= end_indices) | (playhead_with_offset < start_indices)
@@ -256,6 +257,7 @@ class SampleNode(BaseNode):
             outside_high = playhead_with_offset >= end_indices
             outside_low = playhead_with_offset < start_indices
             outside = outside_high | outside_low
+            did_wrap = outside.copy()  # Track where wrapping occurred
             if np.any(outside):
                 # For samples outside the window, wrap them back
                 # Calculate offset from start of window
@@ -275,34 +277,85 @@ class SampleNode(BaseNode):
         # Interpolate from the audio buffer
         wave = np.interp(audio_indices, np.arange(len(self.audio)), self.audio)
 
+        # Handle overlap crossfading for looping samples
+        if self.model.loop and self.model.overlap > 0 and did_wrap is not None:
+            # Calculate overlap size in samples (based on the average window length)
+            avg_window_length = int(np.mean(window_lengths))
+            overlap_samples = int(avg_window_length * self.model.overlap)
+            
+            if overlap_samples > 0:
+                # Create output buffer
+                output = wave.copy()
+                
+                # First, apply any remaining overlap from previous chunk
+                if self.state.overlap_buffer is not None:
+                    samples_to_apply = min(len(self.state.overlap_buffer), num_samples)
+                    
+                    # Simple crossfade: tail fades out, new signal fades in
+                    fade = np.linspace(0, samples_to_apply / overlap_samples, samples_to_apply)
+                    
+                    output[:samples_to_apply] = (
+                        wave[:samples_to_apply] * fade +
+                        self.state.overlap_buffer[:samples_to_apply] * (1 - fade)
+                    )
+                    
+                    # Remove the used portion from the buffer
+                    if samples_to_apply >= len(self.state.overlap_buffer):
+                        # We've consumed all the overlap buffer
+                        self.state.overlap_buffer = None
+                    else:
+                        # Keep the remaining portion for next chunk
+                        self.state.overlap_buffer = self.state.overlap_buffer[samples_to_apply:]
+                
+                # Check if we wrapped in this chunk (and we're not already in the middle of an overlap)
+                if self.state.overlap_buffer is None and np.any(did_wrap):
+                    # Find the first wrap point
+                    wrap_idx = np.where(did_wrap)[0][0]
+                    
+                    # Get the end position for this wrap
+                    end_pos = end_indices[wrap_idx]
+                    
+                    # Check if we can use cached tail
+                    cache_key = (end_pos, overlap_samples)
+                    if self._cached_tail_for_indices != cache_key:
+                        # Compute and cache the tail
+                        tail_start_pos = max(0, end_pos - overlap_samples)
+                        tail_indices = np.arange(tail_start_pos, end_pos, dtype=np.float32)
+                        tail_indices = np.clip(tail_indices, 0, len(self.audio) - 1)
+                        tail = np.interp(tail_indices, np.arange(len(self.audio)), self.audio)
+                        
+                        # Ensure tail is the right length
+                        if len(tail) < overlap_samples:
+                            tail = np.pad(tail, (overlap_samples - len(tail), 0), 'edge')
+                        
+                        self._cached_tail = tail
+                        self._cached_tail_for_indices = cache_key
+                    else:
+                        tail = self._cached_tail
+                    
+                    # How many samples do we have after the wrap in this chunk?
+                    samples_after_wrap = num_samples - wrap_idx
+                    samples_to_fade = min(samples_after_wrap, overlap_samples)
+                    
+                    # Apply crossfade for the portion we have in this chunk
+                    fade = np.linspace(0, samples_to_fade / overlap_samples, samples_to_fade)
+                    output[wrap_idx:wrap_idx + samples_to_fade] = (
+                        wave[wrap_idx:wrap_idx + samples_to_fade] * fade +
+                        tail[:samples_to_fade] * (1 - fade)
+                    )
+                    
+                    # If we haven't completed the full crossfade, store the remainder
+                    if samples_to_fade < overlap_samples:
+                        self.state.overlap_buffer = tail[samples_to_fade:]
+                    else:
+                        self.state.overlap_buffer = None
+                
+                wave = output
+        
         self.state.last_playhead_position = playhead_absolute[-1] if len(playhead_absolute) > 0 else self.state.last_playhead_position
         self.state.total_samples_rendered += len(wave)
 
         return wave
-
-        # Uncomment the following lines if you want to implement looping with overlap, but this doesn't work with variable speed
-        # if self.model.loop:
-        #     result = np.zeros(num_samples)
-        #     overlap_samples = int(final_len * self.model.overlap)
-        #     effective_length = final_len - overlap_samples if overlap_samples > 0 else final_len
-        #     position = 0
-
-        #     while position < num_samples:
-        #         remaining = num_samples - position
-        #         to_copy = min(final_len, remaining)
-
-        #         segment = wave[:to_copy].copy()
-        #         if overlap_samples > 0 and to_copy > overlap_samples:
-        #             fade_out = np.linspace(1, 0, overlap_samples)
-        #             fade_in = np.linspace(0, 1, overlap_samples)
-        #             segment[-overlap_samples:] *= fade_out
-        #             if position > 0:
-        #                 result[position:position+overlap_samples] += wave[:overlap_samples] * fade_in
-        #         result[position:position+to_copy] += segment
-        #         position += effective_length
-        #     return result
-        # else:
-        #     return np.pad(wave, (0, num_samples - final_len), 'constant')
 
 
 SAMPLE_DEFINITION = NodeDefinition("sample", SampleNode, SampleModel)

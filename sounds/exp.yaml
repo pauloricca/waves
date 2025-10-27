@@ -260,23 +260,132 @@ synth3:
 
 
 hum:
-  multiply:
-    number: 8
+  # retrigger:
+  #   repeats: 3
+  #   time: 0.3
+  #   feedback: 0.2
+  #   signal:
+      expression:
+        exp: amp * amp2 * signal * 0.3
+        amp:
+          osc:
+            type: tri
+            freq: 1
+            range: [0.2, 1]
+        amp2:
+          osc:
+            type: tri
+            freq: 2
+            range: [0.6, 1]
+        signal:
+          multiply:
+            number: 8
+            signal:
+              expression:
+                exp: amp * signal
+                amp:
+                  midi_cc:
+                    cc: i - 1
+                    initial: 0
+                signal:
+                  sample:
+                    file: samples/hum.wav
+                    start: 0.2
+                    end: 0.5
+                    loop: true
+                    # base_freq: 200
+                    base_freq:
+                      midi_cc:
+                        range: [0, 100]
+                        cc: 16
+                        initial: 0
+                    freq: 
+                      midi_cc:
+                        range: [0, 300]
+                        cc: 15 + i
+                        initial: 0
+              
+
+
+
+seq-glitch:
+  tempo:
+    bpm: 120
     signal:
       expression:
-        exp: amp * signal
-        amp:
-          midi_cc:
-            cc: i - 1
-            initial: 0
-        signal:
-          sample:
-            file: samples/hum.wav
-            loop: true
-            base_freq: 200
-            freq: 
-              midi_cc:
-                range: [0, 2000]
-                cc: 15 + i
-                initial: 0
-          
+        exp: 0.4 * perc + pads
+        pads:
+          retrigger:
+            repeats: 3
+            time: 0.3
+            feedback: 0.2
+            signal:
+              expression:
+                exp: amp * signal * 0.3
+                amp:
+                  automation:
+                    mode: overlap
+                    overlap: 0.1
+                    repeat: 1000
+                    interval: sixteenth * 2
+                    steps:
+                      - 0
+                      - .5
+                      - 1
+                      - 0
+                
+                      - .5
+                      - .7
+                      - .2
+                      - .5
+                signal:
+                  multiply:
+                    number: 8
+                    signal:
+                      expression:
+                        exp: amp * signal
+                        amp:
+                          midi_cc:
+                            cc: i - 1
+                            initial: 0
+                        signal:
+                          sample:
+                            file: samples/hum.wav
+                            start: 0.2
+                            end: 0.5
+                            loop: true
+                            base_freq: 200
+                            # base_freq:
+                            #   midi_cc:
+                            #     range: [0, 100]
+                            #     cc: 16
+                            #     initial: 0
+                            freq: 
+                              midi_cc:
+                                range: [100, 390]
+                                cc: 15 + i
+                                initial: 0
+        perc:
+          sequencer:
+            interval: sixteenth
+            repeat: 1000
+            sequence:
+              - kick
+              - 
+              - chop c10
+              - kick
+  
+              - glitch
+              - hihat
+              - chop
+              - glitch
+    
+              -
+              - kick
+              - chop c3
+              -
+    
+              - glitch
+              - kick
+              - chop
+              -
