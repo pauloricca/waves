@@ -8,7 +8,7 @@ from collections import deque
 import os
 import shutil
 
-from config import BUFFER_SIZE, SAMPLE_RATE, DO_VISUALISE_OUTPUT, DISPLAY_RENDER_TIME_PERCENTAGE
+from config import BUFFER_SIZE, SAMPLE_RATE, DO_VISUALISE_OUTPUT, DISPLAY_RENDER_STATS
 from utils import visualise_wave
 from nodes.node_utils.midi_utils import get_last_midi_message_display
 
@@ -166,9 +166,9 @@ def run_visualizer_and_stats(
                         replace_previous=True,
                         extra_lines=1
                     )
-                    if DISPLAY_RENDER_TIME_PERCENTAGE:
+                    if DISPLAY_RENDER_STATS:
                         print(stats_text, flush=True)
-                elif DISPLAY_RENDER_TIME_PERCENTAGE:
+                elif DISPLAY_RENDER_STATS:
                     # Clear line and print stats only (no visualization)
                     # Fill the rest of the terminal width with spaces to blank it out
                     try:

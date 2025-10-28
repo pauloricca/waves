@@ -1,6 +1,6 @@
 from __future__ import annotations
 import numpy as np
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from pydantic import ConfigDict
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
@@ -27,7 +27,7 @@ from nodes.node_utils.node_definition_type import NodeDefinition
 #      "1": ...
 class SelectNodeModel(BaseNodeModel):
     model_config = ConfigDict(extra='allow')  # Allow arbitrary path keys
-    test: BaseNodeModel  # The test signal that determines which path to select
+    test: Any  # The test signal that determines which path to select (actual type from parse_node)
 
 
 class SelectNode(BaseNode):
@@ -138,6 +138,11 @@ class SelectNode(BaseNode):
                 # Render the path for this segment
                 segment_output = path_node.render(segment_length, context, 
                                                  **self.get_params_for_children(params))
+                
+                # Handle case where path returned empty (finished)
+                if len(segment_output) == 0:
+                    # Path has finished - return empty to signal completion
+                    return np.array([], dtype=np.float32)
                 
                 # Handle case where path returned fewer samples than requested
                 if len(segment_output) < segment_length:

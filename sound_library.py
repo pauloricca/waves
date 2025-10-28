@@ -18,6 +18,44 @@ def parse_node(data, available_sound_names=None, raw_sound_data=None, all_sound_
     from nodes.node_utils.node_registry import NODE_REGISTRY
     from nodes.node_utils.node_string_parser import apply_params_to_model
     
+    # Helper to check if a dict looks like a standard node definition
+    def looks_like_standard_node(v):
+        return isinstance(v, dict) and len(v) == 1 and isinstance(next(iter(v.values())), dict)
+    
+    # Helper to restructure dict for nodes with extra='allow' (select, context, expression, etc.)
+    def restructure_if_needed(v):
+        """
+        If dict has multiple keys but one matches a node type, restructure it.
+        Input:  {'select': {'test': 'note'}, '55': {...}, '57': {...}}
+        Output: {'select': {'test': 'note', '55': {...}, '57': {...}}}
+        """
+        if not isinstance(v, dict) or len(v) <= 1:
+            return v
+        
+        # Find node type keys
+        node_type_keys = [k for k in v.keys() if any(n.name == k for n in NODE_REGISTRY)]
+        sound_type_keys = [k for k in v.keys() if (available_sound_names and k in available_sound_names) or (all_sound_names and k in all_sound_names)]
+        
+        # If exactly one key is a node type, restructure
+        if len(node_type_keys) == 1:
+            node_type_key = node_type_keys[0]
+            node_params = v[node_type_key].copy() if isinstance(v[node_type_key], dict) else {}
+            # Add all other keys as extra params
+            for k in v.keys():
+                if k != node_type_key:
+                    node_params[k] = v[k]
+            return {node_type_key: node_params}
+        elif len(sound_type_keys) == 1:
+            sound_type_key = sound_type_keys[0]
+            sound_params = v[sound_type_key].copy() if isinstance(v[sound_type_key], dict) else {}
+            # Add all other keys as extra params
+            for k in v.keys():
+                if k != sound_type_key:
+                    sound_params[k] = v[k]
+            return {sound_type_key: sound_params}
+        
+        return v
+    
     if not isinstance(data, dict) or len(data) != 1:
         raise ValueError(f"Each node must have exactly one node_type key: {data}")
     
@@ -25,11 +63,15 @@ def parse_node(data, available_sound_names=None, raw_sound_data=None, all_sound_
     
     # Recursively parse params that look like nodes
     for k, v in params.items():
-        if isinstance(v, dict) and len(v) == 1 and isinstance(next(iter(v.values())), dict):
-            params[k] = parse_node(v, available_sound_names, raw_sound_data, all_sound_names)
+        # First restructure if needed
+        v_restructured = restructure_if_needed(v)
+        
+        if looks_like_standard_node(v_restructured):
+            params[k] = parse_node(v_restructured, available_sound_names, raw_sound_data, all_sound_names)
         elif isinstance(v, list):
             params[k] = [
-                parse_node(i, available_sound_names, raw_sound_data, all_sound_names) if isinstance(i, dict) and len(i) == 1 and isinstance(next(iter(i.values())), dict) else i
+                parse_node(restructure_if_needed(i), available_sound_names, raw_sound_data, all_sound_names) 
+                if looks_like_standard_node(restructure_if_needed(i)) else i
                 for i in v
             ]
     

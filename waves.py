@@ -264,7 +264,7 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
         # Clear chunk data for next render (important for realtime mode)
         render_context.clear_chunk()
 
-    if (DISPLAY_RENDER_TIME_PERCENTAGE or DO_VISUALISE_OUTPUT):
+    if (DISPLAY_RENDER_STATS or DO_VISUALISE_OUTPUT):
         vis_thread = threading.Thread(
             target=run_visualizer_and_stats,
             args=(visualised_wave_buffer, should_stop_ref, start_time, last_render_time_ref, recording_active_ref),

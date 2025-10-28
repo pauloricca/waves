@@ -1,10 +1,8 @@
 from __future__ import annotations
-from typing import Optional
 import math
 import numpy as np
 from pydantic import ConfigDict
 
-from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.node_utils.midi_utils import (
@@ -21,6 +19,7 @@ class MidiModel(BaseNodeModel):
     signal: BaseNodeModel  # The sound/signal to play when a note is triggered
     voices: int = 16  # Maximum number of simultaneous voices (polyphony limit)
     device: str | None = None  # Optional device key from config, None = use default
+    duration: float = math.inf
 
 
 class MidiNode(BaseNode):
@@ -54,11 +53,10 @@ class MidiNode(BaseNode):
     
     def _handle_note_on(self, note_number, velocity, **params):
         """Handle MIDI note on event"""
-        from nodes.node_utils.instantiate_node import instantiate_node
-        
         # Convert MIDI note number to frequency
         frequency = midi_note_to_frequency(note_number)
         amplitude = midi_velocity_to_amplitude(velocity)
+        velocity_norm = velocity / 127.0  # Normalise velocity to 0-1
         
         # Voice stealing: if we've reached max voices, remove the oldest note
         if len(self.state.active_notes) >= self.max_voices:
@@ -72,7 +70,8 @@ class MidiNode(BaseNode):
             
             # Clean up note_number_to_ids mapping
             if oldest_note_number in self.state.note_number_to_ids:
-                self.state.note_number_to_ids[oldest_note_number].discard(oldest_note_id)
+                if oldest_note_id in self.state.note_number_to_ids[oldest_note_number]:
+                    self.state.note_number_to_ids[oldest_note_number].remove(oldest_note_id)
                 if not self.state.note_number_to_ids[oldest_note_number]:
                     del self.state.note_number_to_ids[oldest_note_number]
             
@@ -92,6 +91,11 @@ class MidiNode(BaseNode):
             'f': frequency,  # Alias
             'amp': amplitude,
             'a': amplitude,  # Alias
+            'note': note_number,
+            'n': note_number,  # Alias
+            'velocity': velocity_norm,
+            'vel': velocity_norm,  # Alias
+            'v': velocity_norm,  # Alias
         }
         
         # Store the active note with unique ID
@@ -109,7 +113,7 @@ class MidiNode(BaseNode):
         self.state.note_number_to_ids[note_number].append(note_index)
         
         if MIDI_DEBUG:
-            print(f"Note ON: {note_number} (freq: {frequency:.2f}Hz, vel: {velocity}, id: {note_index})")
+            print(f"Note ON: {note_number} (freq: {frequency:.2f}Hz, vel: {velocity}, vel_norm: {velocity_norm:.2f}, id: {note_index})")
     
     def _handle_note_off(self, note_number):
         """Handle MIDI note off event"""
@@ -153,25 +157,25 @@ class MidiNode(BaseNode):
             merged_params['gate'] = 1.0 if is_in_sustain else 0.0
             
             # Render the note
-            try:
-                note_chunk = sound_node.render(num_samples, context, **merged_params)
-                
-                # If the note returns an empty array, it has finished (e.g., envelope end=True)
-                if len(note_chunk) == 0:
-                    notes_to_remove.append((note_id, note_number))
-                    continue
-                
-                # Update samples rendered counter
-                note_data['samples_rendered'] += len(note_chunk)
-                
-                # Mix into output (pad if needed)
-                if len(note_chunk) < len(output_wave):
-                    note_chunk = np.pad(note_chunk, (0, len(output_wave) - len(note_chunk)))
-                
-                output_wave[:len(note_chunk)] += note_chunk
-            except Exception as e:
-                print(f"Error rendering note {note_number} (id: {note_id}): {e}")
+            # try:
+            note_chunk = sound_node.render(num_samples, context, **merged_params)
+            
+            # If the note returns an empty array, it has finished (e.g., envelope end=True)
+            if len(note_chunk) == 0:
                 notes_to_remove.append((note_id, note_number))
+                continue
+            
+            # Update samples rendered counter
+            note_data['samples_rendered'] += len(note_chunk)
+            
+            # Mix into output (pad if needed)
+            if len(note_chunk) < len(output_wave):
+                note_chunk = np.pad(note_chunk, (0, len(output_wave) - len(note_chunk)))
+            
+            output_wave[:len(note_chunk)] += note_chunk
+            # except Exception as e:
+            #     print(f"Error rendering note {note_number} (id: {note_id}): {e}")
+            #     notes_to_remove.append((note_id, note_number))
         
         # Remove finished notes
         for note_id, note_number in notes_to_remove:

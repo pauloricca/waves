@@ -46,6 +46,7 @@ glitch:
 
 hihat:
   context:
+    duration: 1
     v: 1
     signal:
       expression:
@@ -65,6 +66,7 @@ hihat:
 
 kick:
   mix:
+    duration: 1
     signals:
       # Rumble
       - osc:
@@ -182,3 +184,19 @@ kick2:
               duration: 0.4
               freq: 18
 
+drums:
+  midi:
+    duration: 10000
+    device: akai
+    signal:
+      select:
+        test: note
+      "55":
+        kick: {}
+      "57":
+        hihat:
+          v: max(0.5, v)
+      "48":
+        glitch: {}
+      "50":
+        chop: {}
