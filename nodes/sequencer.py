@@ -16,6 +16,7 @@ class SequencerModel(BaseNodeModel):
     repeat: int = 1
     sequence: Optional[List[Union[BaseNodeModel, str, List[Union[str, BaseNodeModel]], None]]] = None
     chain: Optional[List[Union[str, BaseNodeModel]]] = None
+    swing: WavableValue = 0
 
 
 class SequencerNode(BaseNode):
@@ -26,6 +27,7 @@ class SequencerNode(BaseNode):
         self.chain = model.chain
         self.repeat = model.repeat
         self.interval_node = self.instantiate_child_node(model.interval, "interval")
+        self.swing_node = self.instantiate_child_node(model.swing, "swing")
         
         # Persistent state for realtime playback (survives hot reload)
         if do_initialise_state:
@@ -140,8 +142,11 @@ class SequencerNode(BaseNode):
             num_samples_resolved = num_samples
         
         interval_wave = self.interval_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
-        # Use first value if interval is a wave (assume constant interval for now)
+        swing_wave = self.swing_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+        # Use first value if interval/swing is a wave (assume constant for now)
         interval = float(interval_wave[0]) if len(interval_wave) > 0 else 0.0
+        swing = float(swing_wave[0]) if len(swing_wave) > 0 else 0.0
+        swing = np.clip(swing, -1.0, 1.0)  # Ensure swing is in valid range
         
         sequence = self.sequence or self.chain
         if not sequence:
@@ -193,9 +198,23 @@ class SequencerNode(BaseNode):
             remaining_samples = num_samples - samples_written
             
             if self.sequence and not self.state.sequence_complete:
-                # For sequence mode: calculate based on interval
-                # We're in a step - use interval
-                step_remaining_time = interval - self.state.time_in_current_step
+                # For sequence mode: calculate based on interval with swing
+                # Apply swing to odd steps (step % 2 == 1)
+                current_interval = interval
+                if self.state.current_step % 2 == 1:
+                    # Odd step: apply swing
+                    # swing = -1 means shorter (0.5x), swing = 0 means normal (1x), swing = 1 means longer (1.5x)
+                    swing_factor = 1.0 + (swing * 0.5)
+                    current_interval = interval * swing_factor
+                else:
+                    # Even step: compensate for previous odd step's swing
+                    # If swing was positive, this step should be shorter to maintain overall tempo
+                    # If swing was negative, this step should be longer
+                    swing_factor = 1.0 - (swing * 0.5)
+                    current_interval = interval * swing_factor
+                
+                # We're in a step - use current_interval
+                step_remaining_time = current_interval - self.state.time_in_current_step
                 step_remaining_samples = int(step_remaining_time * SAMPLE_RATE)
                 samples_to_render = min(remaining_samples, step_remaining_samples)
             else:
@@ -204,10 +223,20 @@ class SequencerNode(BaseNode):
             # Safeguard: if samples_to_render is 0 due to rounding, advance to next step
             # This can happen when time_in_current_step is very close to interval
             if samples_to_render <= 0:
-                if self.sequence and not self.state.sequence_complete and self.state.time_in_current_step >= interval - 0.0001:
-                    self.state.current_step += 1
-                    self.state.time_in_current_step = 0
-                    continue
+                if self.sequence and not self.state.sequence_complete:
+                    # Calculate current interval with swing
+                    current_interval = interval
+                    if self.state.current_step % 2 == 1:
+                        swing_factor = 1.0 + (swing * 0.5)
+                        current_interval = interval * swing_factor
+                    else:
+                        swing_factor = 1.0 - (swing * 0.5)
+                        current_interval = interval * swing_factor
+                    
+                    if self.state.time_in_current_step >= current_interval - 0.0001:
+                        self.state.current_step += 1
+                        self.state.time_in_current_step = 0
+                        continue
                 # Otherwise this shouldn't happen - break to avoid infinite loop
                 break
             
@@ -278,10 +307,20 @@ class SequencerNode(BaseNode):
             self.state.time_in_current_step += samples_to_render / SAMPLE_RATE
             
             # Check if we should advance to next step for sequence mode
-            if self.sequence and not self.state.sequence_complete and self.state.time_in_current_step >= interval:
-                # For sequence mode: advance based on interval timing
-                self.state.current_step += 1
-                self.state.time_in_current_step = 0
+            if self.sequence and not self.state.sequence_complete:
+                # Calculate current interval with swing
+                current_interval = interval
+                if self.state.current_step % 2 == 1:
+                    swing_factor = 1.0 + (swing * 0.5)
+                    current_interval = interval * swing_factor
+                else:
+                    swing_factor = 1.0 - (swing * 0.5)
+                    current_interval = interval * swing_factor
+                
+                if self.state.time_in_current_step >= current_interval:
+                    # For sequence mode: advance based on interval timing
+                    self.state.current_step += 1
+                    self.state.time_in_current_step = 0
         
         return output_wave
 

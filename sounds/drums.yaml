@@ -31,9 +31,9 @@ drums-kit:
 drums:
   sequencer:
     repeat: 1000
-    interval: 0.1
+    interval: 0.15
     sequence:
-      - kick
-      - 
-      - [chop, hihat]
-      - glitch
+      - [hihat, kick]
+      - hihat
+      - [hihat, chop]
+      - hihat

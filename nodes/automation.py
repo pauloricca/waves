@@ -85,6 +85,7 @@ class AutomationModel(BaseNodeModel):
     mode: AutomationMode = AutomationMode.STEP
     overlap: float = 0.1  # Crossfade time in seconds for overlap mode
     repeat: int = 1
+    swing: WavableValue = 0
 
 
 class AutomationNode(BaseNode):
@@ -95,8 +96,9 @@ class AutomationNode(BaseNode):
         self.overlap_time = model.overlap
         self.repeat = model.repeat
         
-        # Create interval node
+        # Create interval and swing nodes
         self.interval_node = self.instantiate_child_node(model.interval, "interval")
+        self.swing_node = self.instantiate_child_node(model.swing, "swing")
 
         
         # Persistent state for realtime playback (survives hot reload)
@@ -153,9 +155,12 @@ class AutomationNode(BaseNode):
                 return np.array([])
             self._last_chunk_samples = num_samples_resolved
         
-        # Get interval value
+        # Get interval and swing values
         interval_wave = self.interval_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+        swing_wave = self.swing_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
         interval = float(interval_wave[0]) if len(interval_wave) > 0 else 1.0
+        swing = float(swing_wave[0]) if len(swing_wave) > 0 else 0.0
+        swing = np.clip(swing, -1.0, 1.0)  # Ensure swing is in valid range
         
         if len(self.step_nodes) == 0:
             return np.zeros(num_samples_resolved, dtype=np.float32)
@@ -182,8 +187,21 @@ class AutomationNode(BaseNode):
                     self.state.crossfade_progress = 0
                     continue
             
+            # Calculate current interval with swing
+            # Apply swing to odd steps (step % 2 == 1)
+            current_interval = interval
+            if self.state.current_step % 2 == 1:
+                # Odd step: apply swing
+                # swing = -1 means shorter (0.5x), swing = 0 means normal (1x), swing = 1 means longer (1.5x)
+                swing_factor = 1.0 + (swing * 0.5)
+                current_interval = interval * swing_factor
+            else:
+                # Even step: compensate for previous odd step's swing
+                swing_factor = 1.0 - (swing * 0.5)
+                current_interval = interval * swing_factor
+            
             # Calculate how many samples we can render from current step
-            time_remaining_in_step = interval - self.state.time_in_current_step
+            time_remaining_in_step = current_interval - self.state.time_in_current_step
             samples_remaining_in_step = int(time_remaining_in_step * SAMPLE_RATE)
             samples_to_render = min(samples_remaining_in_step, num_samples_resolved - samples_written)
             
@@ -199,9 +217,9 @@ class AutomationNode(BaseNode):
             if self.mode == AutomationMode.STEP:
                 chunk = self._render_step_mode(samples_to_render, context, params)
             elif self.mode == AutomationMode.RAMP:
-                chunk = self._render_ramp_mode(samples_to_render, interval, context, params)
+                chunk = self._render_ramp_mode(samples_to_render, current_interval, context, params)
             elif self.mode == AutomationMode.OVERLAP:
-                chunk = self._render_overlap_mode(samples_to_render, interval, context, params)
+                chunk = self._render_overlap_mode(samples_to_render, current_interval, context, params)
             else:
                 chunk = np.zeros(samples_to_render, dtype=np.float32)
             
@@ -213,7 +231,7 @@ class AutomationNode(BaseNode):
             self.state.time_in_current_step += len(chunk) / SAMPLE_RATE
             
             # Check if we should move to next step
-            if self.state.time_in_current_step >= interval:
+            if self.state.time_in_current_step >= current_interval:
                 self.state.current_step += 1
                 self.state.time_in_current_step = 0
                 self.state.prev_step_buffer = None
