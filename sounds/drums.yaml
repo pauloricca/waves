@@ -1,0 +1,39 @@
+drums-kit:
+  midi:
+    duration: 10000
+    device: akai
+    signal:
+      select:
+        test: note
+      "55":
+        kick: {}
+      "57":
+        hihat:
+          v: max(0.1, v)
+      "48":
+        glitch: {}
+      "50":
+        chop: {}
+      "52":
+        glitch:
+          c: 40
+      "60":
+        glitch:
+          c: 10
+      "59":
+        glitch:
+          c: 60
+      "53":
+        glitch:
+          c: 56
+
+
+drums:
+  sequencer:
+    repeat: 1000
+    interval: 0.1
+    sequence:
+      - kick
+      - 
+      - [chop, hihat]
+      - glitch

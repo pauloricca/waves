@@ -163,22 +163,56 @@ def load_all_sound_libraries(directory: str = ".") -> Dict[str, SoundLibraryMode
     sound_libraries.clear()
     sound_index.clear()
     
-    # Load each YAML file
+    # Use C-based LibYAML loader if available (much faster)
+    try:
+        Loader = yaml.CSafeLoader
+    except AttributeError:
+        Loader = yaml.SafeLoader
+    
+    # FIRST PASS: Load all raw YAML data and extract user variables
+    raw_data_by_file = {}
     for yaml_file in yaml_files:
         filename = os.path.basename(yaml_file)
         try:
-            library = load_yaml_file(yaml_file)
-            sound_libraries[filename] = library
+            with open(yaml_file) as file:
+                raw_data = yaml.load(file, Loader=Loader)
             
-            # Update the sound index
-            for sound_name, sound_model in library.root.items():
+            if raw_data is None:
+                raw_data = {}
+            
+            # Extract and set user variables if present (only from main waves.yaml)
+            if filename == 'waves.yaml':
+                user_vars = raw_data.pop('vars', None)
+                if user_vars:
+                    from expression_globals import set_user_variables
+                    set_user_variables(user_vars)
+            
+            raw_data_by_file[filename] = raw_data
+            
+            # Pre-populate sound_index with all sound names (models will be None for now)
+            for sound_name in raw_data.keys():
                 if sound_name in sound_index:
                     print(f"Warning: Sound '{sound_name}' defined in multiple files. Using definition from {filename}")
+                sound_index[sound_name] = (filename, None)
+            
+        except Exception as e:
+            print(f"Error loading {filename}: {e}")
+            raise
+    
+    # SECOND PASS: Parse all YAML data now that sound_index has all sound names
+    for filename, raw_data in raw_data_by_file.items():
+        try:
+            library = SoundLibraryModel.model_validate(raw_data)
+            sound_libraries[filename] = library
+            
+            # Update the sound index with actual models
+            for sound_name, sound_model in library.root.items():
                 sound_index[sound_name] = (filename, sound_model)
             
             print(f"Loaded {len(library.root)} sound(s) from {filename}")
         except Exception as e:
-            print(f"Error loading {filename}: {e}")
+            print(f"Error parsing {filename}: {e}")
+            raise
     
     return sound_libraries
 
@@ -201,11 +235,35 @@ def reload_sound_library(filename: str, directory: str = ".") -> bool:
                 if sound_name in sound_index and sound_index[sound_name][0] == filename:
                     del sound_index[sound_name]
         
-        # Load the updated file
-        library = load_yaml_file(file_path)
+        # Use C-based LibYAML loader if available
+        try:
+            Loader = yaml.CSafeLoader
+        except AttributeError:
+            Loader = yaml.SafeLoader
+        
+        # Load raw YAML data
+        with open(file_path) as file:
+            raw_data = yaml.load(file, Loader=Loader)
+        
+        if raw_data is None:
+            raw_data = {}
+        
+        # Extract and set user variables if present (only from main waves.yaml)
+        if filename == 'waves.yaml':
+            user_vars = raw_data.pop('vars', None)
+            if user_vars:
+                from expression_globals import set_user_variables
+                set_user_variables(user_vars)
+        
+        # Pre-populate sound_index with sound names from this file (models will be None for now)
+        for sound_name in raw_data.keys():
+            sound_index[sound_name] = (filename, None)
+        
+        # Now parse the file with full knowledge of all sound names
+        library = SoundLibraryModel.model_validate(raw_data)
         sound_libraries[filename] = library
         
-        # Update the sound index
+        # Update the sound index with actual models
         for sound_name, sound_model in library.root.items():
             sound_index[sound_name] = (filename, sound_model)
         

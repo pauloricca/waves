@@ -15,12 +15,12 @@ oscar:
             signal: rand([500, 250, 150, 700, 1300, 4000])
 
 chop:
-  map:
-    from: [-1, 1]
-    to: [-6, 6]
+  context:
+    c: rand(0, 14)
     signal:
-      context:
-        c: rand(0, 14)
+      map:
+        from: [-1, 1]
+        to: [-6, 6]
         signal:
           sample:
             speed: 2
@@ -30,12 +30,12 @@ chop:
                 signal: c
 
 glitch:
-  map:
-    from: [-1, 1]
-    to: [-1, 1]
+  context:
+    c: rand(0, 164)
     signal:
-      context:
-        c: rand(0, 164)
+      map:
+        from: [-1, 1]
+        to: [-1, 1]
         signal:
           sample:
             speed: 2
@@ -183,20 +183,3 @@ kick2:
               release: 0.5
               duration: 0.4
               freq: 18
-
-drums:
-  midi:
-    duration: 10000
-    device: akai
-    signal:
-      select:
-        test: note
-      "55":
-        kick: {}
-      "57":
-        hihat:
-          v: max(0.5, v)
-      "48":
-        glitch: {}
-      "50":
-        chop: {}
