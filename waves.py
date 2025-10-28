@@ -372,7 +372,7 @@ if __name__ == "__main__":
     if DISABLE_GARBAGE_COLLECTION:
         gc.disable()
 
-    if WAIT_FOR_CHANGES_IN_WAVES_YAML:
+    if DO_HOT_RELOAD:
         def yaml_watcher_thread():
             """
             Watch for changes to all YAML files and signal hot reloads.

@@ -154,7 +154,7 @@ my_sound:
 
 Enable hot reload in `config.py`:
 ```python
-WAIT_FOR_CHANGES_IN_WAVES_YAML = True  # Enable YAML file watching
+DO_HOT_RELOAD = True  # Enable YAML file watching
 ```
 
 ## Testing Recommendations

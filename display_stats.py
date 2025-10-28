@@ -5,6 +5,8 @@ Handles CPU usage, elapsed time, and recording status display.
 import time
 import numpy as np
 from collections import deque
+import os
+import shutil
 
 from config import BUFFER_SIZE, SAMPLE_RATE, DO_VISUALISE_OUTPUT, DISPLAY_RENDER_TIME_PERCENTAGE
 from utils import visualise_wave
@@ -104,7 +106,7 @@ def format_stats_line(cpu_usage_percent: float, elapsed_seconds: float, is_recor
         parts.append(recording_text)
     
     # Combine with vertical bars and spacing
-    return "  |  ".join(parts) + "  "
+    return "  |  ".join(parts)
 
 
 def run_visualizer_and_stats(
@@ -124,7 +126,6 @@ def run_visualizer_and_stats(
         last_render_time_ref: Reference to last render time value
         recording_active_ref: Reference to recording active status
     """
-    import os
     
     # Lower priority for visualization thread to avoid interfering with audio
     try:
@@ -169,7 +170,13 @@ def run_visualizer_and_stats(
                         print(stats_text, flush=True)
                 elif DISPLAY_RENDER_TIME_PERCENTAGE:
                     # Clear line and print stats only (no visualization)
-                    print(f"\r{stats_text}", end='', flush=True)
+                    # Fill the rest of the terminal width with spaces to blank it out
+                    try:
+                        term_width = shutil.get_terminal_size((80, 20)).columns
+                    except Exception:
+                        term_width = 80
+                    padded_text = stats_text.ljust(term_width)
+                    print(f"\r{padded_text}", end='', flush=True)
             except Exception:
                 # Silently ignore visualization errors to avoid breaking audio
                 pass

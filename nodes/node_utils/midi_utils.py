@@ -42,8 +42,8 @@ class MidiInputManager:
         self._devices = {}
         self._save_thread = None
         self._stop_save_thread = threading.Event()
-        # Track last MIDI message for display: {device_key: (message_type, channel, data1, data2)}
-        self._last_message = {}
+        # Track last MIDI message for display: (device_key, message_type, channel, data1, data2)
+        self._last_message = None
         
         self._initialize_devices()
         
@@ -234,10 +234,10 @@ class MidiInputManager:
             device_info['cc_values'][key] = message.value
             device_info['cc_values_dirty'] = True  # Mark as needing save
             # Track last CC message for display
-            self._last_message[device_key] = ('cc', message.channel, message.control, message.value)
+            self._last_message = (device_key, 'cc', message.channel, message.control, message.value)
         elif message.type == 'note_on' and message.velocity > 0:
             # Track last note_on message for display
-            self._last_message[device_key] = ('note_on', message.channel, message.note, message.velocity)
+            self._last_message = (device_key, 'note_on', message.channel, message.note, message.velocity)
         
         # Also put in queue for backwards compatibility with nodes that want all messages
         device_info['queue'].put(message)
@@ -327,7 +327,7 @@ def midi_note_to_name(note_number: int) -> str:
 
 def get_last_midi_message_display() -> str | None:
     """
-    Get a formatted display string for the last MIDI message received on any device.
+    Get a formatted display string for the most recent MIDI message across all devices.
     
     Returns:
         Formatted string like "DEVICE_KEY cc: 23  v: 127" or "DEVICE_KEY note: C4 (60)  v: 80"
@@ -338,18 +338,16 @@ def get_last_midi_message_display() -> str | None:
     if not manager._last_message:
         return None
     
-    # Find the most recent message across all devices
-    # For now, just return the first one we find (could be enhanced to track timestamps)
-    for device_key, message_info in manager._last_message.items():
-        message_type, channel, data1, data2 = message_info
-        
-        if message_type == 'cc':
-            # data1 = cc number, data2 = value
-            return f"{device_key} cc: {data1}  v: {data2}"
-        elif message_type == 'note_on':
-            # data1 = note number, data2 = velocity
-            note_name = midi_note_to_name(data1)
-            return f"{device_key} note: {note_name} ({data1})  v: {data2}"
+    # Unpack the last message
+    device_key, message_type, channel, data1, data2 = manager._last_message
+    
+    if message_type == 'cc':
+        # data1 = cc number, data2 = value
+        return f"{device_key} cc: {data1}  v: {data2}"
+    elif message_type == 'note_on':
+        # data1 = note number, data2 = velocity
+        note_name = midi_note_to_name(data1)
+        return f"{device_key} note: {note_name} ({data1})  v: {data2}"
     
     return None
 

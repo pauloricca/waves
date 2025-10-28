@@ -253,7 +253,7 @@ There is a command-line based audio visualizer that shows the waveform of the so
 
 ## Hot Reload & Live State Preservation
 
-The system supports hot reloading of YAML sound definition files during playback, allowing for live editing without interrupting audio. When `WAIT_FOR_CHANGES_IN_WAVES_YAML` is enabled in config.py, the system automatically detects changes to any YAML file in the `sounds/` directory and reloads only that specific file while preserving node state.
+The system supports hot reloading of YAML sound definition files during playback, allowing for live editing without interrupting audio. When `DO_HOT_RELOAD` is enabled in config.py, the system automatically detects changes to any YAML file in the `sounds/` directory and reloads only that specific file while preserving node state.
 
 **Multi-file hot reload:**
 - Only the changed YAML file is reloaded, not all files
