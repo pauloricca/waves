@@ -13,7 +13,7 @@ MIDI_INPUT_DEVICES = {
     "korg": "nanoKONTROL2 SLIDER/KNOB",
     "akai": "LPD8",
 }
-MIDI_DEFAULT_DEVICE_KEY = None  # Default device key to use when not specified in YAML, or None to auto-detect
+MIDI_DEFAULT_DEVICE_KEY = 'korg'  # Default device key to use when not specified in YAML, or None to auto-detect
 DO_PERSIST_MIDI_CC_VALUES = True  # Save MIDI CC values to file for persistence across restarts
 MIDI_CC_SAVE_INTERVAL = 2.0  # Seconds between saving CC values to file
 

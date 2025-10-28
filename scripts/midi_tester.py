@@ -5,7 +5,6 @@ Use this to find the exact name of your MIDI controller and test CC numbers.
 """
 
 import mido
-import sys
 
 
 def format_message(port_name, message):

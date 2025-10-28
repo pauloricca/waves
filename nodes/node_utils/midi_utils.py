@@ -330,7 +330,7 @@ def get_last_midi_message_display() -> str | None:
     Get a formatted display string for the most recent MIDI message across all devices.
     
     Returns:
-        Formatted string like "DEVICE_KEY cc: 23  v: 127" or "DEVICE_KEY note: C4 (60)  v: 80"
+        Formatted string like "DEVICE_KEY ch: 0 cc: 23  v: 127" or "DEVICE_KEY ch: 0 note: C4 (60)  v: 80"
         or None if no messages have been received
     """
     manager = MidiInputManager()
@@ -343,11 +343,11 @@ def get_last_midi_message_display() -> str | None:
     
     if message_type == 'cc':
         # data1 = cc number, data2 = value
-        return f"{device_key} cc: {data1}  v: {data2}"
+        return f"{device_key} ch: {channel}  cc: {data1}  v: {data2}"
     elif message_type == 'note_on':
         # data1 = note number, data2 = velocity
         note_name = midi_note_to_name(data1)
-        return f"{device_key} note: {note_name} ({data1})  v: {data2}"
+        return f"{device_key} ch: {channel}  note: {note_name} ({data1})  v: {data2}"
     
     return None
 
