@@ -18,6 +18,7 @@ from nodes.node_utils.base_node import BaseNode
 from nodes.node_utils.instantiate_node import instantiate_node
 from nodes.node_utils.render_context import RenderContext
 from utils import look_for_duration, play, save, visualise_wave
+from display_stats import run_visualizer_and_stats
 
 rendered_sounds: dict[np.ndarray] = {}
 
@@ -178,6 +179,11 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
     active_sound_node = sound_node  # Local reference to current node
     stored_sound_name = sound_name  # Store the sound name for hot reload
     
+    # References for display thread (using lists so they can be modified in nested scope)
+    should_stop_ref = [False]
+    last_render_time_ref = [0]
+    recording_active_ref = [recording_active]
+    
     # Create render context that persists across chunks
     render_context = RenderContext()
     render_context.is_realtime = True
@@ -253,40 +259,25 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
 
         rendering_end_time = time.time()
         last_render_time = rendering_end_time - rendering_start_time
+        last_render_time_ref[0] = last_render_time  # Update reference for display thread
         
         # Clear chunk data for next render (important for realtime mode)
         render_context.clear_chunk()
 
-    def run_visualizer_and_stats():
-        # Lower priority for visualization thread to avoid interfering with audio
-        try:
-            os.nice(10)  # Increase niceness (lower priority) on Unix systems
-        except (AttributeError, OSError):
-            pass  # Windows or permission issues
-        
-        while not should_stop:
-            if len(visualised_wave_buffer) > 0:
-                try:
-                    render_time_text = f"CPU usage: {100 * last_render_time / (BUFFER_SIZE / SAMPLE_RATE):.2f}%"
-                    
-                    if DO_VISUALISE_OUTPUT:
-                        visualise_wave(np.array(visualised_wave_buffer), do_normalise=False, replace_previous=True, extra_lines=1)
-                        if DISPLAY_RENDER_TIME_PERCENTAGE:
-                            print(render_time_text, flush=True)
-                    elif DISPLAY_RENDER_TIME_PERCENTAGE:
-                        # Clear line and print stats only (no visualization)
-                        print(f"\r{render_time_text}", end='', flush=True)
-                except Exception:
-                    # Silently ignore visualization errors to avoid breaking audio
-                    pass
-            time.sleep(1 / VISUALISATION_FPS)  # Configurable frame rate
-
     if (DISPLAY_RENDER_TIME_PERCENTAGE or DO_VISUALISE_OUTPUT):
-        vis_thread = threading.Thread(target=run_visualizer_and_stats, daemon=True)
+        vis_thread = threading.Thread(
+            target=run_visualizer_and_stats,
+            args=(visualised_wave_buffer, should_stop_ref, start_time, last_render_time_ref, recording_active_ref),
+            daemon=True
+        )
         vis_thread.start()
 
     with sd.OutputStream(callback=audio_callback, blocksize=BUFFER_SIZE, samplerate=SAMPLE_RATE, channels=1): #, latency='low'
         while not should_stop:
+            # Update references for display thread
+            should_stop_ref[0] = should_stop
+            recording_active_ref[0] = recording_active
+            
             # Only stop based on duration if one is specified
             if duration_in_seconds and time.time() - start_time > duration_in_seconds:
                 should_stop = True

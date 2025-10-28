@@ -47,12 +47,6 @@ GLOBAL_CONSTANTS = {
     'round': np.round,
     'sign': np.sign,
     
-    # Array creation
-    'zeros': np.zeros,
-    'ones': np.ones,
-    'linspace': np.linspace,
-    'arange': np.arange,
-    
     # Useful aggregations
     'sum': np.sum,
     'mean': np.mean,
@@ -60,6 +54,19 @@ GLOBAL_CONSTANTS = {
     
     # NumPy itself for advanced usage
     'np': np,
+
+    # Intervals (as frequency multipliers)
+    'octave': 2.0,
+    'whole': 2.0 ** (2.0 / 12.0),
+    'semi': 2.0 ** (1.0 / 12.0),
+    'whole_tone': 2.0 ** (2.0 / 12.0),
+    'semitone': 2.0 ** (1.0 / 12.0),
+    'fifth': 2.0 ** (7.0 / 12.0),
+    'fourth': 2.0 ** (5.0 / 12.0),
+    'major_third': 2.0 ** (4.0 / 12.0),
+    'minor_third': 2.0 ** (3.0 / 12.0),
+    'major_second': 2.0 ** (2.0 / 12.0),
+    'minor_second': 2.0 ** (1.0 / 12.0),
 }
 
 # Musical note constants (C0 to G10)

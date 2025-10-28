@@ -24,6 +24,47 @@ The MIDI node enables live MIDI input for real-time sound synthesis. It listens 
 
 - **channel** (int): MIDI channel to listen to (0-15). Default: 0
 - **signal** (BaseNodeModel): The sound/node to trigger. Can be any node (oscillator, filter chain, etc.)
+- **device** (str | None): Optional device key from config.py. If None, uses the default device. Default: None
+
+## Multi-Device Support
+
+You can configure multiple MIDI devices in `config.py` and select which device to use in your YAML:
+
+**config.py:**
+```python
+MIDI_INPUT_DEVICES = {
+    "main": "Arturia KeyStep 37",
+    "pads": "AKAI MPD218",
+}
+MIDI_DEFAULT_DEVICE_KEY = "main"  # Use this when device not specified
+```
+
+**waves.yaml:**
+```yaml
+my_sound:
+  mix:
+    signals:
+      # Uses the default device (main)
+      - midi:
+          channel: 0
+          signal:
+            osc:
+              type: sin
+      
+      # Uses the "pads" device explicitly
+      - midi:
+          channel: 0
+          device: pads
+          signal:
+            sample:
+              file: kick.wav
+```
+
+On startup, the system will:
+- List all available MIDI ports
+- Show which configured devices were found (✓) or not found (✗)
+- Auto-detect a fallback device if the default isn't available
+- Persist MIDI CC values per device (so switching devices won't mix up values)
 
 ## How It Works
 

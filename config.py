@@ -9,7 +9,11 @@ BUFFER_SIZE = 2048
 MAX_RECURSION_DEPTH = 2  # Maximum recursion depth for feedback loops
 
 # MIDI settings
-MIDI_INPUT_DEVICE_NAME = None  # Set to a specific device name, or None to auto-detect
+# Dictionary mapping device keys to device names
+MIDI_INPUT_DEVICES = {
+    "korg": "nanoKONTROL2 SLIDER/KNOB",
+}
+MIDI_DEFAULT_DEVICE_KEY = None  # Default device key to use when not specified in YAML, or None to auto-detect
 DO_PERSIST_MIDI_CC_VALUES = True  # Save MIDI CC values to file for persistence across restarts
 MIDI_CC_SAVE_INTERVAL = 2.0  # Seconds between saving CC values to file
 VISUALISATION_ROW_HEIGHT = 10
@@ -28,7 +32,7 @@ DO_PRE_RENDER_WHOLE_SOUND = False
 DO_PLAY_IN_REAL_TIME = True
 
 # Real-time recording settings
-DO_RECORD_REAL_TIME = True  # Enable to save real-time playback to file
+DO_RECORD_REAL_TIME = False  # Enable to save real-time playback to file
 
 # Visualisation settings
 DO_VISUALISE_OUTPUT = False

@@ -15,8 +15,58 @@ The `midi_cc` node captures MIDI Control Change (CC) messages and outputs them a
 ## Parameters
 
 - **channel** (int): MIDI channel to listen to (0-15). Default: 0
-- **cc_number** (int): The CC number to capture (0-127). Required.
-- **initial_value** (float): The value to output before any CC message is received (0.0-1.0). Default: 0.0
+- **cc** (WavableValue): The CC number to capture (0-127). Can be dynamic. Default: 0
+- **initial** (float): The value in the output range before any CC is received. Default: 0.5
+- **range** (Tuple[WavableValue, WavableValue]): Output range [min, max]. Both can be dynamic. Default: (0.0, 1.0)
+- **device** (str | None): Optional device key from config.py. If None, uses the default device. Default: None
+
+## Multi-Device Support
+
+You can use MIDI CC from multiple controllers simultaneously. Configure devices in `config.py`:
+
+**config.py:**
+```python
+MIDI_INPUT_DEVICES = {
+    "main": "Arturia KeyStep 37",
+    "pads": "AKAI MPD218",
+}
+MIDI_DEFAULT_DEVICE_KEY = "main"
+```
+
+**waves.yaml:**
+```yaml
+multi_device_cc:
+  mix:
+    signals:
+      # Filter cutoff from main controller
+      - filter:
+          type: lowpass
+          cutoff:
+            midi_cc:
+              channel: 0
+              cc: 74
+              range: [200, 5000]
+              # device not specified = uses "main" (default)
+          signal:
+            osc:
+              freq: 220
+      
+      # Amplitude from pads controller
+      - osc:
+          freq: 440
+          amp:
+            midi_cc:
+              channel: 0
+              cc: 1
+              device: pads  # Explicitly use pads
+              range: [0, 0.5]
+```
+
+**MIDI CC State Persistence:**
+- CC values are saved to `.midi_state.json` every 2 seconds (configurable)
+- Values are stored per device name (not device key)
+- When you switch devices, each device's CC values are preserved separately
+- This prevents confusion when reconnecting controllers
 
 ## How It Works
 

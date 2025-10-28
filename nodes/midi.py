@@ -20,6 +20,7 @@ class MidiModel(BaseNodeModel):
     channel: int = 0  # MIDI channel to listen to (0-15)
     signal: BaseNodeModel  # The sound/signal to play when a note is triggered
     voices: int = 16  # Maximum number of simultaneous voices (polyphony limit)
+    device: str | None = None  # Optional device key from config, None = use default
 
 
 class MidiNode(BaseNode):
@@ -28,6 +29,7 @@ class MidiNode(BaseNode):
         self.channel = model.channel
         self.signal_model = model.signal
         self.max_voices = model.voices
+        self.device_key = model.device  # Store the device key
         
         # Persistent state for active notes (survives hot reload)
         if do_initialise_state:
@@ -40,7 +42,7 @@ class MidiNode(BaseNode):
     
     def _process_midi_messages(self, **params):
         """Process all pending MIDI messages from the queue"""
-        messages = self.midi_manager.get_messages()
+        messages = self.midi_manager.get_messages(device_key=self.device_key)
         
         for message in messages:
             # Only process messages for our channel

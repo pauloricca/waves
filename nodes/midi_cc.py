@@ -16,6 +16,7 @@ class MidiCCModel(BaseNodeModel):
     cc: WavableValue = 0  # CC number to listen to (0-127) - can be dynamic
     initial: float = 0.5  # Initial value in the range
     range: Tuple[WavableValue, WavableValue] = (0.0, 1.0)  # Output range [min, max] - both can be dynamic
+    device: str | None = None  # Optional device key from config, None = use default
     duration: float = math.inf  # MIDI CC nodes run indefinitely
     
     @field_validator('range', mode='before')
@@ -38,6 +39,7 @@ class MidiCCNode(BaseNode):
     def __init__(self, model: MidiCCModel, node_id: str, state=None, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
         self.channel = model.channel
+        self.device_key = model.device  # Store the device key
         
         # Instantiate child nodes for dynamic parameters
         self.cc_node = self.instantiate_child_node(model.cc, "cc")
@@ -72,7 +74,7 @@ class MidiCCNode(BaseNode):
         # If CC number changed, reset the state to avoid using stale values
         if self.state.last_cc_number is not None and cc_number != self.state.last_cc_number:
             # CC number changed - get the current value for the new CC
-            cc_value = self.midi_manager.get_cc_value(self.channel, cc_number)
+            cc_value = self.midi_manager.get_cc_value(self.channel, cc_number, self.device_key)
             if cc_value is not None:
                 self.state.current_normalized_value = cc_value / 127.0
             if MIDI_DEBUG:
@@ -81,7 +83,7 @@ class MidiCCNode(BaseNode):
         self.state.last_cc_number = cc_number
         
         # Get the latest CC value for this channel and CC number
-        cc_value = self.midi_manager.get_cc_value(self.channel, cc_number)
+        cc_value = self.midi_manager.get_cc_value(self.channel, cc_number, self.device_key)
         
         if cc_value is not None:
             # Normalize CC value (0-127) to (0.0-1.0)
