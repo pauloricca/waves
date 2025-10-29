@@ -1009,4 +1009,96 @@ test-automation-nodes:
               type: sin
               freq: 5
               range: [400, 800]
+
+# Test interval node with chromatic scale (default)
+test_interval_chromatic:
+  osc:
+    duration: 2
+    type: sin
+    freq:
+      interval:
+        root: A4
+        note:
+          automation:
+            interval: 0.25
+            mode: step
+            steps: [0, 3, 4, 5, 7, 9, 11, 12]  # Major scale degrees
+
+# Test interval node with blues scale
+test_interval_blues:
+  osc:
+    duration: 2
+    type: sin
+    freq:
+      interval:
+        root: C4
+        note:
+          automation:
+            interval: 0.2
+            mode: step
+            steps: [0, 1, 2, 3, 4, 5, 6, 7]  # Indices in blues scale
+        scale: blues  # Expression evaluates to [0, 3, 5, 6, 7, 10]
+
+# Test interval node with major pentatonic scale using list
+test_interval_pentatonic:
+  osc:
+    duration: 3
+    type: tri
+    freq:
+      interval:
+        root: 220
+        note:
+          automation:
+            interval: 0.3
+            mode: step
+            steps: [0, 2, 4, 6, 8]
+        scale: [0, 2, 4, 7, 9]  # Major pentatonic
+
+# Test interval node with dynamic root frequency
+test_interval_dynamic_root:
+  retrigger:
+    repeats: 5
+    time: 0.3
+    feedback: 0.5
+    signal:
+      filter:
+        type: lowpass
+        cutoff:
+          osc:
+            # type: wander
+            freq: 0.05
+            range: [300, 800]
+        peak: 0.01
+        signal:
+          context:
+            freq: 
+              interval:
+                root:
+                  osc:
+                    type: sqr
+                    freq: 0.5
+                    range: [220, 440]
+                note:
+                  automation:
+                    interval: 0.7
+                    mode: step
+                    repeat: 2000
+                    steps: [0, 2, 1, -1, 5]
+                scale: minor
+            signal:
+              expression: 
+                exp: shape * sin + (1 - shape) * saw
+                shape: 0.8
+                sin: 
+                  osc:
+                    type: sin
+                    amp: 0.4
+                    freq: freq
+                saw: 
+                  osc:
+                    type: saw
+                    amp: 0.4
+                    freq: freq
+              
+
  
