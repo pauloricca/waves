@@ -201,17 +201,26 @@ class FilterNode(BaseNode):
         return out
 
 def normalized_to_q(n: float) -> float:
-    # Map n ∈ [-1, 1] → Q ∈ [0.5, 50] with smooth curve
+    # Map n ∈ [-1, 1] → Q ∈ [0.5, 10] with smooth curve
+    # More conservative max Q to avoid extreme resonance
     min_q = 0.5
-    max_q = 50
+    max_q = 10.0  # Reduced from 50 - much more musical range
     neutral_q = 0.707
 
     # Convert n ∈ [-1, 1] to t ∈ [0, 1]
     t = (n + 1) / 2
-
-    # Use a smooth non-linear curve (e.g., exponential base)
-    # Curve centered at t=0.5 → neutral Q
-    curved = np.interp(t, [0, 0.5, 1], [min_q, neutral_q, max_q])
+    
+    # Use exponential curve for more control at lower Q values
+    # This gives finer control in the musical range (Q < 5)
+    if t < 0.5:
+        # Map 0->0.5 to min_q->neutral_q linearly
+        curved = min_q + (neutral_q - min_q) * (t / 0.5)
+    else:
+        # Map 0.5->1 to neutral_q->max_q with exponential curve
+        # This compresses the higher Q values
+        normalized = (t - 0.5) / 0.5  # 0 to 1
+        curved = neutral_q + (max_q - neutral_q) * (normalized ** 2)
+    
     return curved
 
 def biquad_lowpass(fc: float, q: float, fs: float):
@@ -226,7 +235,16 @@ def biquad_lowpass(fc: float, q: float, fs: float):
     a1 = -2 * cos_w0
     a2 = 1 - alpha
 
-    return normalize_biquad(b0, b1, b2, a0, a1, a2)
+    b, a = normalize_biquad(b0, b1, b2, a0, a1, a2)
+    
+    # Apply gain compensation for resonance
+    # At high Q, the filter boosts at the cutoff frequency
+    # Compensate by reducing overall gain
+    if q > 1.0:
+        gain_compensation = 1.0 / np.sqrt(q)
+        b = b * gain_compensation
+    
+    return b, a
 
 def biquad_highpass(fc: float, q: float, fs: float):
     w0 = 2 * np.pi * fc / fs
@@ -240,7 +258,14 @@ def biquad_highpass(fc: float, q: float, fs: float):
     a1 = -2 * cos_w0
     a2 = 1 - alpha
 
-    return normalize_biquad(b0, b1, b2, a0, a1, a2)
+    b, a = normalize_biquad(b0, b1, b2, a0, a1, a2)
+    
+    # Apply gain compensation for resonance
+    if q > 1.0:
+        gain_compensation = 1.0 / np.sqrt(q)
+        b = b * gain_compensation
+    
+    return b, a
 
 def biquad_bandpass(fc: float, q: float, fs: float):
     w0 = 2 * np.pi * fc / fs
@@ -254,7 +279,14 @@ def biquad_bandpass(fc: float, q: float, fs: float):
     a1 = -2 * cos_w0
     a2 = 1 - alpha
 
-    return normalize_biquad(b0, b1, b2, a0, a1, a2)
+    b, a = normalize_biquad(b0, b1, b2, a0, a1, a2)
+    
+    # Bandpass already has more controlled gain, but still compensate
+    if q > 1.0:
+        gain_compensation = 1.0 / np.sqrt(q)
+        b = b * gain_compensation
+    
+    return b, a
 
 def normalize_biquad(b0, b1, b2, a0, a1, a2):
     return (
