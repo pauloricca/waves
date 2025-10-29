@@ -1,20 +1,20 @@
 
 pretty:
-  # retrigger:
-  #   repeats: 3
-  #   time: 0.7
-  #   feedback: 0.3
-  #   signal:
-  #     retrigger:
-  #       repeats: 5
-  #       time: 0.3
-  #       feedback: 0.5
-  #       signal:
+  retrigger:
+    repeats: 3
+    time: 0.7
+    feedback: 0.3
+    signal:
+      retrigger:
+        repeats: 5
+        time: 0.3
+        feedback: 0.5
+        signal:
           filter:
             type: lowpass
             cutoff:
               midi_cc:
-                cc: 17
+                cc: 18
                 range: [0, 1000]
               # osc:
               #   # type: wander
@@ -23,7 +23,7 @@ pretty:
             # peak: 0.01
             peak:
               midi_cc:
-                cc: 18
+                cc: 19
                 range: [0, 1]
             signal:
               context:
@@ -43,22 +43,74 @@ pretty:
                     scale: minor
                 signal:
                   expression: 
-                    exp: shape * sin + (1 - shape) * saw
+                    exp: lead_amp * (shape * sin + (1 - shape) * saw) + bass_amp * (shape_bass * bass03 + (1 - shape_bass) * bass05) + high_amp * high
                     shape:
+                      midi_cc:
+                        cc: 17
+                        range: [1, 0]
+                    shape_bass:
                       midi_cc:
                         cc: 16
                         range: [1, 0]
+                    lead_amp:
+                      midi_cc:
+                        cc: 1
+                    bass_amp:
+                      midi_cc:
+                        cc: 0
+                    high_amp:
+                      midi_cc:
+                        cc: 2
                     sin: 
                       osc:
                         type: sin
                         amp: 0.4
+                        freq: freq
+                    bass03: 
+                      osc:
+                        type: sin
+                        amp: 0.4
                         freq: freq * 0.333
-                        # freq: freq
+                    bass05: 
+                      osc:
+                        type: sin
+                        amp: 0.4
+                        freq: freq * 0.5
                     saw: 
                       osc:
                         type: sqr
-                        amp: 0.6
+                        amp: 0.3
                         freq: freq
+                    high: 
+                      # delay:
+                      #   time: 0.5
+                      #   signal:
+                          osc:
+                            type: sin
+                            freq: freq * 4
+                            amp:
+                              expression:
+                                exp: osc1 * osc2 * osc3 * osc4
+                                osc1:
+                                  osc:
+                                    type: tri
+                                    freq: 1
+                                    range: [0, 1]
+                                osc2:
+                                  osc:
+                                    type: tri
+                                    freq: 0.4
+                                    range: [0, 1]
+                                osc3:
+                                  osc:
+                                    type: sqr
+                                    freq: 1.7
+                                    range: [0, 1]
+                                osc4:
+                                  osc:
+                                    type: sqr
+                                    freq: 1.1
+                                    range: [0, 1]
               
 
  
