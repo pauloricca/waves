@@ -42,7 +42,11 @@ class FilterNode(BaseNode):
             self.state.x2 = 0.0
             self.state.y1 = 0.0
             self.state.y2 = 0.0
-            self.state.zi = None  # Filter initial conditions
+            # Coefficient caching
+            self.state.last_cutoff = None
+            self.state.last_peak = None
+            self.state.cached_b = None
+            self.state.cached_a = None
 
     def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, get the full child signal
@@ -78,27 +82,69 @@ class FilterNode(BaseNode):
 
         filter_type = self.model.type.lower()
         q = normalized_to_q(peak)
+        
+        # Clamp cutoff to valid range (20 Hz to Nyquist - 100 Hz)
+        nyquist = SAMPLE_RATE / 2.0
+        min_cutoff = 20.0
+        max_cutoff = nyquist - 100.0
+        
+        if np.isscalar(cutoff):
+            cutoff = np.clip(cutoff, min_cutoff, max_cutoff)
+        else:
+            cutoff = np.clip(cutoff, min_cutoff, max_cutoff)
 
         if np.isscalar(cutoff):
-            if filter_type == "lowpass":
-                b, a = biquad_lowpass(cutoff, q, SAMPLE_RATE)
-            elif filter_type == "highpass":
-                b, a = biquad_highpass(cutoff, q, SAMPLE_RATE)
-            elif filter_type == "bandpass":
-                nyq = SAMPLE_RATE / 2.0
-                b, a = scipy.signal.iirpeak(cutoff / nyq, Q=q)
-            else:
-                raise ValueError(f"Unsupported filter type: {filter_type}")
+            # Static cutoff - use cached coefficients if parameters haven't changed
+            params_changed = (self.state.last_cutoff != cutoff or 
+                             self.state.last_peak != peak or 
+                             self.state.cached_b is None)
             
-            # Initialize filter state if needed
-            if self.state.zi is None:
-                self.state.zi = scipy.signal.lfilter_zi(b, a)
+            if params_changed:
+                if filter_type == "lowpass":
+                    self.state.cached_b, self.state.cached_a = biquad_lowpass(cutoff, q, SAMPLE_RATE)
+                elif filter_type == "highpass":
+                    self.state.cached_b, self.state.cached_a = biquad_highpass(cutoff, q, SAMPLE_RATE)
+                elif filter_type == "bandpass":
+                    self.state.cached_b, self.state.cached_a = biquad_bandpass(cutoff, q, SAMPLE_RATE)
+                else:
+                    raise ValueError(f"Unsupported filter type: {filter_type}")
+                
+                self.state.last_cutoff = cutoff
+                self.state.last_peak = peak
             
-            # Apply filter with state
-            filtered, self.state.zi = scipy.signal.lfilter(b, a, signal_wave, zi=self.state.zi)
-            return filtered
+            # Apply filter using simple biquad (no scipy.signal.lfilter)
+            return self._apply_biquad_simple(signal_wave, self.state.cached_b, self.state.cached_a)
         else:
-            # Modulated cutoff with Q support
+            # Modulated cutoff - check if it's actually changing significantly
+            cutoff_change = np.max(np.abs(np.diff(cutoff))) if len(cutoff) > 1 else 0
+            
+            # If cutoff is barely changing (e.g., MIDI CC at steady value), treat as static
+            # This threshold means less than 1 Hz change across the buffer
+            if cutoff_change < 1.0:
+                avg_cutoff = np.mean(cutoff)
+                
+                # Check if we should recalculate coefficients
+                params_changed = (self.state.last_cutoff is None or 
+                                 abs(self.state.last_cutoff - avg_cutoff) > 0.5 or
+                                 self.state.last_peak != peak or
+                                 self.state.cached_b is None)
+                
+                if params_changed:
+                    if filter_type == "lowpass":
+                        self.state.cached_b, self.state.cached_a = biquad_lowpass(avg_cutoff, q, SAMPLE_RATE)
+                    elif filter_type == "highpass":
+                        self.state.cached_b, self.state.cached_a = biquad_highpass(avg_cutoff, q, SAMPLE_RATE)
+                    elif filter_type == "bandpass":
+                        self.state.cached_b, self.state.cached_a = biquad_bandpass(avg_cutoff, q, SAMPLE_RATE)
+                    else:
+                        raise ValueError(f"Unsupported filter type: {filter_type}")
+                    
+                    self.state.last_cutoff = avg_cutoff
+                    self.state.last_peak = peak
+                
+                return self._apply_biquad_simple(signal_wave, self.state.cached_b, self.state.cached_a)
+            
+            # Truly modulated cutoff - use per-sample processing
             out = np.zeros_like(signal_wave)
             
             # Use instance state variables for continuity between chunks
@@ -130,6 +176,29 @@ class FilterNode(BaseNode):
             self.state.y1, self.state.y2 = y1, y2
 
             return out
+    
+    def _apply_biquad_simple(self, signal_wave, b, a):
+        """Apply biquad filter using simple state variables (no scipy zi)"""
+        out = np.zeros_like(signal_wave)
+        
+        # Use instance state variables for continuity between chunks
+        x1, x2 = self.state.x1, self.state.x2
+        y1, y2 = self.state.y1, self.state.y2
+
+        for i in range(len(signal_wave)):
+            # Direct Form I Biquad filter
+            x0 = signal_wave[i]
+            y0 = b[0] * x0 + b[1] * x1 + b[2] * x2 - a[1] * y1 - a[2] * y2
+
+            out[i] = y0
+            x2, x1 = x1, x0
+            y2, y1 = y1, y0
+
+        # Store state for next chunk
+        self.state.x1, self.state.x2 = x1, x2
+        self.state.y1, self.state.y2 = y1, y2
+
+        return out
 
 def normalized_to_q(n: float) -> float:
     # Map n ∈ [-1, 1] → Q ∈ [0.5, 50] with smooth curve

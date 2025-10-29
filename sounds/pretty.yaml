@@ -1,0 +1,64 @@
+
+pretty:
+  # retrigger:
+  #   repeats: 3
+  #   time: 0.7
+  #   feedback: 0.3
+  #   signal:
+  #     retrigger:
+  #       repeats: 5
+  #       time: 0.3
+  #       feedback: 0.5
+  #       signal:
+          filter:
+            type: lowpass
+            cutoff:
+              midi_cc:
+                cc: 17
+                range: [0, 1000]
+              # osc:
+              #   # type: wander
+              #   freq: 0.05
+              #   range: [300, 800]
+            # peak: 0.01
+            peak:
+              midi_cc:
+                cc: 18
+                range: [0, 1]
+            signal:
+              context:
+                freq: 
+                  interval:
+                    root:
+                      osc:
+                        type: sqr
+                        freq: 0.5
+                        range: [220, 440]
+                    note:
+                      automation:
+                        interval: 0.7
+                        mode: step
+                        repeat: 2000
+                        steps: [0, 2, 1, -1, 6]
+                    scale: minor
+                signal:
+                  expression: 
+                    exp: shape * sin + (1 - shape) * saw
+                    shape:
+                      midi_cc:
+                        cc: 16
+                        range: [1, 0]
+                    sin: 
+                      osc:
+                        type: sin
+                        amp: 0.4
+                        freq: freq * 0.333
+                        # freq: freq
+                    saw: 
+                      osc:
+                        type: sqr
+                        amp: 0.6
+                        freq: freq
+              
+
+ 
