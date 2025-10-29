@@ -12,6 +12,8 @@ from nodes.node_utils.base_node import BaseNodeModel
 sound_libraries: Dict[str, SoundLibraryModel] = {}
 # Flat dict of all sound names -> (filename, model) for quick lookup
 sound_index: Dict[str, tuple[str, BaseNodeModel]] = {}
+# Temporary storage of raw YAML data during multi-file loading (for cross-file reference resolution)
+_raw_data_cache: Dict[str, dict] = {}
 
 
 def parse_node(data, available_sound_names=None, raw_sound_data=None, all_sound_names=None) -> BaseNodeModel:
@@ -89,6 +91,23 @@ def parse_node(data, available_sound_names=None, raw_sound_data=None, all_sound_
         elif all_sound_names and node_type in all_sound_names:
             # Reference to sound in another file - get it from the sound index
             _, sound_model = sound_index[node_type]
+            
+            # If the model is still None (not yet parsed), we need to parse it from raw data
+            if sound_model is None:
+                # Find the raw data for this sound in the cache
+                for filename, raw_data in _raw_data_cache.items():
+                    if node_type in raw_data:
+                        # Parse it now
+                        sound_data = {node_type: raw_data[node_type]}
+                        temp_library = SoundLibraryModel.model_validate(sound_data)
+                        sound_model = temp_library.root[node_type]
+                        # Update the index with the parsed model
+                        sound_index[node_type] = (filename, sound_model)
+                        break
+                
+                if sound_model is None:
+                    raise ValueError(f"Could not find or parse sound '{node_type}' from cross-file reference")
+            
             # Apply parameters to the model
             return apply_params_to_model(sound_model, params)
         else:
@@ -151,7 +170,7 @@ def load_yaml_file(file_path: str) -> SoundLibraryModel:
 
 def load_all_sound_libraries(directory: str = ".") -> Dict[str, SoundLibraryModel]:
     """Load all .yaml files in the directory into the sound library."""
-    global sound_libraries, sound_index
+    global sound_libraries, sound_index, _raw_data_cache
     
     # Find all .yaml files in the directory
     yaml_files = glob.glob(os.path.join(directory, "*.yaml"))
@@ -162,6 +181,7 @@ def load_all_sound_libraries(directory: str = ".") -> Dict[str, SoundLibraryMode
     # Clear existing libraries and index
     sound_libraries.clear()
     sound_index.clear()
+    _raw_data_cache.clear()
     
     # Use C-based LibYAML loader if available (much faster)
     try:
@@ -189,6 +209,9 @@ def load_all_sound_libraries(directory: str = ".") -> Dict[str, SoundLibraryMode
             
             raw_data_by_file[filename] = raw_data
             
+            # Store in cache for cross-file reference resolution
+            _raw_data_cache[filename] = raw_data
+            
             # Pre-populate sound_index with all sound names (models will be None for now)
             for sound_name in raw_data.keys():
                 if sound_name in sound_index:
@@ -205,7 +228,7 @@ def load_all_sound_libraries(directory: str = ".") -> Dict[str, SoundLibraryMode
             library = SoundLibraryModel.model_validate(raw_data)
             sound_libraries[filename] = library
             
-            # Update the sound index with actual models
+            # Update the sound index with actual models IMMEDIATELY so they're available for subsequent files
             for sound_name, sound_model in library.root.items():
                 sound_index[sound_name] = (filename, sound_model)
             
@@ -214,12 +237,15 @@ def load_all_sound_libraries(directory: str = ".") -> Dict[str, SoundLibraryMode
             print(f"Error parsing {filename}: {e}")
             raise
     
+    # Clear the cache after loading is complete
+    _raw_data_cache.clear()
+    
     return sound_libraries
 
 
 def reload_sound_library(filename: str, directory: str = ".") -> bool:
     """Reload a single YAML file and update the sound library."""
-    global sound_libraries, sound_index
+    global sound_libraries, sound_index, _raw_data_cache
     
     file_path = os.path.join(directory, filename)
     
@@ -259,6 +285,9 @@ def reload_sound_library(filename: str, directory: str = ".") -> bool:
         for sound_name in raw_data.keys():
             sound_index[sound_name] = (filename, None)
         
+        # Store in cache for cross-file reference resolution
+        _raw_data_cache[filename] = raw_data
+        
         # Now parse the file with full knowledge of all sound names
         library = SoundLibraryModel.model_validate(raw_data)
         sound_libraries[filename] = library
@@ -266,6 +295,9 @@ def reload_sound_library(filename: str, directory: str = ".") -> bool:
         # Update the sound index with actual models
         for sound_name, sound_model in library.root.items():
             sound_index[sound_name] = (filename, sound_model)
+        
+        # Clear the cache after loading is complete
+        _raw_data_cache.clear()
         
         return True
     
