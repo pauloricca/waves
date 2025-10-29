@@ -148,8 +148,9 @@ class OscillatorNode(BaseNode):
                 if phase_modulation is not None:
                     phase = phase + phase_modulation
                 total_wave = amplitude * wave_function(phase[:len(total_wave)])
-                # Save the last phase for next render
-                self.state.phase_acc = phase[-1] if phase_modulation is None else (phase[-1] - (phase_modulation[-1] if isinstance(phase_modulation, np.ndarray) else phase_modulation))
+                # Save the last phase for next render, wrapped to prevent accumulator growth
+                phase_acc_raw = phase[-1] if phase_modulation is None else (phase[-1] - (phase_modulation[-1] if isinstance(phase_modulation, np.ndarray) else phase_modulation))
+                self.state.phase_acc = phase_acc_raw % (2 * np.pi)
             else:
                 # Calculate phase with accumulated phase offset
                 phase = self.state.phase_acc + 2 * np.pi * frequency * t
@@ -169,7 +170,9 @@ class OscillatorNode(BaseNode):
                 if phase_modulation is not None:
                     phase = phase + phase_modulation
                 total_wave = amplitude * np.sign(np.sin(phase[:len(total_wave)]))
-                self.state.phase_acc = phase[-1] if phase_modulation is None else (phase[-1] - (phase_modulation[-1] if isinstance(phase_modulation, np.ndarray) else phase_modulation))
+                # Wrap phase accumulator to prevent growth
+                phase_acc_raw = phase[-1] if phase_modulation is None else (phase[-1] - (phase_modulation[-1] if isinstance(phase_modulation, np.ndarray) else phase_modulation))
+                self.state.phase_acc = phase_acc_raw % (2 * np.pi)
             else:
                 phase = self.state.phase_acc + 2 * np.pi * frequency * t
                 # Add phase modulation if provided
@@ -188,7 +191,9 @@ class OscillatorNode(BaseNode):
                 if phase_modulation is not None:
                     phase = phase + phase_modulation
                 total_wave = amplitude * (2 / np.pi) * np.arcsin(np.sin(phase[:len(total_wave)]))
-                self.state.phase_acc = phase[-1] if phase_modulation is None else (phase[-1] - (phase_modulation[-1] if isinstance(phase_modulation, np.ndarray) else phase_modulation))
+                # Wrap phase accumulator to prevent growth
+                phase_acc_raw = phase[-1] if phase_modulation is None else (phase[-1] - (phase_modulation[-1] if isinstance(phase_modulation, np.ndarray) else phase_modulation))
+                self.state.phase_acc = phase_acc_raw % (2 * np.pi)
             else:
                 phase = self.state.phase_acc + 2 * np.pi * frequency * t
                 # Add phase modulation if provided
@@ -207,7 +212,9 @@ class OscillatorNode(BaseNode):
                 if phase_modulation is not None:
                     phase = phase + phase_modulation
                 total_wave = amplitude * (2 / np.pi) * np.arctan(np.tan(phase[:len(total_wave)] / 2))
-                self.state.phase_acc = phase[-1] if phase_modulation is None else (phase[-1] - (phase_modulation[-1] if isinstance(phase_modulation, np.ndarray) else phase_modulation))
+                # Wrap phase accumulator to prevent growth (SAW uses 2*pi period)
+                phase_acc_raw = phase[-1] if phase_modulation is None else (phase[-1] - (phase_modulation[-1] if isinstance(phase_modulation, np.ndarray) else phase_modulation))
+                self.state.phase_acc = phase_acc_raw % (2 * np.pi)
             else:
                 phase = self.state.phase_acc + np.pi * frequency * t
                 # Add phase modulation if provided
@@ -219,7 +226,9 @@ class OscillatorNode(BaseNode):
                 self.state.phase_acc = phase_without_mod % np.pi
         elif osc_type == OscillatorTypes.PERLIN:
             continuous_t = t + self.state.phase_acc
-            self.state.phase_acc = continuous_t[-1]
+            # Wrap phase_acc to prevent unbounded growth (Perlin is periodic at large values)
+            # Using a large period to avoid noticeable repetition
+            self.state.phase_acc = (continuous_t[-1] % 10000)
             noise_function = Noise(self.seed).noise1
             perlin_noise = np.array(noise_function(continuous_t * self.model.scale))
             total_wave = amplitude * perlin_noise
