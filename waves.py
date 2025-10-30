@@ -36,6 +36,56 @@ recording_buffer = None
 recording_active = False
 current_sound_name = None  # Track current sound name for recording
 
+
+def get_innermost_node(node: BaseNode) -> BaseNode:
+    """
+    Unwrap pass-through nodes to find the innermost actual signal node.
+    
+    Pass-through nodes like ContextNode and TempoNode just add params but pass
+    through their child signal unchanged. This function recursively unwraps them
+    to find the actual signal-generating node (e.g., TracksNode).
+    
+    Args:
+        node: A BaseNode instance to unwrap
+        
+    Returns:
+        The innermost non-pass-through node
+    """
+    # Check if this node has a signal_node attribute (pass-through pattern)
+    if hasattr(node, 'model') and hasattr(node.model, 'is_pass_through') and node.model.is_pass_through:
+        if hasattr(node, 'signal_node'):
+            return get_innermost_node(node.signal_node)
+    
+    return node
+
+
+def has_tracks_node_inside(model) -> bool:
+    """
+    Check if a model is or contains a TracksNode, unwrapping pass-through nodes.
+    
+    Pass-through nodes like 'context' and 'tempo' just add render params but don't 
+    change the audio. We recursively unwrap them to see if there's a TracksNode inside.
+    
+    Args:
+        model: A BaseNodeModel to check
+        
+    Returns:
+        True if the model is a TracksNodeModel or contains one inside pass-through nodes
+    """
+    from nodes.tracks import TracksNodeModel
+    
+    # Direct check
+    if isinstance(model, TracksNodeModel):
+        return True
+    
+    # Check if this is a pass-through node with a signal child
+    if hasattr(model, 'is_pass_through') and model.is_pass_through:
+        if hasattr(model, 'signal'):
+            return has_tracks_node_inside(model.signal)
+    
+    return False
+
+
 def perform_hot_reload_background(sound_name_to_play: str, changed_filename: str = None, params: dict = None):
     """
     Perform a hot reload of the sound model on a background thread.
@@ -78,11 +128,9 @@ def perform_hot_reload_background(sound_name_to_play: str, changed_filename: str
             from nodes.node_utils.node_string_parser import apply_params_to_model
             new_model = apply_params_to_model(new_model, params)
         
-        # Auto-wrap in tracks node if not already a tracks node
-        from nodes.tracks import TracksNodeModel
-        is_tracks_node = isinstance(new_model, TracksNodeModel)
-        
-        if not is_tracks_node:
+        # Auto-wrap in tracks node if not already a tracks node (or contains one inside pass-through nodes)
+        if not has_tracks_node_inside(new_model):
+            from nodes.tracks import TracksNodeModel
             # Wrap in a tracks node with the sound name as the track name
             wrapped_model = TracksNodeModel()
             wrapped_model.__pydantic_extra__ = {sound_name_to_play: new_model}
@@ -166,7 +214,9 @@ def save_recording(sound_name=None):
         
         # Save individual track stems if this is an explicit tracks node
         from nodes.tracks import TracksNode
-        if DO_SAVE_MULTITRACK and recording_is_explicit_tracks and isinstance(recording_sound_node, TracksNode) and recording_track_buffers:
+        # Unwrap pass-through nodes to find the actual TracksNode
+        innermost_recording_node = get_innermost_node(recording_sound_node) if recording_sound_node else None
+        if DO_SAVE_MULTITRACK and recording_is_explicit_tracks and isinstance(innermost_recording_node, TracksNode) and recording_track_buffers:
             for track_name, track_buffer in recording_track_buffers.items():
                 if len(track_buffer) > 0:
                     track_audio = np.array(track_buffer, dtype=np.float32)
@@ -200,9 +250,11 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
         recording_is_explicit_tracks = is_explicit_tracks
         
         # Initialize track buffers if this is an explicit tracks node
+        # Unwrap pass-through nodes to find the actual TracksNode
         from nodes.tracks import TracksNode
-        if is_explicit_tracks and isinstance(sound_node, TracksNode):
-            recording_track_buffers = {name: deque() for name in sound_node.get_track_names()}
+        innermost_node = get_innermost_node(sound_node)
+        if is_explicit_tracks and isinstance(innermost_node, TracksNode):
+            recording_track_buffers = {name: deque() for name in innermost_node.get_track_names()}
         else:
             recording_track_buffers = None
         
@@ -295,8 +347,10 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
             recording_buffer.extend(audio_data)  # Store full stereo for recording
             
             # Also record individual tracks if this is a multi-track recording
-            if recording_track_buffers and hasattr(active_sound_node, 'last_track_outputs') and active_sound_node.last_track_outputs:
-                for track_name, track_data in active_sound_node.last_track_outputs.items():
+            # Need to unwrap pass-through nodes to get to the TracksNode
+            innermost_active_node = get_innermost_node(active_sound_node)
+            if recording_track_buffers and hasattr(innermost_active_node, 'last_track_outputs') and innermost_active_node.last_track_outputs:
+                for track_name, track_data in innermost_active_node.last_track_outputs.items():
                     if track_name in recording_track_buffers and len(track_data) > 0:
                         recording_track_buffers[track_name].extend(track_data)
 
@@ -338,8 +392,10 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
 
     # Detect if the sound node outputs stereo
     # We need to check this before starting the stream
+    # Unwrap pass-through nodes (like context, tempo) to find the actual signal node
     from nodes.tracks import TracksNode
-    num_channels = 2 if isinstance(sound_node, TracksNode) else 1
+    innermost_node = get_innermost_node(sound_node)
+    num_channels = 2 if isinstance(innermost_node, TracksNode) else 1
 
     with sd.OutputStream(callback=audio_callback, blocksize=BUFFER_SIZE, samplerate=SAMPLE_RATE, channels=num_channels): #, latency='low'
         while not should_stop:
@@ -379,11 +435,11 @@ def main():
     if params:
         sound_model_to_play = apply_params_to_model(sound_model_to_play, params)
     
-    # Auto-wrap in tracks node if not already a tracks node
-    from nodes.tracks import TracksNodeModel
-    is_explicit_tracks = isinstance(sound_model_to_play, TracksNodeModel)
+    # Auto-wrap in tracks node if not already a tracks node (or contains one inside pass-through nodes)
+    is_explicit_tracks = has_tracks_node_inside(sound_model_to_play)
     
     if not is_explicit_tracks:
+        from nodes.tracks import TracksNodeModel
         # Wrap in a tracks node with the sound name as the track name
         wrapped_model = TracksNodeModel()
         # Store the original sound as a track using __pydantic_extra__
@@ -417,20 +473,22 @@ def main():
         # Export individual tracks if:
         # 1. User explicitly used 'tracks:' node AND has at least one track
         # 2. User explicitly used 'tracks:' with multiple tracks
+        # Unwrap pass-through nodes to find the actual TracksNode
         from nodes.tracks import TracksNode
-        is_tracks = isinstance(sound_node_to_play, TracksNode)
-        should_export_tracks = is_explicit_tracks and is_tracks and len(sound_node_to_play.get_track_names()) >= 1
+        innermost_node = get_innermost_node(sound_node_to_play)
+        is_tracks = isinstance(innermost_node, TracksNode)
+        should_export_tracks = is_explicit_tracks and is_tracks and len(innermost_node.get_track_names()) >= 1
         
         # Render mixdown (always needed)
         if DO_PRE_RENDER_WHOLE_SOUND:
             num_samples = int(SAMPLE_RATE * sound_duration)
             rendered_sound = sound_node_to_play.render(num_samples, context=render_context)
-            # Track outputs are cached in the node after render
-            track_outputs = sound_node_to_play.last_track_outputs if should_export_tracks else None
+            # Track outputs are cached in the innermost node after render
+            track_outputs = innermost_node.last_track_outputs if should_export_tracks else None
         else:
             # Render mixdown in chunks and accumulate track outputs
             rendered_sound = []
-            track_buffers = {name: [] for name in sound_node_to_play.get_track_names()} if should_export_tracks else None
+            track_buffers = {name: [] for name in innermost_node.get_track_names()} if should_export_tracks else None
             
             while True:
                 rendered_buffer = sound_node_to_play.render(BUFFER_SIZE, context=render_context)
@@ -439,8 +497,8 @@ def main():
                 rendered_sound.append(rendered_buffer)
                 
                 # Collect track outputs from this chunk
-                if should_export_tracks and sound_node_to_play.last_track_outputs:
-                    for track_name, track_data in sound_node_to_play.last_track_outputs.items():
+                if should_export_tracks and innermost_node.last_track_outputs:
+                    for track_name, track_data in innermost_node.last_track_outputs.items():
                         if len(track_data) > 0:
                             track_buffers[track_name].append(track_data)
                 

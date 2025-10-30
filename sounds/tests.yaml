@@ -8,6 +8,58 @@ test_stereo_node:
         freq: 440
         duration: 2
 
+# Test pass-through nodes (context/tempo) wrapping tracks
+test_pass_through_tracks:
+  context:
+    v: 0.5
+    signal:
+      tracks:
+        duration: 2
+        left:
+          osc:
+            type: sin
+            freq: 440
+            amp: v
+        left_pan: -1
+        right:
+          osc:
+            type: sin
+            freq: 880
+            amp: v
+        right_pan: 1
+
+# Test tempo wrapping tracks
+test_tempo_tracks:
+  tempo:
+    bpm: 120
+    signal:
+      tracks:
+        duration: 2
+        kick:
+          osc:
+            type: sin
+            freq: 60
+            duration: 0.5
+        kick_pan: 0
+
+# Test nested pass-through nodes with tracks
+test_nested_pass_through:
+  tempo:
+    bpm: 140
+    signal:
+      context:
+        v: 0.8
+        signal:
+          tracks:
+            duration: 2
+            main:
+              osc:
+                type: sin
+                freq: 440
+                amp: v
+            main_pan: 0
+
+
 # Test stereo node with dynamic pan (auto-pan)
 test_stereo_autopan:
   stereo:

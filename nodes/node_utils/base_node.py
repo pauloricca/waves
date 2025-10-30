@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 class BaseNodeModel(BaseModel):
     duration: Optional[float] = None
     id: Optional[str] = None  # Unique identifier for this node to enable referencing
+    is_pass_through: bool = False  # Override to True for nodes that just pass through their signal child
     pass
 
 

@@ -20,6 +20,7 @@ class OscillatorTypes(str, Enum):
     TRI = "TRI"
     SQR = "SQR"
     SAW = "SAW"
+    RAMP = "RAMP"
     NOISE = "NOISE"
     PERLIN = "PERLIN"
     WANDER = "WANDER"
@@ -34,6 +35,7 @@ class OscillatorModel(BaseNodeModel):
     amp: WavableValue = 1.0
     amp_interpolation: InterpolationTypes = InterpolationTypes.LINEAR
     phase: Optional[WavableValue] = None # Phase modulation (for FM synthesis)
+    pulse_width: WavableValue = 0.5 # Pulse width for square wave (0.0 to 1.0, default 0.5 = 50% duty cycle)
     attack: float = 0 # Attack time in seconds
     release: float = 0 # Release time in seconds
     scale: float = 1.0 # Perlin/wander variation rate (higher = faster changes)
@@ -72,6 +74,7 @@ class OscillatorNode(BaseNode):
         self.freq = self.instantiate_child_node(model.freq, "freq") if model.freq else None
         self.amp = self.instantiate_child_node(model.amp, "amp")
         self.phase_mod = self.instantiate_child_node(model.phase, "phase_mod") if model.phase else None
+        self.pulse_width = self.instantiate_child_node(model.pulse_width, "pulse_width")
         self.seed = self.model.seed or random.randint(0, 10000)
         
         # Persistent state (survives hot reload)
@@ -121,6 +124,11 @@ class OscillatorNode(BaseNode):
 
         amplitude = self.amp.render(num_samples, context, **params_for_children)
         
+        # Render pulse width for square wave
+        pulse_width = self.pulse_width.render(num_samples, context, **params_for_children)
+        if len(pulse_width) == 1:
+            pulse_width = pulse_width[0]
+        
         # Render phase modulation if provided
         phase_modulation = None
         if self.phase_mod:
@@ -169,7 +177,9 @@ class OscillatorNode(BaseNode):
                 # Add phase modulation if provided
                 if phase_modulation is not None:
                     phase = phase + phase_modulation
-                total_wave = amplitude * np.sign(np.sin(phase[:len(total_wave)]))
+                # Normalize phase to [0, 1] for pulse width comparison
+                normalized_phase = (phase[:len(total_wave)] % (2 * np.pi)) / (2 * np.pi)
+                total_wave = amplitude * np.where(normalized_phase < pulse_width, 1.0, -1.0)
                 # Wrap phase accumulator to prevent growth
                 phase_acc_raw = phase[-1] if phase_modulation is None else (phase[-1] - (phase_modulation[-1] if isinstance(phase_modulation, np.ndarray) else phase_modulation))
                 self.state.phase_acc = phase_acc_raw % (2 * np.pi)
@@ -178,7 +188,9 @@ class OscillatorNode(BaseNode):
                 # Add phase modulation if provided
                 if phase_modulation is not None:
                     phase = phase + phase_modulation
-                total_wave = amplitude * np.sign(np.sin(phase))
+                # Normalize phase to [0, 1] for pulse width comparison
+                normalized_phase = (phase % (2 * np.pi)) / (2 * np.pi)
+                total_wave = amplitude * np.where(normalized_phase < pulse_width, 1.0, -1.0)
                 # Update phase accumulator for next render
                 phase_without_mod = self.state.phase_acc + 2 * np.pi * frequency * chunk_duration_seconds
                 self.state.phase_acc = phase_without_mod % (2 * np.pi)
@@ -203,7 +215,8 @@ class OscillatorNode(BaseNode):
                 # Update phase accumulator for next render
                 phase_without_mod = self.state.phase_acc + 2 * np.pi * frequency * chunk_duration_seconds
                 self.state.phase_acc = phase_without_mod % (2 * np.pi)
-        elif osc_type == OscillatorTypes.SAW:
+        elif osc_type in [OscillatorTypes.SAW, OscillatorTypes.RAMP]:
+            # SAW and RAMP are the same, just inverted
             if isinstance(frequency, np.ndarray):
                 dt = 1 / SAMPLE_RATE
                 phase_increments = 2 * np.pi * frequency * dt
@@ -224,6 +237,10 @@ class OscillatorNode(BaseNode):
                 # Update phase accumulator for next render
                 phase_without_mod = self.state.phase_acc + np.pi * frequency * chunk_duration_seconds
                 self.state.phase_acc = phase_without_mod % np.pi
+            
+            # Invert for RAMP (descending ramp)
+            if osc_type == OscillatorTypes.RAMP:
+                total_wave = -total_wave
         elif osc_type == OscillatorTypes.PERLIN:
             continuous_t = t + self.state.phase_acc
             # Wrap phase_acc to prevent unbounded growth (Perlin is periodic at large values)
@@ -254,7 +271,7 @@ class OscillatorNode(BaseNode):
                 self.state.wander_velocity *= damping
                 
                 # Update position
-                self.state.wander_position += self.state.samples_to_time(wander_velocity)
+                self.state.wander_position += self.state.wander_velocity * (1 / SAMPLE_RATE)
                 
                 # Soft bounds to keep the output roughly in [-1, 1]
                 # Using tanh for smooth bouncing at boundaries

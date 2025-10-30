@@ -21,6 +21,7 @@ class TempoNodeModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     signal: BaseNodeModel  # The signal to render with tempo context
     bpm: Optional[WavableValue] = None  # BPM as WavableValue (scalar, expression, or node)
+    is_pass_through: bool = True
 
 
 class TempoNode(BaseNode):
