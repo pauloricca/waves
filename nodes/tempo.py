@@ -39,7 +39,7 @@ class TempoNode(BaseNode):
         # TODO: Add MIDI clock support
         # self.midi_clock_source = None
     
-    def _do_render(self, num_samples=None, context=None, **params):
+    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         # Get BPM (from parameter or future MIDI clock)
         if self.bpm_node is None:
             # TODO: Get from MIDI clock when implemented

@@ -33,7 +33,7 @@ class ContextNode(BaseNode):
         if do_initialise_state:
             self.state.total_samples_rendered = 0
     
-    def _do_render(self, num_samples=None, context=None, **params):
+    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         # Resolve num_samples first (handles None case)
         num_samples = self.resolve_num_samples(num_samples)
         if num_samples is None:

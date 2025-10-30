@@ -16,7 +16,7 @@ class ReferenceNode(BaseNode):
         super().__init__(model, node_id, state, do_initialise_state)
         self.ref_id = model.ref
     
-    def _do_render(self, num_samples: int = None, context: RenderContext = None, **params) -> np.ndarray:
+    def _do_render(self, num_samples: int = None, context: RenderContext = None, num_channels: int = 1, **params) -> np.ndarray:
         if context is None:
             raise ValueError(f"ReferenceNode '{self.ref_id}' requires a render context")
         

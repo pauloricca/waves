@@ -108,7 +108,7 @@ class InputNode(BaseNode):
         # Start the shared input stream
         _start_input_stream(model.device)
     
-    def _do_render(self, num_samples=None, context=None, **params):
+    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         global _input_buffer
         
         # Resolve num_samples from duration if None

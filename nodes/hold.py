@@ -40,7 +40,7 @@ class HoldNode(BaseNode):
         v = self.signal_node.render(1, context, **self.get_params_for_children(params))
         return float(v[0]) if v.size > 0 else 0.0
 
-    def _do_render(self, num_samples=None, context=None, **params):
+    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         if num_samples is None:
             num_samples = self.resolve_num_samples(num_samples)
             if num_samples is None:

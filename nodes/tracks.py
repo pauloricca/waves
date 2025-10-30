@@ -40,6 +40,7 @@ from types import SimpleNamespace
 
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
+from nodes.node_utils.panning import apply_panning
 
 
 class TracksNodeModel(BaseNodeModel):
@@ -112,84 +113,55 @@ class TracksNode(BaseNode):
         """
         Render all tracks individually and return dict of {track_name: stereo_array}.
         Used for exporting individual track stems.
+        
+        Requests stereo output (num_channels=2) from child nodes. If a child returns:
+        - Mono (1D array): Apply panning to create stereo
+        - Stereo (2D array): Use as-is (already stereo)
         """
         track_outputs = {}
         
         for track in self.tracks:
-            # Render mono signal
-            mono_signal = track['node'].render(num_samples, context, **params)
+            # Request stereo output (num_channels=2)
+            signal = track['node'].render(num_samples, context, num_channels=2, **params)
             
             # If signal is empty, this track is done
-            if len(mono_signal) == 0:
+            if len(signal) == 0:
                 track_outputs[track['name']] = np.array([], dtype=np.float32).reshape(0, 2)
                 continue
             
-            # Get pan value (static or dynamic)
-            if track['is_pan_dynamic']:
-                pan_value = track['pan'].render(len(mono_signal), context, **params)
-                # Ensure pan_value matches mono_signal length
-                if len(pan_value) < len(mono_signal):
-                    # Pad with last value
-                    pan_value = np.pad(pan_value, (0, len(mono_signal) - len(pan_value)), 
-                                      mode='edge')
-                elif len(pan_value) > len(mono_signal):
-                    pan_value = pan_value[:len(mono_signal)]
+            # Check if we got mono or stereo
+            if signal.ndim == 2:
+                # Already stereo - use as-is
+                stereo_signal = signal
             else:
-                pan_value = track['pan']
+                # Mono - apply panning to create stereo
+                # Get pan value (static or dynamic)
+                if track['is_pan_dynamic']:
+                    pan_value = track['pan'].render(len(signal), context, **params)
+                    # Ensure pan_value matches signal length
+                    if len(pan_value) < len(signal):
+                        # Pad with last value
+                        pan_value = np.pad(pan_value, (0, len(signal) - len(pan_value)), 
+                                          mode='edge')
+                    elif len(pan_value) > len(signal):
+                        pan_value = pan_value[:len(signal)]
+                else:
+                    pan_value = track['pan']
+                
+                # Apply panning to create stereo
+                stereo_signal = apply_panning(signal, pan_value)
             
-            # Apply panning to create stereo
-            stereo_signal = self._apply_panning(mono_signal, pan_value)
             track_outputs[track['name']] = stereo_signal
         
         return track_outputs
     
-    def _apply_panning(self, mono_signal: np.ndarray, pan_value: Union[float, np.ndarray]) -> np.ndarray:
-        """
-        Apply equal-power panning to mono signal to create stereo output.
-        
-        Args:
-            mono_signal: 1D array of mono audio
-            pan_value: Scalar or 1D array of pan values from -1 (left) to 1 (right)
-        
-        Returns:
-            2D array of shape (num_samples, 2) with stereo audio
-        """
-        # Handle special cases for efficiency (no calculation needed)
-        is_scalar_pan = not isinstance(pan_value, np.ndarray)
-        
-        if is_scalar_pan:
-            if pan_value == -1:
-                # Full left
-                return np.stack([mono_signal, np.zeros_like(mono_signal)], axis=-1)
-            elif pan_value == 1:
-                # Full right
-                return np.stack([np.zeros_like(mono_signal), mono_signal], axis=-1)
-            elif pan_value == 0:
-                # Center - equal power means 0.707 in each channel
-                return np.stack([mono_signal * 0.7071067811865476, 
-                               mono_signal * 0.7071067811865476], axis=-1)
-        
-        # General case: equal-power panning
-        # Convert pan from [-1, 1] to [0, 1]
-        pan_normalized = (pan_value + 1) / 2
-        
-        # Equal power law using trigonometric functions
-        # At center, both channels are at sqrt(2)/2 ≈ 0.707
-        angle = pan_normalized * np.pi / 2
-        left_gain = np.cos(angle)
-        right_gain = np.sin(angle)
-        
-        # Apply gains
-        left_channel = mono_signal * left_gain
-        right_channel = mono_signal * right_gain
-        
-        return np.stack([left_channel, right_channel], axis=-1)
-    
-    def _do_render(self, num_samples=None, context=None, **params):
+    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         """
         Render all tracks and mix them to stereo output.
         Also caches track outputs in self.last_track_outputs for stem export.
         Volume (_vol) is applied only to the mixdown, not to individual track exports.
+        
+        Note: TracksNode always outputs stereo (ignores num_channels parameter).
         
         Returns:
             2D array of shape (num_samples, 2) with mixed stereo audio

@@ -125,7 +125,7 @@ class SequencerNode(BaseNode):
         total_duration = total_sequence_duration * self.repeat
         return int(total_duration * SAMPLE_RATE)
 
-    def _do_render(self, num_samples=None, context=None, **params):
+    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         # If num_samples is None, render the entire sequence
         if num_samples is None:
             num_samples = self.resolve_num_samples(num_samples)

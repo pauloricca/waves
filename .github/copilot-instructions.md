@@ -21,18 +21,40 @@ A Node has a render method which takes in a number of samples to render and a se
 The render method is the main public interface for generating audio. It handles cross-cutting concerns like caching, recursion tracking, and timing, then delegates to the `_do_render()` method for the actual rendering logic.
 
 **Architecture:**
-- `render(num_samples, context, **params)` - Public method in BaseNode that:
+- `render(num_samples, context, num_channels, **params)` - Public method in BaseNode that:
   1. Creates a RenderContext if none provided (backwards compatibility)
   2. Handles caching for nodes with an `id` field
   3. Tracks recursion depth to prevent infinite feedback loops
   4. Updates timing information
   5. Delegates to `_do_render()` for actual rendering
   
-- `_do_render(num_samples, context, **params)` - Protected method that subclasses override:
+- `_do_render(num_samples, context, num_channels, **params)` - Protected method that subclasses override:
   - Contains the pure rendering logic specific to each node type
   - Should not handle caching, recursion, or timing (BaseNode handles that)
-  - Must pass `context` to all child `render()` calls
-  - Pass `context` as second positional parameter: `child.render(num_samples, context, **params)`
+  - Must pass `context` and `num_channels` to all child `render()` calls
+  - Pass these as positional parameters: `child.render(num_samples, context, num_channels, **params)`
+
+**Multi-channel support:**
+The render system supports both mono and stereo output through the `num_channels` parameter:
+- `num_channels=1` (default): Mono output - returns 1D array of shape `(num_samples,)`
+- `num_channels=2`: Stereo output - returns 2D array of shape `(num_samples, 2)`
+
+Most nodes are mono and ignore the `num_channels` parameter, always returning 1D arrays. Stereo-capable nodes (like sample players with stereo files) can check `num_channels` and return 2D arrays when stereo is requested.
+
+Parent nodes (like `tracks`) request stereo output by passing `num_channels=2` to children, then check the shape of the returned array:
+- If 1D (mono): Apply processing like panning to create stereo
+- If 2D (stereo): Use as-is or apply stereo-aware processing
+
+**When implementing a stereo-capable node:**
+```python
+def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    if num_channels == 2 and self.has_stereo_data:
+        # Return stereo: shape (num_samples, 2)
+        return np.column_stack([left_channel, right_channel])
+    else:
+        # Return mono: shape (num_samples,)
+        return mono_signal
+```
 
 The render method is called multiple times (potentially in real time) to generate the final output wave. Each time it is called, it generates a chunk of samples (the size of which is defined by the num_samples parameter). We should take this into consideration when writing its implementation, we should take measures to ensure that this method is efficient and does not introduce artifacts, clicks or cracks in the output wave, for example as a result of value jumps between one chunk and the next. We might need to keep some internal state (or sometimes a buffer) in the node to ensure continuity between chunks.
 
@@ -239,6 +261,50 @@ my_composition:
 
 When a node type isn't recognized in the NODE_REGISTRY, the parser checks if it matches a root-level sound name. If found, it instantiates that sound and applies any provided parameters directly to its model. This enables modular composition and sound reuse.
 
+### Stereo Routing and the Tracks Node
+
+The system supports stereo/multi-channel output through the `tracks` node, which is a special root-level node for multi-track stereo mixing with panning and volume control. All individual nodes remain mono by default, and stereo routing is handled at the tracks level.
+
+**Basic tracks usage:**
+```yaml
+my_sound:
+  tracks:
+    track1:  # Track name (arbitrary)
+      osc:
+        type: sin
+        freq: 440
+    track1_pan: -1  # Pan left (-1 = left, 0 = center, 1 = right)
+    track1_vol: 0.8  # Volume for mixdown only (doesn't affect stem export)
+    
+    track2:
+      osc:
+        type: sin
+        freq: 880
+    track2_pan: 1  # Pan right
+    track2_vol: 1.0
+```
+
+**Key features:**
+- Arbitrary track names using `ConfigDict(extra='allow')` pattern
+- Pan with `{track_name}_pan` suffix (static value or WavableValue for dynamic panning)
+- Volume with `{track_name}_vol` suffix (only affects mixdown, not individual stem exports)
+- Equal-power panning law using trigonometric functions for natural stereo imaging
+- Auto-wrapping: Non-tracks sounds are automatically wrapped in a single-track TracksNode for stereo playback
+
+**Stereo-capable nodes:**
+When a track contains a stereo-capable node (e.g., stereo sample player), the tracks node:
+1. Requests stereo output by passing `num_channels=2` to the child
+2. Checks the returned array shape:
+   - If 1D (mono): Applies panning to create stereo
+   - If 2D (stereo): Uses as-is (stereo sources bypass panning)
+
+**Multi-track export:**
+- Individual track stems are exported as `{sound_name}__{track_name}.wav`
+- Mixdown is exported as `{sound_name}.wav`
+- Track stems export without `_vol` applied (full amplitude)
+- Mixdown has `_vol` applied during mixing
+- Controlled by `DO_SAVE_MULTITRACK` config option
+
 ## Running the code
 
 To run the code we use the main waves.py file, followed by one parameter, which should match one of the root level keys in any of the yaml files in the `sounds/` directory. For example:
@@ -380,13 +446,14 @@ To create a new type of node, we create a new file with the node name in the nod
 Then we need to add the new node to the NODE_REGISTRY in nodes/node_utils/node_registry.py.
 
 **Important implementation details:**
-- Override `_do_render(self, num_samples=None, context=None, **params)` not `render()`
+- Override `_do_render(self, num_samples=None, context=None, num_channels=1, **params)` not `render()`
 - The `render()` method in BaseNode handles caching, recursion, and timing automatically
-- Always pass `context` as the second positional parameter when calling child `render()` methods
+- Always pass `context` and `num_channels` as positional parameters when calling child `render()` methods: `child.render(num_samples, context, num_channels, **params)`
 - Ensure the node works correctly in both realtime and non-realtime modes
 - In realtime mode, the node renders in chunks; in non-realtime, it may render the entire signal at once
 - When `num_samples` is None, render the full signal (or raise an error if the node needs explicit duration)
 - For stateful nodes, accept `state` and `do_initialise_state` parameters (see Hot Reload section above)
+- Most nodes can ignore `num_channels` and return mono (1D arrays); only implement stereo support if the node has stereo data or needs stereo processing
 
 ### Critical Rules for Node Implementation with Hot Reload Support
 

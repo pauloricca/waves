@@ -69,7 +69,7 @@ class FollowNode(BaseNode):
         if do_initialise_state:
             self.state.envelope_value = 0.0  # Current envelope follower value
 
-    def _do_render(self, num_samples=None, context=None, **params):
+    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         # Evaluate expression parameters
         attack = self.eval_scalar(self.model.attack, context, **params)
         release = self.eval_scalar(self.model.release, context, **params)

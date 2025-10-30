@@ -36,7 +36,7 @@ class ExpressionNode(BaseNode):
             self.state.total_samples_rendered = 0
     
 
-    def _do_render(self, num_samples=None, context=None, **params):
+    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         from expression_globals import get_expression_context, evaluate_compiled
         
         # Resolve num_samples first (handles None case)

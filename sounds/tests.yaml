@@ -47,6 +47,73 @@ test_volume:
         freq: 2
         range: [0, 1]
 
+# Test stereo retrigger with spread
+test_retrigger_stereo:
+  tracks:
+    duration: 3
+    main:
+      retrigger:
+        time: 0.15
+        repeats: 5
+        feedback: 0.7
+        spread: 1.0
+        movement: 0
+        signal:
+          osc:
+            type: sin
+            freq: 440
+            duration: 0.05
+
+# Test stereo retrigger with movement
+test_retrigger_movement:
+  tracks:
+    duration: 6
+    main:
+      retrigger:
+        time: 0.2
+        repeats: 6
+        feedback: 0.6
+        spread: 0.7
+        movement: 0.2
+        signal:
+          osc:
+            type: sin
+            freq: 220
+            duration: 0.1
+            attack: 0.01
+            release: 0.03
+
+# Test musical stereo retrigger
+test_retrigger_musical:
+  tracks:
+    duration: 4
+    clicks:
+      retrigger:
+        time: 0.12
+        repeats: 8
+        feedback: 0.5
+        spread: 1.0
+        movement: 0.3
+        signal:
+          osc:
+            type: sin
+            freq: 880
+            amp: 0.3
+            duration: 0.01
+    bass:
+      retrigger:
+        time: 0.24
+        repeats: 4
+        feedback: 0.7
+        spread: 0.6
+        movement: 0.15
+        signal:
+          osc:
+            type: tri
+            freq: 110
+            duration: 0.05
+    bass_pan: 0
+
 # Test dynamic panning
 test_autopan:
   tracks:

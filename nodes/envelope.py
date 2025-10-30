@@ -43,7 +43,7 @@ class EnvelopeNode(BaseNode):
             self.state.previous_gate_state = True  # Track previous gate state for retrigger detection
             self.state.sustain_duration_samples = None  # For duration-based envelopes (drums)
 
-    def _do_render(self, num_samples, context=None, **params):
+    def _do_render(self, num_samples, context=None, num_channels=1, **params):
         # Evaluate expression parameters
         attack = self.eval_scalar(self.model.attack, context, **params)
         decay = self.eval_scalar(self.model.decay, context, **params)

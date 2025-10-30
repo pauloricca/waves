@@ -44,7 +44,7 @@ class BaseNode:
         
 
 
-    def render(self, num_samples: int = None, context = None, **params) -> np.ndarray:
+    def render(self, num_samples: int = None, context = None, num_channels: int = 1, **params) -> np.ndarray:
         """
         Main render method that handles caching, recursion tracking, and timing.
         Delegates actual rendering to _do_render() which subclasses implement.
@@ -53,7 +53,13 @@ class BaseNode:
             num_samples: Number of samples to render. If None, render the entire duration
                         of the node (based on self.duration or until the node is exhausted).
             context: RenderContext for managing shared state, caching, and recursion tracking.
+            num_channels: Number of output channels (1 for mono, 2 for stereo). Nodes that don't
+                         support multi-channel output will ignore this and return mono.
             **params: Parameters to forward to child nodes.
+        
+        Returns:
+            For mono (num_channels=1): 1D array of shape (num_samples,)
+            For stereo (num_channels=2): 2D array of shape (num_samples, 2)
         
         This method:
         1. Creates a default context if none provided (backwards compatibility)
@@ -80,7 +86,10 @@ class BaseNode:
                 # Return zeros to break feedback loop
                 if num_samples is None:
                     return np.array([], dtype=np.float32)
-                return np.zeros(num_samples, dtype=np.float32)
+                if num_channels == 1:
+                    return np.zeros(num_samples, dtype=np.float32)
+                else:
+                    return np.zeros((num_samples, num_channels), dtype=np.float32)
             
             # Check if this node has already been rendered in this chunk (for nodes with explicit IDs)
             # This prevents stateful nodes from being rendered multiple times when referenced
@@ -94,7 +103,7 @@ class BaseNode:
             # Increment recursion, render, decrement, cache (if top level)
             context.increment_recursion(instance_id)
             try:
-                wave = self._render_with_timing(num_samples, context, **params)
+                wave = self._render_with_timing(num_samples, context, num_channels, **params)
                 if recursion_depth == 0:  # Only cache at top level
                     # Only write cache for nodes with explicit IDs (not auto-generated)
                     # Cache is only meant to be read by reference nodes
@@ -105,10 +114,10 @@ class BaseNode:
                 context.decrement_recursion(instance_id)
         
         # No id, just render normally with timing
-        return self._render_with_timing(num_samples, context, **params)
+        return self._render_with_timing(num_samples, context, num_channels, **params)
     
     
-    def _render_with_timing(self, num_samples: int, context, **params) -> np.ndarray:
+    def _render_with_timing(self, num_samples: int, context, num_channels: int, **params) -> np.ndarray:
         """
         Updates timing info and calls _do_render().
         This keeps timing logic separate from rendering logic.
@@ -120,10 +129,10 @@ class BaseNode:
             self._last_chunk_samples = num_samples
         # If num_samples is None, _last_chunk_samples will be updated by the implementing node
         
-        return self._do_render(num_samples, context, **params)
+        return self._do_render(num_samples, context, num_channels, **params)
     
     
-    def _do_render(self, num_samples: int, context, **params) -> np.ndarray:
+    def _do_render(self, num_samples: int, context, num_channels: int = 1, **params) -> np.ndarray:
         """
         Subclasses override this to implement their rendering logic.
         This method focuses purely on rendering without worrying about caching,
@@ -131,13 +140,17 @@ class BaseNode:
         
         Args:
             num_samples: Number of samples to render
-            context: RenderContext for accessing cached outputs and passing to children
-            **params: Parameters forwarded from parent nodes
+            context: RenderContext for shared state
+            num_channels: Number of output channels (1=mono, 2=stereo)
+            **params: Additional parameters from parent nodes
             
         Returns:
-            Rendered wave as numpy array
+            For mono: 1D array of shape (num_samples,)
+            For stereo: 2D array of shape (num_samples, 2)
+            Most nodes will ignore num_channels and return mono.
         """
         raise NotImplementedError(f"{self.__class__.__name__} must implement _do_render()")
+
     
     
     def _adjust_output_length(self, wave: np.ndarray, num_samples: Optional[int]) -> np.ndarray:

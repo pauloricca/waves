@@ -85,7 +85,7 @@ class OscillatorNode(BaseNode):
         self.fase_out_multiplier: np.ndarray = None
 
 
-    def _do_render(self, num_samples=None, context=None, **params):
+    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         # Resolve num_samples from duration if None
         num_samples = self.resolve_num_samples(num_samples)
         if num_samples is None:

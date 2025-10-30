@@ -130,7 +130,7 @@ class MapNode(BaseNode):
             self.clip_min = None
             self.clip_max = None
 
-    def _do_render(self, num_samples=None, context=None, **params):
+    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         # If num_samples is None, get the full child signal
         if num_samples is None:
             num_samples = self.resolve_num_samples(num_samples)

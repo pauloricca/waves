@@ -53,7 +53,7 @@ class MixNode(BaseNode):
         if do_initialise_state:
             self.state.total_samples_rendered = 0
 
-    def _do_render(self, num_samples=None, context=None, **params):
+    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         # Check if we've already rendered the full duration
         max_samples = None
         if self.duration is not None:

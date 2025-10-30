@@ -32,7 +32,7 @@ class ShuffleNode(BaseNode):
         self._total_samples_rendered = 0
         self._is_pre_rendered = False
 
-    def _do_render(self, num_samples=None, context=None, **params):
+    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         # If we haven't pre-rendered the full signal yet, do it now
         if not self._is_pre_rendered:
             self._pre_render_full_signal(context, **params)

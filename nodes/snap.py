@@ -98,7 +98,7 @@ class SnapNode(BaseNode):
         """Check if a value is static (scalar) or dynamic (node/expression/list)."""
         return isinstance(value, (int, float))
     
-    def _do_render(self, num_samples=None, context=None, **params):
+    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         num_samples = self.resolve_num_samples(num_samples)
         
         # Render the input signal
