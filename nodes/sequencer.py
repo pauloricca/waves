@@ -22,6 +22,7 @@ class SequencerModel(BaseNodeModel):
 class SequencerNode(BaseNode):
     def __init__(self, model: SequencerModel, node_id: str, state, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
+        self.is_stereo = True  # Pass-through node: supports stereo children
         self.model = model
         self.sequence = model.sequence
         self.chain = model.chain
@@ -141,8 +142,8 @@ class SequencerNode(BaseNode):
         if num_samples_resolved is None:
             num_samples_resolved = num_samples
         
-        interval_wave = self.interval_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
-        swing_wave = self.swing_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+        interval_wave = self.interval_node.render(num_samples_resolved, context, num_channels, **self.get_params_for_children(params))
+        swing_wave = self.swing_node.render(num_samples_resolved, context, num_channels, **self.get_params_for_children(params))
         # Use first value if interval/swing is a wave (assume constant for now)
         interval = float(interval_wave[0]) if len(interval_wave) > 0 else 0.0
         swing = float(swing_wave[0]) if len(swing_wave) > 0 else 0.0
@@ -150,9 +151,16 @@ class SequencerNode(BaseNode):
         
         sequence = self.sequence or self.chain
         if not sequence:
-            return np.zeros(num_samples, dtype=np.float32)
+            if num_channels == 2:
+                return np.zeros((num_samples, 2), dtype=np.float32)
+            else:
+                return np.zeros(num_samples, dtype=np.float32)
         
-        output_wave = np.zeros(num_samples, dtype=np.float32)
+        # Initialize output wave based on num_channels
+        if num_channels == 2:
+            output_wave = np.zeros((num_samples, 2), dtype=np.float32)
+        else:
+            output_wave = np.zeros(num_samples, dtype=np.float32)
         samples_written = 0
         
         while samples_written < num_samples:
@@ -241,7 +249,10 @@ class SequencerNode(BaseNode):
                 break
             
             # Render all active sounds and mix them
-            step_wave = np.zeros(samples_to_render, dtype=np.float32)
+            if num_channels == 2:
+                step_wave = np.zeros((samples_to_render, 2), dtype=np.float32)
+            else:
+                step_wave = np.zeros(samples_to_render, dtype=np.float32)
             
             sounds_to_remove = []
             for i, (sound_node, render_args, sound_duration, samples_rendered_so_far, step_idx) in enumerate(self.state.all_active_sounds):
@@ -264,7 +275,7 @@ class SequencerNode(BaseNode):
                 merged_params.update(render_args)
                 
                 # Render from current position
-                sound_chunk = sound_node.render(samples_to_render_from_sound, context, **merged_params)
+                sound_chunk = sound_node.render(samples_to_render_from_sound, context, num_channels, **merged_params)
                 
                 # If the sound returns empty array, it's done - mark for removal
                 if len(sound_chunk) == 0:
@@ -282,7 +293,12 @@ class SequencerNode(BaseNode):
                 
                 # Mix into step wave (pad if needed)
                 if len(sound_chunk) < len(step_wave):
-                    sound_chunk = np.pad(sound_chunk, (0, len(step_wave) - len(sound_chunk)))
+                    if num_channels == 2 and sound_chunk.ndim == 2:
+                        # Stereo padding
+                        sound_chunk = np.pad(sound_chunk, ((0, len(step_wave) - len(sound_chunk)), (0, 0)))
+                    else:
+                        # Mono padding
+                        sound_chunk = np.pad(sound_chunk, (0, len(step_wave) - len(sound_chunk)))
                 
                 step_wave[:len(sound_chunk)] += sound_chunk
             
@@ -302,7 +318,10 @@ class SequencerNode(BaseNode):
                     # if there are still samples to render
             
             # Add to output
-            output_wave[samples_written:samples_written + samples_to_render] = step_wave
+            if num_channels == 2:
+                output_wave[samples_written:samples_written + samples_to_render, :] = step_wave
+            else:
+                output_wave[samples_written:samples_written + samples_to_render] = step_wave
             samples_written += samples_to_render
             self.state.time_in_current_step += samples_to_time(samples_to_render)
             
