@@ -6,6 +6,7 @@ from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
+from utils import empty_mono, time_to_samples
 
 class DelayMode(str, Enum):
     DIGITAL = "DIGITAL"
@@ -44,7 +45,7 @@ class DelayNode(BaseNode):
             # Dynamic delay (node or list) - use a generous default
             max_delay_time = 30.0  # 30 seconds should be enough for most cases
         
-        max_delay_samples = int(max_delay_time * SAMPLE_RATE)
+        max_delay_samples = time_to_samples(max_delay_time )
         self.buffer_size = max_delay_samples
         
         # Persistent state for buffer and positions (survives hot reload)
@@ -106,11 +107,11 @@ class DelayNode(BaseNode):
             # Check if we should stop (after delay time has passed since input finished)
             # Get the current delay time to know how long to continue
             delay_time_check = self.time_node.render(1, context, **self.get_params_for_children(params))[0]
-            max_tail_samples = int(delay_time_check * SAMPLE_RATE)
+            max_tail_samples = time_to_samples(delay_time_check )
             
             if self.state.samples_since_input_finished >= max_tail_samples:
                 # We've output enough tail, stop now
-                return np.array([], dtype=np.float32)
+                return empty_mono()
             
             # Create a silent input signal (all zeros) to allow reading from the buffer
             signal_wave = np.zeros(num_samples, dtype=np.float32)
@@ -136,7 +137,7 @@ class DelayNode(BaseNode):
         # Handle both constant and time-varying delay times
         if len(delay_times) == 1:
             # Constant delay time - vectorized operations
-            delay_samples = int(delay_times[0] * SAMPLE_RATE)
+            delay_samples = time_to_samples(delay_times[0] )
             delay_samples = np.clip(delay_samples, 0, self.buffer_size - 1)
             
             # Calculate all positions at once

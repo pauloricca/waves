@@ -7,7 +7,7 @@ from sound_library import get_sound_model
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
-from utils import look_for_duration
+from utils import look_for_duration, empty_mono, time_to_samples, samples_to_time
 
 
 class SequencerModel(BaseNodeModel):
@@ -123,7 +123,7 @@ class SequencerNode(BaseNode):
                 total_sequence_duration += 1.0
         
         total_duration = total_sequence_duration * self.repeat
-        return int(total_duration * SAMPLE_RATE)
+        return time_to_samples(total_duration )
 
     def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         # If num_samples is None, render the entire sequence
@@ -166,7 +166,7 @@ class SequencerNode(BaseNode):
                     # No more sounds to render, we're done - return what we have so far
                     # If we haven't written anything yet, return empty array
                     if samples_written == 0:
-                        return np.array([], dtype=np.float32)
+                        return empty_mono()
                     # Otherwise return the partial buffer we've filled
                     return output_wave[:samples_written]
                 # Continue to render active sounds below
@@ -215,7 +215,7 @@ class SequencerNode(BaseNode):
                 
                 # We're in a step - use current_interval
                 step_remaining_time = current_interval - self.state.time_in_current_step
-                step_remaining_samples = int(step_remaining_time * SAMPLE_RATE)
+                step_remaining_samples = time_to_samples(step_remaining_time )
                 samples_to_render = min(remaining_samples, step_remaining_samples)
             else:
                 # For chain mode or when sequence is complete: render all remaining samples
@@ -246,7 +246,7 @@ class SequencerNode(BaseNode):
             sounds_to_remove = []
             for i, (sound_node, render_args, sound_duration, samples_rendered_so_far, step_idx) in enumerate(self.state.all_active_sounds):
                 # Check if this sound has finished playing
-                total_sound_samples = int(sound_duration * SAMPLE_RATE)
+                total_sound_samples = time_to_samples(sound_duration )
                 if samples_rendered_so_far >= total_sound_samples:
                     # Sound has finished, mark for removal
                     sounds_to_remove.append(i)
@@ -304,7 +304,7 @@ class SequencerNode(BaseNode):
             # Add to output
             output_wave[samples_written:samples_written + samples_to_render] = step_wave
             samples_written += samples_to_render
-            self.state.time_in_current_step += samples_to_render / SAMPLE_RATE
+            self.state.time_in_current_step += samples_to_time(samples_to_render)
             
             # Check if we should advance to next step for sequence mode
             if self.sequence and not self.state.sequence_complete:

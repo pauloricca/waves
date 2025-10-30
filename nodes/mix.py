@@ -35,7 +35,7 @@ from typing import List
 from pydantic import ConfigDict
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from utils import add_waves
+from utils import add_waves, empty_mono
 
 
 class MixModel(BaseNodeModel):
@@ -62,13 +62,13 @@ class MixNode(BaseNode):
             
             # If we've already rendered everything, return empty
             if self.state.total_samples_rendered >= max_samples:
-                return np.array([], dtype=np.float32)
+                return empty_mono()
             
             # If num_samples would exceed duration, limit it
             if num_samples is not None:
                 remaining_samples = max_samples - self.state.total_samples_rendered
                 if remaining_samples <= 0:
-                    return np.array([], dtype=np.float32)
+                    return empty_mono()
                 num_samples = min(num_samples, remaining_samples)
         
         # If num_samples is None, we need to render the full signal
@@ -103,7 +103,7 @@ class MixNode(BaseNode):
         
         # If no signals are active, return empty array to signal completion
         if not any_signal_active:
-            return np.array([], dtype=np.float32)
+            return empty_mono()
         
         # Track how many samples we've rendered (mixed_wave should not be None here)
         if mixed_wave is not None:

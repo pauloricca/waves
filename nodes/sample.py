@@ -6,7 +6,7 @@ from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
-from utils import load_wav_file
+from utils import load_wav_file, empty_mono, time_to_samples
 
 
 # Sample node with offset parameter:
@@ -173,10 +173,10 @@ class SampleNode(BaseNode):
 
         # Check if we have a duration limit and if we've exceeded it
         if self.model.duration is not None:
-            max_total_samples = int(self.model.duration * SAMPLE_RATE)
+            max_total_samples = time_to_samples(self.model.duration )
             if self.state.total_samples_rendered >= max_total_samples:
                 # Already rendered full duration
-                return np.array([], dtype=np.float32)
+                return empty_mono()
             # Check if this chunk would exceed the duration
             samples_remaining = max_total_samples - self.state.total_samples_rendered
             if num_samples > samples_remaining:
@@ -242,7 +242,7 @@ class SampleNode(BaseNode):
                 first_outside = np.where(outside_bounds)[0][0]
                 if first_outside == 0:
                     # Already outside on first sample, we're done
-                    return np.array([], dtype=np.float32)
+                    return empty_mono()
                 # Truncate to just before going outside
                 num_samples = first_outside
                 playhead_with_offset = playhead_with_offset[:num_samples]
@@ -268,7 +268,7 @@ class SampleNode(BaseNode):
 
         # Handle the case where we truncated early (non-looping)
         if num_samples == 0:
-            return np.array([], dtype=np.float32)
+            return empty_mono()
 
         # Clip to valid audio buffer range
         audio_indices = np.clip(audio_indices, 0, len(self.audio) - 1)

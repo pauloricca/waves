@@ -11,7 +11,7 @@ from nodes.wavable_value import InterpolationTypes, WavableValue
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from vnoise import Noise
 
-from utils import multiply_waves
+from utils import multiply_waves, empty_mono, time_to_samples, samples_to_time
 
 
 class OscillatorTypes(str, Enum):
@@ -93,10 +93,10 @@ class OscillatorNode(BaseNode):
         
         # Check if we've reached the end of our duration
         if self.duration is not None:
-            total_duration_samples = int(self.duration * SAMPLE_RATE)
+            total_duration_samples = time_to_samples(self.duration )
             if self.number_of_chunks_rendered >= total_duration_samples:
                 # We're done, return empty array
-                return np.array([], dtype=np.float32)
+                return empty_mono()
             
             # Check if this chunk will exceed duration
             samples_remaining = total_duration_samples - self.number_of_chunks_rendered
@@ -105,7 +105,7 @@ class OscillatorNode(BaseNode):
                 num_samples = samples_remaining
         
         # These need to be calculated AFTER num_samples is potentially adjusted
-        chunk_duration_seconds = num_samples / SAMPLE_RATE
+        chunk_duration_seconds = samples_to_time(num_samples)
         t = np.linspace(0, chunk_duration_seconds, num_samples, endpoint=False)
 
         total_wave = np.zeros(num_samples)
@@ -254,7 +254,7 @@ class OscillatorNode(BaseNode):
                 self.state.wander_velocity *= damping
                 
                 # Update position
-                self.state.wander_position += self.state.wander_velocity / SAMPLE_RATE
+                self.state.wander_position += self.state.samples_to_time(wander_velocity)
                 
                 # Soft bounds to keep the output roughly in [-1, 1]
                 # Using tanh for smooth bouncing at boundaries
@@ -262,7 +262,7 @@ class OscillatorNode(BaseNode):
             
             total_wave = amplitude * wander_wave
 
-        attack_number_of_samples = int(self.model.attack * SAMPLE_RATE)
+        attack_number_of_samples = time_to_samples(self.model.attack )
 
         if attack_number_of_samples > 0:
             if self.fase_in_multiplier is None:
@@ -275,8 +275,8 @@ class OscillatorNode(BaseNode):
             self.fase_in_multiplier = self.fase_in_multiplier[len(total_wave):]  # Keep the rest for next render
 
         if self.duration is not None:
-            release_number_of_samples = int(self.model.release * SAMPLE_RATE)
-            full_number_of_samples = int(self.duration * SAMPLE_RATE)
+            release_number_of_samples = time_to_samples(self.model.release )
+            full_number_of_samples = time_to_samples(self.duration )
 
             if release_number_of_samples > 0:
                 if self.fase_out_multiplier is None:

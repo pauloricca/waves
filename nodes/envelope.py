@@ -5,6 +5,7 @@ from config import SAMPLE_RATE, OSC_ENVELOPE_TYPE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
+from utils import empty_mono, time_to_samples
 
 
 class EnvelopeModel(BaseNodeModel):
@@ -87,14 +88,14 @@ class EnvelopeNode(BaseNode):
             if self.duration is not None:
                 # Calculate sustain duration: total_duration - attack - decay - release
                 if self.state.sustain_duration_samples is None:
-                    attack_samples = int(attack * SAMPLE_RATE)
-                    decay_samples = int(decay * SAMPLE_RATE)
-                    release_samples = int(release * SAMPLE_RATE)
-                    total_duration_samples = int(self.duration * SAMPLE_RATE)
+                    attack_samples = time_to_samples(attack )
+                    decay_samples = time_to_samples(decay )
+                    release_samples = time_to_samples(release )
+                    total_duration_samples = time_to_samples(self.duration )
                     self.state.sustain_duration_samples = max(0, total_duration_samples - attack_samples - decay_samples - release_samples)
                 
                 # Check if we've exceeded sustain duration
-                sustain_end_sample = int(attack * SAMPLE_RATE) + int(decay * SAMPLE_RATE) + self.state.sustain_duration_samples
+                sustain_end_sample = time_to_samples(attack ) + time_to_samples(decay ) + self.state.sustain_duration_samples
                 is_in_sustain = self.number_of_chunks_rendered < sustain_end_sample
             else:
                 # No gate and no duration - stay open indefinitely (never release)
@@ -117,7 +118,7 @@ class EnvelopeNode(BaseNode):
         processed_samples = 0
         
         # Apply attack envelope
-        attack_len = int(attack * SAMPLE_RATE)
+        attack_len = time_to_samples(attack )
         if attack_len > 0:
             if self.state.fade_in_multiplier is None:
                 # Create the attack envelope from current_amplitude to 1
@@ -151,7 +152,7 @@ class EnvelopeNode(BaseNode):
             self.state.current_amplitude = 1.0
         
         # Apply decay envelope
-        decay_len = int(decay * SAMPLE_RATE)
+        decay_len = time_to_samples(decay )
         if decay_len > 0 and self.state.is_in_decay_phase and not self.state.is_in_sustain_phase and not self.state.is_in_release_phase:
             if self.state.decay_multiplier is None:
                 # Create the decay envelope (1 to sustain level)
@@ -190,7 +191,7 @@ class EnvelopeNode(BaseNode):
             self.state.current_amplitude = sustain
         
         # Apply release envelope
-        release_len = int(release * SAMPLE_RATE)
+        release_len = time_to_samples(release )
         if release_len > 0 and self.state.is_in_release_phase:
             if self.state.fade_out_multiplier is None and self.state.release_started:
                 # Create the release envelope starting from CURRENT amplitude (not sustain)
@@ -223,7 +224,7 @@ class EnvelopeNode(BaseNode):
                     
                     # If end=True, return empty array to signal completion
                     if self.end:
-                        return np.array([], dtype=np.float32)
+                        return empty_mono()
         elif self.state.is_in_release_phase and release_len == 0:
             # No release time, output silence immediately
             signal_wave[:] = 0
@@ -231,7 +232,7 @@ class EnvelopeNode(BaseNode):
             
             # If end=True, return empty array to signal completion
             if self.end:
-                return np.array([], dtype=np.float32)
+                return empty_mono()
 
         return signal_wave
 

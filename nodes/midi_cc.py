@@ -8,6 +8,7 @@ from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.node_utils.midi_utils import MidiInputManager, MIDI_DEBUG
 from nodes.wavable_value import WavableValue
+from utils import ensure_array, get_last_or_default
 
 
 class MidiCCModel(BaseNodeModel):
@@ -121,14 +122,12 @@ class MidiCCNode(BaseNode):
         max_wave = self.max_node.render(num_samples, context, **params_for_children)
         
         # Ensure they're arrays of the right length
-        if not isinstance(min_wave, np.ndarray):
-            min_wave = np.full(num_samples, min_wave, dtype=np.float32)
-        elif len(min_wave) == 1:
+        min_wave = ensure_array(min_wave, num_samples)
+        if len(min_wave) == 1:
             min_wave = np.full(num_samples, min_wave[0], dtype=np.float32)
             
-        if not isinstance(max_wave, np.ndarray):
-            max_wave = np.full(num_samples, max_wave, dtype=np.float32)
-        elif len(max_wave) == 1:
+        max_wave = ensure_array(max_wave, num_samples)
+        if len(max_wave) == 1:
             max_wave = np.full(num_samples, max_wave[0], dtype=np.float32)
         
         # Process any pending MIDI messages using the current CC number
@@ -152,7 +151,7 @@ class MidiCCNode(BaseNode):
             output_wave = self.state.last_output_value * (1 - interpolation_factor) + target_wave * interpolation_factor
         
         # Store the last value for the next chunk
-        self.state.last_output_value = output_wave[-1] if num_samples > 0 else self.state.last_output_value
+        self.state.last_output_value = get_last_or_default(output_wave, self.state.last_output_value)
         
         return output_wave
 

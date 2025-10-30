@@ -2,6 +2,7 @@ from __future__ import annotations
 import numpy as np
 from pydantic import ConfigDict
 from config import SAMPLE_RATE
+from utils import time_to_samples
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
@@ -76,7 +77,7 @@ class ShuffleNode(BaseNode):
         # Get crossfade time (render a single sample to get the value)
         crossfade_value = self.crossfade_node.render(1, context, **self.get_params_for_children(params))
         crossfade_time = crossfade_value[0] if len(crossfade_value) > 0 else 0.0
-        crossfade_samples = int(crossfade_time * SAMPLE_RATE)
+        crossfade_samples = time_to_samples(crossfade_time )
         
         # Determine chunk parameters for shuffling
         if self.model.chunks:

@@ -8,6 +8,7 @@ from typing import Optional, TYPE_CHECKING
 from pydantic import BaseModel
 
 from constants import RenderArgs
+from utils import empty_mono, empty_stereo, time_to_samples, samples_to_time
 
 if TYPE_CHECKING:
     from nodes.wavable_value import WavableValue
@@ -86,7 +87,7 @@ class BaseNode:
             if recursion_depth >= context.max_recursion:
                 # Return zeros to break feedback loop
                 if num_samples is None:
-                    return np.array([], dtype=np.float32)
+                    return empty_mono()
                 if num_channels == 1:
                     return np.zeros(num_samples, dtype=np.float32)
                 else:
@@ -126,7 +127,7 @@ class BaseNode:
         """
         if self._last_chunk_samples is not None:
             self.number_of_chunks_rendered += self._last_chunk_samples
-        self.time_since_start = self.number_of_chunks_rendered / SAMPLE_RATE
+        self.time_since_start = samples_to_time(self.number_of_chunks_rendered)
         if num_samples is not None:
             self._last_chunk_samples = num_samples
         # If num_samples is None, _last_chunk_samples will be updated by the implementing node
@@ -141,7 +142,7 @@ class BaseNode:
                 # Parent wants stereo but we're mono - render mono and duplicate channels
                 mono_result = self._do_render(num_samples, context, 1, **params)
                 if len(mono_result) == 0:
-                    return np.array([], dtype=np.float32).reshape(0, 2)
+                    return empty_stereo()
                 # Duplicate mono to stereo (center panned)
                 result = np.stack([mono_result, mono_result], axis=-1)
             else:
@@ -236,7 +237,7 @@ class BaseNode:
             Resolved num_samples, or None if it should be determined from child
         """
         if num_samples is None and self.duration is not None:
-            num_samples = int(self.duration * SAMPLE_RATE)
+            num_samples = time_to_samples(self.duration)
             self._last_chunk_samples = num_samples
         return num_samples
     

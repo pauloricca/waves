@@ -4,6 +4,7 @@ from typing import Dict, Optional, Any
 from pydantic import ConfigDict
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
+from utils import empty_mono
 
 
 # Select node: A conditional selector that chooses between different signal paths based on a test signal.
@@ -99,7 +100,7 @@ class SelectNode(BaseNode):
         
         # Handle case where test signal ended early
         if len(test_signal) == 0:
-            return np.array([], dtype=np.float32)
+            return empty_mono()
         
         actual_samples = len(test_signal)
         
@@ -142,7 +143,7 @@ class SelectNode(BaseNode):
                 # Handle case where path returned empty (finished)
                 if len(segment_output) == 0:
                     # Path has finished - return empty to signal completion
-                    return np.array([], dtype=np.float32)
+                    return empty_mono()
                 
                 # Handle case where path returned fewer samples than requested
                 if len(segment_output) < segment_length:

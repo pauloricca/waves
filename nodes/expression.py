@@ -4,6 +4,7 @@ from typing import Union
 from pydantic import ConfigDict
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
+from utils import empty_mono
 
 
 class ExpressionNodeModel(BaseNodeModel):
@@ -54,12 +55,12 @@ class ExpressionNode(BaseNode):
             
             # If we've already rendered everything, return empty
             if self.state.total_samples_rendered >= max_samples:
-                return np.array([], dtype=np.float32)
+                return empty_mono()
             
             # If num_samples would exceed duration, limit it
             remaining_samples = max_samples - self.state.total_samples_rendered
             if remaining_samples <= 0:
-                return np.array([], dtype=np.float32)
+                return empty_mono()
             num_samples = min(num_samples, remaining_samples)
         
         # Handle constant case - no need to evaluate anything
@@ -101,7 +102,7 @@ class ExpressionNode(BaseNode):
         if actual_num_samples < num_samples:
             # If any child returned 0 samples, signal completion
             if actual_num_samples == 0:
-                return np.array([], dtype=np.float32)
+                return empty_mono()
             
             # Otherwise, truncate all arrays to match the shortest child
             num_samples = actual_num_samples

@@ -7,7 +7,6 @@ from scipy.io import wavfile
 
 
 from config import *
-from nodes.node_utils.base_node import BaseNodeModel
 
 def play(wave):
     wave = np.clip(wave, -1, 1)
@@ -144,12 +143,15 @@ def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_l
     has_printed_visualisation = True
 
 
-def look_for_duration(model: BaseNodeModel):
+def look_for_duration(model):
     """
     Recursively looks for the duration attribute in the model or its attributes.
     Returns None if no finite duration is found (e.g., for infinite-running nodes).
     If multiple durations are found (e.g., in lists), returns the largest value.
     """
+    # Import here to avoid circular dependency
+    from nodes.node_utils.base_node import BaseNodeModel
+    
     durations = []
     
     # Check if model itself has a duration attribute
@@ -248,3 +250,83 @@ def match_length(array: np.ndarray, target_length: int) -> np.ndarray:
         # Crop to target length
         return array[:target_length]
     return array
+
+
+def empty_mono() -> np.ndarray:
+    """
+    Returns an empty mono audio array.
+    Used to signal end of rendering or empty output.
+    
+    Returns:
+        Empty 1D float32 array
+    """
+    return np.array([], dtype=np.float32)
+
+
+def empty_stereo() -> np.ndarray:
+    """
+    Returns an empty stereo audio array.
+    Used to signal end of rendering or empty output for stereo nodes.
+    
+    Returns:
+        Empty 2D float32 array with shape (0, 2)
+    """
+    return np.array([], dtype=np.float32).reshape(0, 2)
+
+
+def time_to_samples(seconds: float) -> int:
+    """
+    Converts time in seconds to number of samples.
+    
+    Args:
+        seconds: Time duration in seconds
+        
+    Returns:
+        Number of samples (rounded down to nearest integer)
+    """
+    return int(seconds * SAMPLE_RATE)
+
+
+def samples_to_time(samples: int) -> float:
+    """
+    Converts number of samples to time in seconds.
+    
+    Args:
+        samples: Number of samples
+        
+    Returns:
+        Time duration in seconds
+    """
+    return samples / SAMPLE_RATE
+
+
+def ensure_array(value, num_samples: int) -> np.ndarray:
+    """
+    Ensures a value is a numpy array of the specified length.
+    If value is already an array, returns it as-is.
+    If value is a scalar, creates an array filled with that value.
+    
+    Args:
+        value: Scalar value or numpy array
+        num_samples: Desired length for scalar conversion
+        
+    Returns:
+        Numpy array of length num_samples
+    """
+    if isinstance(value, np.ndarray):
+        return value
+    return np.full(num_samples, value, dtype=np.float32)
+
+
+def get_last_or_default(array: np.ndarray, default=0):
+    """
+    Safely gets the last value from an array, or returns default if empty.
+    
+    Args:
+        array: Numpy array to get last value from
+        default: Default value to return if array is empty
+        
+    Returns:
+        Last value of array, or default if empty
+    """
+    return array[-1] if len(array) > 0 else default

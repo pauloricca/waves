@@ -9,6 +9,7 @@ from config import SAMPLE_RATE, BUFFER_SIZE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
+from utils import empty_mono, time_to_samples
 
 
 class InputModel(BaseNodeModel):
@@ -119,10 +120,10 @@ class InputNode(BaseNode):
         
         # Check if we've reached the end of our duration
         if self.duration is not None:
-            total_duration_samples = int(self.duration * SAMPLE_RATE)
+            total_duration_samples = time_to_samples(self.duration )
             if self.state.total_samples_rendered >= total_duration_samples:
                 # We're done, return empty array
-                return np.array([], dtype=np.float32)
+                return empty_mono()
             
             # Limit num_samples to not exceed duration
             remaining = total_duration_samples - self.state.total_samples_rendered

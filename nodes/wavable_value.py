@@ -5,6 +5,7 @@ from typing import List, Union
 import numpy as np
 from pydantic import ConfigDict
 from config import SAMPLE_RATE
+from utils import time_to_samples, ensure_array
 from constants import RenderArgs
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from scipy.interpolate import PchipInterpolator
@@ -54,14 +55,14 @@ class WavableValueNode(BaseNode):
                 duration = params.get(RenderArgs.DURATION, 0)
                 if duration == 0:
                     raise ValueError("Duration required for expression")
-                num_samples = int(duration * SAMPLE_RATE)
+                num_samples = time_to_samples(duration )
                 self._last_chunk_samples = num_samples
             
             eval_context = get_expression_context(params, self.time_since_start, num_samples, context)
             result = evaluate_compiled(self.compiled_info, eval_context, num_samples)
             
             # Result is already properly formatted by evaluate_compiled
-            return result.astype(np.float32) if isinstance(result, np.ndarray) else np.full(num_samples, result, dtype=np.float32)
+            return ensure_array(result, num_samples)
         
         elif self.value_type == 'scalar':
             # Scalar values
@@ -70,7 +71,7 @@ class WavableValueNode(BaseNode):
                 duration = params.get(RenderArgs.DURATION, 0)
                 if duration == 0:
                     raise ValueError("Duration must be set for scalar wavable values when rendering full signal.")
-                num_samples = int(duration * SAMPLE_RATE)
+                num_samples = time_to_samples(duration )
                 self._last_chunk_samples = num_samples
             return np.full(num_samples, self.value, dtype=np.float32)
         
@@ -81,8 +82,8 @@ class WavableValueNode(BaseNode):
             if duration == 0:
                 raise ValueError("Duration must be set somewhere above interpolated values.")
             
-            if self.interpolated_values is None or len(self.interpolated_values) != int(duration * SAMPLE_RATE):
-                self.interpolated_values = interpolate_values(self.value, int(duration * SAMPLE_RATE), self.interpolation_type)
+            if self.interpolated_values is None or len(self.interpolated_values) != time_to_samples(duration ):
+                self.interpolated_values = interpolate_values(self.value, time_to_samples(duration ), self.interpolation_type)
 
             if num_samples is None:
                 # Return the entire interpolated values

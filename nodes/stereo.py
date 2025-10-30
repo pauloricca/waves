@@ -32,7 +32,7 @@ from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.node_utils.panning import apply_panning
 from nodes.wavable_value import WavableValue
-from utils import match_length
+from utils import match_length, empty_mono, empty_stereo
 
 
 class StereoNodeModel(BaseNodeModel):
@@ -63,8 +63,8 @@ class StereoNode(BaseNode):
         # If signal is empty, return appropriate empty array
         if len(mono_signal) == 0:
             if num_channels == 2:
-                return np.array([], dtype=np.float32).reshape(0, 2)
-            return np.array([], dtype=np.float32)
+                return empty_stereo()
+            return empty_mono()
         
         # Get pan value (static or dynamic)
         pan_value = self.pan_node.render(len(mono_signal), context, **params)

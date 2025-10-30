@@ -26,7 +26,7 @@ from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.node_utils.panning import apply_panning
-from utils import add_waves
+from utils import add_waves, empty_mono, empty_stereo
 
 class RetriggerModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
@@ -68,8 +68,8 @@ class RetriggerNode(BaseNode):
                 child_signal = self.render_full_child_signal(self.signal_node, context, **self.get_params_for_children(params))
                 if len(child_signal) == 0:
                     if is_stereo:
-                        return np.array([], dtype=np.float32).reshape(0, 2)
-                    return np.array([])
+                        return empty_stereo()
+                    return empty_mono()
                 
                 # Calculate total retrigger time and set num_samples accordingly
                 n_delay_time_samples = int(SAMPLE_RATE * self.model.time)
@@ -98,8 +98,8 @@ class RetriggerNode(BaseNode):
         # If signal is done and we have no carry over, we're done
         if len(signal_wave) == 0 and len(self.state.carry_over) == 0:
             if is_stereo:
-                return np.array([], dtype=np.float32).reshape(0, 2)
-            return np.array([], dtype=np.float32)
+                return empty_stereo()
+            return empty_mono()
         
         n_delay_time_samples = int(SAMPLE_RATE * self.model.time)
         

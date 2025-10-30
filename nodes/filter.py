@@ -7,6 +7,7 @@ from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
+from utils import empty_mono
 
 class FilterTypes(str, Enum):
     HIGHPASS = "HIGHPASS"
@@ -65,7 +66,7 @@ class FilterNode(BaseNode):
         
         # If signal is done, we're done
         if len(signal_wave) == 0:
-            return np.array([], dtype=np.float32)
+            return empty_mono()
         
         return self._apply_filter(signal_wave, num_samples, context, params)
     

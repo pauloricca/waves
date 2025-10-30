@@ -67,6 +67,7 @@ from typing import List, Optional
 import numpy as np
 from pydantic import ConfigDict
 from config import SAMPLE_RATE
+from utils import time_to_samples, samples_to_time, get_last_or_default
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
@@ -138,7 +139,7 @@ class AutomationNode(BaseNode):
         """Calculate total number of samples for the entire automation sequence"""
         total_steps = len(self.step_nodes)
         total_duration = total_steps * interval * self.repeat
-        return int(total_duration * SAMPLE_RATE)
+        return time_to_samples(total_duration )
 
     def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         # Evaluate interval for this chunk
@@ -167,7 +168,7 @@ class AutomationNode(BaseNode):
         
         output_wave = np.zeros(num_samples_resolved, dtype=np.float32)
         samples_written = 0
-        samples_per_step = int(interval * SAMPLE_RATE)
+        samples_per_step = time_to_samples(interval )
         
         while samples_written < num_samples_resolved:
             # Check if we've completed the current repeat
@@ -202,7 +203,7 @@ class AutomationNode(BaseNode):
             
             # Calculate how many samples we can render from current step
             time_remaining_in_step = current_interval - self.state.time_in_current_step
-            samples_remaining_in_step = int(time_remaining_in_step * SAMPLE_RATE)
+            samples_remaining_in_step = time_to_samples(time_remaining_in_step )
             samples_to_render = min(samples_remaining_in_step, num_samples_resolved - samples_written)
             
             if samples_to_render <= 0:
@@ -258,7 +259,7 @@ class AutomationNode(BaseNode):
         
         # If node returned fewer samples than requested, pad with last value
         if len(result) < num_samples:
-            last_value = result[-1] if len(result) > 0 else 0
+            last_value = get_last_or_default(result, 0)
             padding = np.full(num_samples - len(result), last_value)
             result = np.concatenate([result, padding])
         
@@ -287,7 +288,7 @@ class AutomationNode(BaseNode):
             if len(result) == 0:
                 return np.zeros(num_samples, dtype=np.float32)
             if len(result) < num_samples:
-                last_value = result[-1] if len(result) > 0 else 0
+                last_value = get_last_or_default(result, 0)
                 padding = np.full(num_samples - len(result), last_value)
                 result = np.concatenate([result, padding])
             return result
@@ -315,12 +316,12 @@ class AutomationNode(BaseNode):
         
         # Pad if necessary
         if len(current_value) < num_samples:
-            last_value = current_value[-1] if len(current_value) > 0 else 0
+            last_value = get_last_or_default(current_value, 0)
             padding = np.full(num_samples - len(current_value), last_value)
             current_value = np.concatenate([current_value, padding])
         
         if len(next_value) < num_samples:
-            last_value = next_value[-1] if len(next_value) > 0 else 0
+            last_value = get_last_or_default(next_value, 0)
             padding = np.full(num_samples - len(next_value), last_value)
             next_value = np.concatenate([next_value, padding])
         
@@ -340,7 +341,7 @@ class AutomationNode(BaseNode):
         while the new value fades in over the overlap duration. The crossfade happens
         at the beginning of the new step.
         """
-        overlap_samples = int(self.overlap_time * SAMPLE_RATE)
+        overlap_samples = time_to_samples(self.overlap_time )
         
         # Find current active step (most recent non-None step at or before current position)
         current_value_step = self._find_prev_non_none_step(self.state.current_step + 1)
@@ -368,7 +369,7 @@ class AutomationNode(BaseNode):
                 self.state.crossfade_progress = 0
         
         # Calculate current position within the step (in samples)
-        samples_into_step = int(self.state.time_in_current_step * SAMPLE_RATE)
+        samples_into_step = time_to_samples(self.state.time_in_current_step )
         
         # Determine if we're in a crossfade period
         in_crossfade = (self.state.prev_step_index is not None and 
@@ -382,7 +383,7 @@ class AutomationNode(BaseNode):
         if len(current_output) == 0:
             current_output = np.zeros(num_samples, dtype=np.float32)
         elif len(current_output) < num_samples:
-            last_value = current_output[-1] if len(current_output) > 0 else 0
+            last_value = get_last_or_default(current_output, 0)
             padding = np.full(num_samples - len(current_output), last_value)
             current_output = np.concatenate([current_output, padding])
         
@@ -394,7 +395,7 @@ class AutomationNode(BaseNode):
             if len(prev_output) == 0:
                 prev_output = np.zeros(num_samples, dtype=np.float32)
             elif len(prev_output) < num_samples:
-                last_value = prev_output[-1] if len(prev_output) > 0 else 0
+                last_value = get_last_or_default(prev_output, 0)
                 padding = np.full(num_samples - len(prev_output), last_value)
                 prev_output = np.concatenate([prev_output, padding])
             

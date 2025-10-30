@@ -4,6 +4,7 @@ import numpy as np
 from pydantic import ConfigDict
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
+from utils import empty_mono
 
 class SmoothModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
@@ -33,7 +34,7 @@ class SmoothNode(BaseNode):
         
         # If signal is done, we're done
         if len(signal_wave) == 0:
-            return np.array([], dtype=np.float32)
+            return empty_mono()
         
         return self._apply_smoothing(signal_wave)
     

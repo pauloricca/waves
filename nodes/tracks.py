@@ -41,7 +41,7 @@ from types import SimpleNamespace
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.node_utils.panning import apply_panning
-from utils import match_length
+from utils import match_length, empty_stereo
 
 
 class TracksNodeModel(BaseNodeModel):
@@ -128,7 +128,7 @@ class TracksNode(BaseNode):
             
             # If signal is empty, this track is done
             if len(signal) == 0:
-                track_outputs[track['name']] = np.array([], dtype=np.float32).reshape(0, 2)
+                track_outputs[track['name']] = empty_stereo()
                 continue
             
             # Check if we got mono or stereo
@@ -170,12 +170,12 @@ class TracksNode(BaseNode):
         
         # Check if all tracks are empty (finished rendering)
         if all(len(output) == 0 for output in track_outputs.values()):
-            return np.array([], dtype=np.float32).reshape(0, 2)
+            return empty_stereo()
         
         # Find the minimum length among non-empty tracks
         non_empty_lengths = [len(output) for output in track_outputs.values() if len(output) > 0]
         if not non_empty_lengths:
-            return np.array([], dtype=np.float32).reshape(0, 2)
+            return empty_stereo()
         
         min_length = min(non_empty_lengths)
         

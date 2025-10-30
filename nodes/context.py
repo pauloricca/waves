@@ -4,6 +4,7 @@ from pydantic import ConfigDict
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
+from utils import empty_mono
 
 
 # Context node: Creates a scope where additional variables are added to render params.
@@ -47,12 +48,12 @@ class ContextNode(BaseNode):
             
             # If we've already rendered everything, return empty
             if self.state.total_samples_rendered >= max_samples:
-                return np.array([], dtype=np.float32)
+                return empty_mono()
             
             # If num_samples would exceed duration, limit it
             remaining_samples = max_samples - self.state.total_samples_rendered
             if remaining_samples <= 0:
-                return np.array([], dtype=np.float32)
+                return empty_mono()
             num_samples = min(num_samples, remaining_samples)
         
         # Render all context arguments and add to params
@@ -62,7 +63,7 @@ class ContextNode(BaseNode):
             wave = node.render(num_samples, context, **self.get_params_for_children(params))
             # If child returned empty, we're done
             if len(wave) == 0:
-                return np.array([], dtype=np.float32)
+                return empty_mono()
             extended_params[name] = wave
         
         # Now render the signal with the extended params
