@@ -47,6 +47,7 @@ class RetriggerNode(BaseNode):
         # Persistent state for carry over samples (survives hot reload)
         if do_initialise_state:
             self.state.carry_over = np.array([], dtype=np.float32)
+            self.state.carry_over_start_time = 0.0  # Track when carry_over samples should play
 
     def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         """
@@ -80,12 +81,39 @@ class RetriggerNode(BaseNode):
                 if is_stereo:
                     delayed_wave = np.zeros((total_length, 2), dtype=np.float32)
                     for i in range(self.model.repeats):
-                        # Calculate pan position for this retrigger
-                        pan = self._calculate_pan_for_repeat(i, 0)
-                        # Apply panning to the signal
-                        stereo_signal = apply_panning(child_signal * (self.model.feedback ** i), pan)
+                        delay_time = i * self.model.time
                         start_idx = i * n_delay_time_samples
                         end_idx = start_idx + len(child_signal)
+                        
+                        # For movement, calculate pan for each sample
+                        if self.model.movement > 0:
+                            # Create time array for each sample in this retrigger
+                            sample_times = delay_time + np.arange(len(child_signal)) / SAMPLE_RATE
+                            
+                            # Vectorized pan calculation
+                            if self.model.repeats == 1:
+                                base_pan = 0.0
+                            else:
+                                normalized_pos = (i / (self.model.repeats - 1)) * 2 - 1
+                                base_pan = normalized_pos * self.model.spread
+                            
+                            # Add movement rotation
+                            rotation = np.sin(2 * np.pi * self.model.movement * sample_times)
+                            pans = np.clip(base_pan + rotation * self.model.spread, -1, 1)
+                            
+                            # Apply time-varying panning
+                            attenuated_signal = child_signal * (self.model.feedback ** i)
+                            left_gains = np.cos((pans + 1) * np.pi / 4)
+                            right_gains = np.sin((pans + 1) * np.pi / 4)
+                            stereo_signal = np.column_stack([
+                                attenuated_signal * left_gains,
+                                attenuated_signal * right_gains
+                            ])
+                        else:
+                            # Static pan
+                            pan = self._calculate_pan_for_repeat(i, delay_time)
+                            stereo_signal = apply_panning(child_signal * (self.model.feedback ** i), pan)
+                        
                         delayed_wave[start_idx:end_idx] += stereo_signal
                 else:
                     delayed_wave = np.zeros(total_length)
@@ -109,10 +137,40 @@ class RetriggerNode(BaseNode):
             # Add delays with panning (only if we have signal)
             if len(signal_wave) > 0:
                 for i in range(self.model.repeats):
-                    # Calculate pan position for this retrigger based on time
-                    pan = self._calculate_pan_for_repeat(i, self.time_since_start)
-                    # Apply panning to create stereo
-                    stereo_signal = apply_panning(signal_wave * (self.model.feedback ** i), pan)
+                    # Calculate pan position for each sample based on when it will be heard
+                    # Each retrigger starts at time_since_start + (i * delay_time)
+                    delay_time = i * self.model.time
+                    
+                    # For movement, we need to calculate pan for each sample individually
+                    if self.model.movement > 0:
+                        # Create time array for each sample in this retrigger
+                        sample_times = self.time_since_start + delay_time + np.arange(len(signal_wave)) / SAMPLE_RATE
+                        
+                        # Vectorized pan calculation
+                        if self.model.repeats == 1:
+                            base_pan = 0.0
+                        else:
+                            normalized_pos = (i / (self.model.repeats - 1)) * 2 - 1
+                            base_pan = normalized_pos * self.model.spread
+                        
+                        # Add movement rotation
+                        rotation = np.sin(2 * np.pi * self.model.movement * sample_times)
+                        pans = np.clip(base_pan + rotation * self.model.spread, -1, 1)
+                        
+                        # Apply time-varying panning using vectorized operations
+                        attenuated_signal = signal_wave * (self.model.feedback ** i)
+                        # Calculate left and right channels with vectorized panning
+                        left_gains = np.cos((pans + 1) * np.pi / 4)
+                        right_gains = np.sin((pans + 1) * np.pi / 4)
+                        stereo_signal = np.column_stack([
+                            attenuated_signal * left_gains,
+                            attenuated_signal * right_gains
+                        ])
+                    else:
+                        # Static pan - calculate once for the whole retrigger
+                        pan = self._calculate_pan_for_repeat(i, self.time_since_start + delay_time)
+                        stereo_signal = apply_panning(signal_wave * (self.model.feedback ** i), pan)
+                    
                     start_idx = i * n_delay_time_samples
                     end_idx = start_idx + len(signal_wave)
                     delayed_wave[start_idx:end_idx] += stereo_signal
