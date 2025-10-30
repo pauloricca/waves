@@ -32,6 +32,7 @@ from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.node_utils.panning import apply_panning
 from nodes.wavable_value import WavableValue
+from utils import match_length
 
 
 class StereoNodeModel(BaseNodeModel):
@@ -69,12 +70,7 @@ class StereoNode(BaseNode):
         pan_value = self.pan_node.render(len(mono_signal), context, **params)
         
         # Ensure pan_value matches signal length
-        if len(pan_value) < len(mono_signal):
-            # Pad with last value
-            pan_value = np.pad(pan_value, (0, len(mono_signal) - len(pan_value)), 
-                              mode='edge')
-        elif len(pan_value) > len(mono_signal):
-            pan_value = pan_value[:len(mono_signal)]
+        pan_value = match_length(pan_value, len(mono_signal))
         
         # Apply panning to create stereo
         stereo_signal = apply_panning(mono_signal, pan_value)

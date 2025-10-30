@@ -41,6 +41,7 @@ from types import SimpleNamespace
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.node_utils.panning import apply_panning
+from utils import match_length
 
 
 class TracksNodeModel(BaseNodeModel):
@@ -140,12 +141,7 @@ class TracksNode(BaseNode):
                 if track['is_pan_dynamic']:
                     pan_value = track['pan'].render(len(signal), context, **params)
                     # Ensure pan_value matches signal length
-                    if len(pan_value) < len(signal):
-                        # Pad with last value
-                        pan_value = np.pad(pan_value, (0, len(signal) - len(pan_value)), 
-                                          mode='edge')
-                    elif len(pan_value) > len(signal):
-                        pan_value = pan_value[:len(signal)]
+                    pan_value = match_length(pan_value, len(signal))
                 else:
                     pan_value = track['pan']
                 
@@ -202,12 +198,7 @@ class TracksNode(BaseNode):
             if track['is_vol_dynamic']:
                 vol_value = track['vol'].render(len(stereo_signal), context, **params)
                 # Ensure vol_value matches stereo_signal length
-                if len(vol_value) < len(stereo_signal):
-                    # Pad with last value
-                    vol_value = np.pad(vol_value, (0, len(stereo_signal) - len(vol_value)), 
-                                      mode='edge')
-                elif len(vol_value) > len(stereo_signal):
-                    vol_value = vol_value[:len(stereo_signal)]
+                vol_value = match_length(vol_value, len(stereo_signal))
                 # Apply volume to both channels
                 stereo_signal = stereo_signal * vol_value[:, np.newaxis]
             else:

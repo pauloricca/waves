@@ -226,3 +226,25 @@ def multiply_waves(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     
     # Now we can safely multiply the two arrays
     return np.multiply(a, b, out=a, casting='unsafe')
+
+
+def match_length(array: np.ndarray, target_length: int) -> np.ndarray:
+    """
+    Ensures array matches target_length by padding or cropping.
+    If array is shorter, pads with edge values (repeats last value).
+    If array is longer, crops to target_length.
+    
+    Args:
+        array: Input array to match length
+        target_length: Desired length
+        
+    Returns:
+        Array of length target_length
+    """
+    if len(array) < target_length:
+        # Pad with last value
+        return np.pad(array, (0, target_length - len(array)), mode='edge')
+    elif len(array) > target_length:
+        # Crop to target length
+        return array[:target_length]
+    return array
