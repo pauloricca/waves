@@ -1,3 +1,27 @@
+# Test stereo node with static pan
+test_stereo_node:
+  stereo:
+    pan: -0.7  # Pan left
+    signal:
+      osc:
+        type: sin
+        freq: 440
+        duration: 2
+
+# Test stereo node with dynamic pan (auto-pan)
+test_stereo_autopan:
+  stereo:
+    pan:
+      osc:
+        type: sin
+        freq: 0.5  # Pan left-right twice per second
+        range: [-1, 1]
+    signal:
+      osc:
+        type: sin
+        freq: 440
+        duration: 4
+
 # Test stereo tracks node
 test_stereo:
   tracks:
