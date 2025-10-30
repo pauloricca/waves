@@ -57,19 +57,21 @@ class TracksNode(BaseNode):
         self.tracks = []  # List of {name, node, pan_node_or_value}
         
         if hasattr(model, '__pydantic_extra__') and model.__pydantic_extra__:
-            # First pass: identify all track names (non-_pan parameters and non-base-model-fields)
-            # Filter out: _pan suffixes and standard BaseNode parameters (duration, amp, etc.)
+            # First pass: identify all track names (non-_pan/_vol parameters and non-base-model-fields)
+            # Filter out: _pan and _vol suffixes and standard BaseNode parameters (duration, amp, etc.)
             standard_params = {'duration', 'bpm', 'context'}
             track_names = [
                 name for name in model.__pydantic_extra__.keys() 
-                if not name.endswith('_pan') and name not in standard_params
+                if not name.endswith('_pan') and not name.endswith('_vol') and name not in standard_params
             ]
             
-            # Second pass: build track configs with their pan values
+            # Second pass: build track configs with their pan and vol values
             for track_name in track_names:
                 track_value = model.__pydantic_extra__[track_name]
                 pan_param_name = f"{track_name}_pan"
                 pan_value = model.__pydantic_extra__.get(pan_param_name, 0)  # Default to center
+                vol_param_name = f"{track_name}_vol"
+                vol_value = model.__pydantic_extra__.get(vol_param_name, 1.0)  # Default to unity gain
                 
                 # Instantiate track node
                 if isinstance(track_value, BaseNodeModel):
@@ -80,20 +82,27 @@ class TracksNode(BaseNode):
                 # Handle pan value (can be scalar or node for dynamic panning)
                 if isinstance(pan_value, BaseNodeModel):
                     pan_node = self.instantiate_child_node(pan_value, pan_param_name)
-                    self.tracks.append({
-                        'name': track_name,
-                        'node': track_node,
-                        'pan': pan_node,
-                        'is_pan_dynamic': True
-                    })
+                    is_pan_dynamic = True
                 else:
-                    # Static pan value
-                    self.tracks.append({
-                        'name': track_name,
-                        'node': track_node,
-                        'pan': float(pan_value),
-                        'is_pan_dynamic': False
-                    })
+                    pan_node = float(pan_value)
+                    is_pan_dynamic = False
+                
+                # Handle vol value (can be scalar or node for dynamic volume)
+                if isinstance(vol_value, BaseNodeModel):
+                    vol_node = self.instantiate_child_node(vol_value, vol_param_name)
+                    is_vol_dynamic = True
+                else:
+                    vol_node = float(vol_value)
+                    is_vol_dynamic = False
+                
+                self.tracks.append({
+                    'name': track_name,
+                    'node': track_node,
+                    'pan': pan_node,
+                    'is_pan_dynamic': is_pan_dynamic,
+                    'vol': vol_node,
+                    'is_vol_dynamic': is_vol_dynamic
+                })
     
     def get_track_names(self):
         """Return list of track names for file export"""
@@ -180,13 +189,14 @@ class TracksNode(BaseNode):
         """
         Render all tracks and mix them to stereo output.
         Also caches track outputs in self.last_track_outputs for stem export.
+        Volume (_vol) is applied only to the mixdown, not to individual track exports.
         
         Returns:
             2D array of shape (num_samples, 2) with mixed stereo audio
         """
         track_outputs = self.get_track_outputs(num_samples, context, **params)
         
-        # Cache the track outputs for stem export
+        # Cache the track outputs for stem export (without volume applied)
         self.last_track_outputs = track_outputs
         
         # Check if all tracks are empty (finished rendering)
@@ -200,16 +210,38 @@ class TracksNode(BaseNode):
         
         min_length = min(non_empty_lengths)
         
-        # Mix all tracks together
+        # Mix all tracks together with volume applied
         # Start with zeros
         mixed = np.zeros((min_length, 2), dtype=np.float32)
         
-        for track_name, stereo_signal in track_outputs.items():
-            if len(stereo_signal) > 0:
-                # Truncate to min_length if needed
-                if len(stereo_signal) > min_length:
-                    stereo_signal = stereo_signal[:min_length]
-                mixed += stereo_signal
+        for track in self.tracks:
+            track_name = track['name']
+            stereo_signal = track_outputs.get(track_name)
+            
+            if stereo_signal is None or len(stereo_signal) == 0:
+                continue
+            
+            # Truncate to min_length if needed
+            if len(stereo_signal) > min_length:
+                stereo_signal = stereo_signal[:min_length]
+            
+            # Get volume value (static or dynamic)
+            if track['is_vol_dynamic']:
+                vol_value = track['vol'].render(len(stereo_signal), context, **params)
+                # Ensure vol_value matches stereo_signal length
+                if len(vol_value) < len(stereo_signal):
+                    # Pad with last value
+                    vol_value = np.pad(vol_value, (0, len(stereo_signal) - len(vol_value)), 
+                                      mode='edge')
+                elif len(vol_value) > len(stereo_signal):
+                    vol_value = vol_value[:len(stereo_signal)]
+                # Apply volume to both channels
+                stereo_signal = stereo_signal * vol_value[:, np.newaxis]
+            else:
+                # Static volume
+                stereo_signal = stereo_signal * track['vol']
+            
+            mixed += stereo_signal
         
         return mixed
 

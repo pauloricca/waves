@@ -20,6 +20,33 @@ test_stereo:
         duration: 2
     center_pan: 0
 
+# Test volume control per track
+test_volume:
+  tracks:
+    duration: 2
+    loud:
+      osc:
+        type: sin
+        freq: 440
+    loud_pan: -1
+    loud_vol: 1.0
+    quiet:
+      osc:
+        type: sin
+        freq: 880
+    quiet_pan: 1
+    quiet_vol: 0.3
+    dynamic_vol:
+      osc:
+        type: sin
+        freq: 220
+    dynamic_vol_pan: 0
+    dynamic_vol_vol:
+      osc:
+        type: sin
+        freq: 2
+        range: [0, 1]
+
 # Test dynamic panning
 test_autopan:
   tracks:

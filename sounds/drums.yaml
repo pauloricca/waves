@@ -31,10 +31,10 @@ drum-kit:
 
 
 drums:
-  expression:
-    exp: 0.2 * kick + perc + synth
+  tracks:
     perc:
       drum-kit: {}
+    kick_vol: 0.3
     kick:
       sequencer:
         repeat: 1000
@@ -44,6 +44,7 @@ drums:
           - 
           - hihat
           -
+    synth_vol: 0.4
     synth:
       osc:
         amp:
