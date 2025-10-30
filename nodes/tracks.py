@@ -50,6 +50,7 @@ class TracksNodeModel(BaseNodeModel):
 class TracksNode(BaseNode):
     def __init__(self, model: TracksNodeModel, node_id: str, state=None, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
+        self.is_stereo = True  # TracksNode always outputs stereo
         
         # Cache for last rendered track outputs (used for stem export)
         self.last_track_outputs = None

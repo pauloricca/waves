@@ -26,34 +26,51 @@ The render method is the main public interface for generating audio. It handles 
   2. Handles caching for nodes with an `id` field
   3. Tracks recursion depth to prevent infinite feedback loops
   4. Updates timing information
-  5. Delegates to `_do_render()` for actual rendering
+  5. Handles automatic stereo/mono conversion based on `self.is_stereo`
+  6. Delegates to `_do_render()` for actual rendering
   
 - `_do_render(num_samples, context, num_channels, **params)` - Protected method that subclasses override:
   - Contains the pure rendering logic specific to each node type
-  - Should not handle caching, recursion, or timing (BaseNode handles that)
+  - Should not handle caching, recursion, timing, or stereo/mono conversion (BaseNode handles that)
   - Must pass `context` and `num_channels` to all child `render()` calls
   - Pass these as positional parameters: `child.render(num_samples, context, num_channels, **params)`
 
 **Multi-channel support:**
-The render system supports both mono and stereo output through the `num_channels` parameter:
-- `num_channels=1` (default): Mono output - returns 1D array of shape `(num_samples,)`
-- `num_channels=2`: Stereo output - returns 2D array of shape `(num_samples, 2)`
+The render system supports both mono and stereo output through the `num_channels` parameter and the `is_stereo` attribute:
 
-Most nodes are mono and ignore the `num_channels` parameter, always returning 1D arrays. Stereo-capable nodes (like sample players with stereo files) can check `num_channels` and return 2D arrays when stereo is requested.
+- **`is_stereo` attribute**: Set to `False` by default. Override to `True` in stereo-capable nodes by setting `self.is_stereo = True` in `__init__()` after calling `super().__init__()`
+- **Automatic conversion**: BaseNode automatically handles mono/stereo conversion:
+  - If a mono node (`is_stereo=False`) receives `num_channels=2`, BaseNode renders mono and duplicates channels (center panned)
+  - If a stereo node (`is_stereo=True`) receives any `num_channels`, it passes through to `_do_render()` and the node must handle it
+  
+**Stereo node rules (CRITICAL):**
+1. Set `self.is_stereo = True` in `__init__()` after `super().__init__()`
+2. `_do_render()` MUST handle both `num_channels=1` (mono) and `num_channels=2` (stereo) requests
+3. When `num_channels=1`, return 1D array: shape `(num_samples,)`
+4. When `num_channels=2`, return 2D array: shape `(num_samples, 2)`
+5. Always check `num_channels` in `_do_render()` to determine output format
 
-Parent nodes (like `tracks`) request stereo output by passing `num_channels=2` to children, then check the shape of the returned array:
-- If 1D (mono): Apply processing like panning to create stereo
-- If 2D (stereo): Use as-is or apply stereo-aware processing
+**Pass-through stereo nodes:**
+Nodes that simply pass through their child signal unchanged (like `context`, `tempo`) should:
+1. Set `self.is_stereo = True`
+2. Pass `num_channels` to child renders: `child.render(num_samples, context, num_channels, **params)`
+3. Return the child result as-is (works for both mono and stereo)
 
 **When implementing a stereo-capable node:**
 ```python
-def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
-    if num_channels == 2 and self.has_stereo_data:
-        # Return stereo: shape (num_samples, 2)
-        return np.column_stack([left_channel, right_channel])
-    else:
-        # Return mono: shape (num_samples,)
-        return mono_signal
+class MyStereoNode(BaseNode):
+    def __init__(self, model, node_id, state, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
+        self.is_stereo = True  # Mark as stereo-capable
+        # ... rest of init
+    
+    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+        if num_channels == 2 and self.has_stereo_data:
+            # Return stereo: shape (num_samples, 2)
+            return np.column_stack([left_channel, right_channel])
+        else:
+            # Return mono: shape (num_samples,)
+            return mono_signal
 ```
 
 The render method is called multiple times (potentially in real time) to generate the final output wave. Each time it is called, it generates a chunk of samples (the size of which is defined by the num_samples parameter). We should take this into consideration when writing its implementation, we should take measures to ensure that this method is efficient and does not introduce artifacts, clicks or cracks in the output wave, for example as a result of value jumps between one chunk and the next. We might need to keep some internal state (or sometimes a buffer) in the node to ensure continuity between chunks.
@@ -447,13 +464,15 @@ Then we need to add the new node to the NODE_REGISTRY in nodes/node_utils/node_r
 
 **Important implementation details:**
 - Override `_do_render(self, num_samples=None, context=None, num_channels=1, **params)` not `render()`
-- The `render()` method in BaseNode handles caching, recursion, and timing automatically
+- The `render()` method in BaseNode handles caching, recursion, timing, and automatic stereo/mono conversion
 - Always pass `context` and `num_channels` as positional parameters when calling child `render()` methods: `child.render(num_samples, context, num_channels, **params)`
 - Ensure the node works correctly in both realtime and non-realtime modes
 - In realtime mode, the node renders in chunks; in non-realtime, it may render the entire signal at once
 - When `num_samples` is None, render the full signal (or raise an error if the node needs explicit duration)
 - For stateful nodes, accept `state` and `do_initialise_state` parameters (see Hot Reload section above)
-- Most nodes can ignore `num_channels` and return mono (1D arrays); only implement stereo support if the node has stereo data or needs stereo processing
+- **Mono nodes (default)**: Leave `is_stereo=False` (default). BaseNode automatically duplicates mono to stereo when `num_channels=2` is requested
+- **Stereo nodes**: Set `self.is_stereo = True` in `__init__()` and ensure `_do_render()` handles both `num_channels=1` (mono) and `num_channels=2` (stereo)
+- **Pass-through nodes**: If your node just passes through a child signal unchanged, set `is_stereo=True` and pass `num_channels` to the child
 
 ### Critical Rules for Node Implementation with Hot Reload Support
 

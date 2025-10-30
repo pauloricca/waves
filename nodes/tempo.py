@@ -28,6 +28,7 @@ class TempoNode(BaseNode):
         from nodes.node_utils.instantiate_node import instantiate_node
         from nodes.wavable_value import WavableValueNode, WavableValueModel
         super().__init__(model, node_id, state, do_initialise_state)
+        self.is_stereo = True  # Tempo is a pass-through node, supports stereo
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
         
         # Wrap bpm in WavableValue if provided
@@ -78,7 +79,7 @@ class TempoNode(BaseNode):
         extended_params['triplet'] = triplet
         
         # Render signal with extended params
-        return self.signal_node.render(num_samples, context, **extended_params)
+        return self.signal_node.render(num_samples, context, num_channels, **extended_params)
 
 
 TEMPO_DEFINITION = NodeDefinition("tempo", TempoNode, TempoNodeModel)

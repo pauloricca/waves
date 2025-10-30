@@ -26,6 +26,7 @@ class BaseNode:
         self.time_since_start = 0
         self.number_of_chunks_rendered = 0
         self._last_chunk_samples = 0
+        self.is_stereo = False  # Override to True in stereo-capable nodes
         
         # State is always provided by instantiate_node now (guaranteed non-None)
         self.state = state
@@ -121,6 +122,7 @@ class BaseNode:
         """
         Updates timing info and calls _do_render().
         This keeps timing logic separate from rendering logic.
+        Also handles automatic stereo/mono conversion based on node capability.
         """
         if self._last_chunk_samples is not None:
             self.number_of_chunks_rendered += self._last_chunk_samples
@@ -129,7 +131,24 @@ class BaseNode:
             self._last_chunk_samples = num_samples
         # If num_samples is None, _last_chunk_samples will be updated by the implementing node
         
-        return self._do_render(num_samples, context, num_channels, **params)
+        # Handle stereo/mono conversion automatically
+        if self.is_stereo:
+            # This is a stereo-capable node - call _do_render with requested num_channels
+            result = self._do_render(num_samples, context, num_channels, **params)
+        else:
+            # This is a mono-only node
+            if num_channels == 2:
+                # Parent wants stereo but we're mono - render mono and duplicate channels
+                mono_result = self._do_render(num_samples, context, 1, **params)
+                if len(mono_result) == 0:
+                    return np.array([], dtype=np.float32).reshape(0, 2)
+                # Duplicate mono to stereo (center panned)
+                result = np.stack([mono_result, mono_result], axis=-1)
+            else:
+                # Parent wants mono and we're mono - normal rendering
+                result = self._do_render(num_samples, context, num_channels, **params)
+        
+        return result
     
     
     def _do_render(self, num_samples: int, context, num_channels: int = 1, **params) -> np.ndarray:

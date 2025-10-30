@@ -18,6 +18,7 @@ class ContextNode(BaseNode):
     def __init__(self, model: ContextNodeModel, node_id: str, state, do_initialise_state=True):
         from nodes.wavable_value import WavableValueNode, WavableValueModel
         super().__init__(model, node_id, state, do_initialise_state)
+        self.is_stereo = True  # Context is a pass-through node, supports stereo
         self.model = model
         
         # Instantiate the signal node
@@ -65,7 +66,7 @@ class ContextNode(BaseNode):
             extended_params[name] = wave
         
         # Now render the signal with the extended params
-        result = self.signal_node.render(num_samples, context, **extended_params)
+        result = self.signal_node.render(num_samples, context, num_channels, **extended_params)
         
         # Track samples rendered
         self.state.total_samples_rendered += len(result)

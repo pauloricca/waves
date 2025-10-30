@@ -40,6 +40,7 @@ class RetriggerModel(BaseNodeModel):
 class RetriggerNode(BaseNode):
     def __init__(self, model: RetriggerModel, node_id: str, state, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
+        self.is_stereo = True  # RetriggerNode supports stereo output
         self.model = model
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
         
