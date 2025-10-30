@@ -24,6 +24,7 @@ from nodes.shuffle import SHUFFLE_DEFINITION
 from nodes.smooth import SMOOTH_DEFINITION
 from nodes.snap import SNAP_DEFINITION
 from nodes.tempo import TEMPO_DEFINITION
+from nodes.tracks import TRACKS_DEFINITION
 
 NODE_REGISTRY = [
     AUTOMATION_DEFINITION,
@@ -52,4 +53,5 @@ NODE_REGISTRY = [
     FOLLOW_DEFINITION,
     INPUT_DEFINITION,
     INTERVAL_DEFINITION,
+    TRACKS_DEFINITION,
 ]

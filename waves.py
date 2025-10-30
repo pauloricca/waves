@@ -78,6 +78,16 @@ def perform_hot_reload_background(sound_name_to_play: str, changed_filename: str
             from nodes.node_utils.node_string_parser import apply_params_to_model
             new_model = apply_params_to_model(new_model, params)
         
+        # Auto-wrap in tracks node if not already a tracks node
+        from nodes.tracks import TracksNodeModel
+        is_tracks_node = isinstance(new_model, TracksNodeModel)
+        
+        if not is_tracks_node:
+            # Wrap in a tracks node with the sound name as the track name
+            wrapped_model = TracksNodeModel()
+            wrapped_model.__pydantic_extra__ = {sound_name_to_play: new_model}
+            new_model = wrapped_model
+        
         new_node = instantiate_node(new_model, sound_name_to_play, "root")
         
         # Store the new node for atomic swap on next audio chunk
@@ -95,6 +105,9 @@ def perform_hot_reload_background(sound_name_to_play: str, changed_filename: str
 recording_buffer = None
 recording_active = False
 current_sound_name = None  # Track current sound name for recording
+recording_track_buffers = None  # Dict of track_name -> deque for multi-track recording
+recording_sound_node = None  # Reference to sound node for track export
+recording_is_explicit_tracks = False  # Whether user explicitly used tracks: node
 
 def get_unique_filename(base_filename):
     """
@@ -106,7 +119,13 @@ def get_unique_filename(base_filename):
     Returns:
         A unique filename that doesn't exist in OUTPUT_DIR
     """
-    output_dir = os.path.join(os.path.dirname(__file__), OUTPUT_DIR)
+    # Use current working directory if __file__ is not available
+    try:
+        base_dir = os.path.dirname(__file__)
+    except NameError:
+        base_dir = os.getcwd()
+    
+    output_dir = os.path.join(base_dir, OUTPUT_DIR)
     os.makedirs(output_dir, exist_ok=True)
     
     # Split filename into name and extension
@@ -127,8 +146,8 @@ def get_unique_filename(base_filename):
         counter += 1
 
 def save_recording(sound_name=None):
-    """Save the recorded audio buffer to a file."""
-    global recording_buffer, recording_active
+    """Save the recorded audio buffer to file(s)."""
+    global recording_buffer, recording_active, recording_track_buffers, recording_sound_node, recording_is_explicit_tracks
     
     if not recording_active or recording_buffer is None or len(recording_buffer) == 0:
         return
@@ -140,14 +159,25 @@ def save_recording(sound_name=None):
         # Use sound name if provided, otherwise fall back to default
         base_filename = f"{sound_name}.wav" if sound_name else "realtime_recording.wav"
         
-        # Get a unique filename to avoid overwriting
+        # Save mixdown
         unique_filename = get_unique_filename(base_filename)
-        
-        # Save using the existing save function
         save(recorded_audio, unique_filename)
         print(f"Recording saved: {unique_filename} ({len(recorded_audio) / SAMPLE_RATE:.2f} seconds)")
+        
+        # Save individual track stems if this is an explicit tracks node
+        from nodes.tracks import TracksNode
+        if DO_SAVE_MULTITRACK and recording_is_explicit_tracks and isinstance(recording_sound_node, TracksNode) and recording_track_buffers:
+            for track_name, track_buffer in recording_track_buffers.items():
+                if len(track_buffer) > 0:
+                    track_audio = np.array(track_buffer, dtype=np.float32)
+                    track_filename = f"{sound_name}__{track_name}.wav"
+                    unique_track_filename = get_unique_filename(track_filename)
+                    save(track_audio, unique_track_filename)
+                    print(f"Track saved: {unique_track_filename}")
     except Exception as e:
         print(f"Error saving recording: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         recording_active = False
 
@@ -157,14 +187,25 @@ def signal_handler(sig, frame):
     save_recording(current_sound_name)
     sys.exit(0)
 
-def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_name: str = None):
+def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_name: str = None, is_explicit_tracks: bool = False):
     global recording_buffer, recording_active, current_sound_name, current_sound_node, yaml_changed
+    global recording_track_buffers, recording_sound_node, recording_is_explicit_tracks
     
     # Initialize recording if enabled
     if DO_RECORD_REAL_TIME:
         recording_buffer = deque()
         recording_active = True
         current_sound_name = sound_name
+        recording_sound_node = sound_node
+        recording_is_explicit_tracks = is_explicit_tracks
+        
+        # Initialize track buffers if this is an explicit tracks node
+        from nodes.tracks import TracksNode
+        if is_explicit_tracks and isinstance(sound_node, TracksNode):
+            recording_track_buffers = {name: deque() for name in sound_node.get_track_names()}
+        else:
+            recording_track_buffers = None
+        
         # Register cleanup function to save on normal exit
         atexit.register(lambda: save_recording(sound_name))
     
@@ -240,22 +281,45 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
         # Apply master gain
         audio_data *= RENDERED_MASTER_GAIN
 
+        # Detect if stereo (2D array) or mono (1D array)
+        is_stereo = audio_data.ndim == 2
+        
+        # For visualization and recording, use mono (left channel if stereo)
+        if is_stereo:
+            mono_for_vis = audio_data[:, 0]  # Left channel
+        else:
+            mono_for_vis = audio_data
+
         # Add to recording buffer if recording is enabled (before clipping for visualization)
         if recording_active and recording_buffer is not None:
-            recording_buffer.extend(audio_data)
+            recording_buffer.extend(audio_data)  # Store full stereo for recording
+            
+            # Also record individual tracks if this is a multi-track recording
+            if recording_track_buffers and hasattr(active_sound_node, 'last_track_outputs') and active_sound_node.last_track_outputs:
+                for track_name, track_data in active_sound_node.last_track_outputs.items():
+                    if track_name in recording_track_buffers and len(track_data) > 0:
+                        recording_track_buffers[track_name].extend(track_data)
 
-        visualised_wave_buffer.extend(audio_data)
+        visualised_wave_buffer.extend(mono_for_vis)  # Visualize left channel only
 
         clipped_audio_data = np.clip(audio_data, -1.0, 1.0)
 
         # If we got fewer samples than requested, pad with zeros or stop
         if len(clipped_audio_data) < frames:
             # This is the last chunk - pad with zeros and then stop
-            padding = np.zeros(frames - len(clipped_audio_data))
+            if is_stereo:
+                padding = np.zeros((frames - len(clipped_audio_data), 2))
+            else:
+                padding = np.zeros(frames - len(clipped_audio_data))
             clipped_audio_data = np.concatenate([clipped_audio_data, padding])
             should_stop = True
 
-        outdata[:] = clipped_audio_data.reshape(-1, 1)
+        # Reshape for output: stereo stays (n, 2), mono becomes (n, 1)
+        if is_stereo:
+            outdata[:] = clipped_audio_data
+        else:
+            outdata[:] = clipped_audio_data.reshape(-1, 1)
+
 
         rendering_end_time = time.time()
         last_render_time = rendering_end_time - rendering_start_time
@@ -272,7 +336,12 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
         )
         vis_thread.start()
 
-    with sd.OutputStream(callback=audio_callback, blocksize=BUFFER_SIZE, samplerate=SAMPLE_RATE, channels=1): #, latency='low'
+    # Detect if the sound node outputs stereo
+    # We need to check this before starting the stream
+    from nodes.tracks import TracksNode
+    num_channels = 2 if isinstance(sound_node, TracksNode) else 1
+
+    with sd.OutputStream(callback=audio_callback, blocksize=BUFFER_SIZE, samplerate=SAMPLE_RATE, channels=num_channels): #, latency='low'
         while not should_stop:
             # Update references for display thread
             should_stop_ref[0] = should_stop
@@ -310,6 +379,17 @@ def main():
     if params:
         sound_model_to_play = apply_params_to_model(sound_model_to_play, params)
     
+    # Auto-wrap in tracks node if not already a tracks node
+    from nodes.tracks import TracksNodeModel
+    is_explicit_tracks = isinstance(sound_model_to_play, TracksNodeModel)
+    
+    if not is_explicit_tracks:
+        # Wrap in a tracks node with the sound name as the track name
+        wrapped_model = TracksNodeModel()
+        # Store the original sound as a track using __pydantic_extra__
+        wrapped_model.__pydantic_extra__ = {sound_name_to_play: sound_model_to_play}
+        sound_model_to_play = wrapped_model
+    
     # Initialize the node (not as hot reload on first load)
     sound_node_to_play = instantiate_node(sound_model_to_play, sound_name_to_play, "root")
     
@@ -321,7 +401,7 @@ def main():
     sound_duration = look_for_duration(sound_model_to_play)
 
     if DO_PLAY_IN_REAL_TIME:
-        play_in_real_time(sound_node_to_play, sound_duration, sound_name_to_play)
+        play_in_real_time(sound_node_to_play, sound_duration, sound_name_to_play, is_explicit_tracks)
     else:
         # Non-realtime mode requires a duration
         if not sound_duration:
@@ -333,36 +413,88 @@ def main():
             
         rendering_start_time = time.time()
         
+        # Check if this is a tracks node for multi-file export
+        # Export individual tracks if:
+        # 1. User explicitly used 'tracks:' node AND has at least one track
+        # 2. User explicitly used 'tracks:' with multiple tracks
+        from nodes.tracks import TracksNode
+        is_tracks = isinstance(sound_node_to_play, TracksNode)
+        should_export_tracks = is_explicit_tracks and is_tracks and len(sound_node_to_play.get_track_names()) >= 1
+        
+        # Render mixdown (always needed)
         if DO_PRE_RENDER_WHOLE_SOUND:
-            rendered_sound = sound_node_to_play.render(int(SAMPLE_RATE * sound_duration), context=render_context)
+            num_samples = int(SAMPLE_RATE * sound_duration)
+            rendered_sound = sound_node_to_play.render(num_samples, context=render_context)
+            # Track outputs are cached in the node after render
+            track_outputs = sound_node_to_play.last_track_outputs if should_export_tracks else None
         else:
-            # Render in chunks
-            rendered_sound: np.ndarray = []
-            rendered_buffer: np.ndarray = None
-            while (rendered_buffer is None or len(rendered_buffer) != 0) and len(rendered_sound) < sound_duration * SAMPLE_RATE:
+            # Render mixdown in chunks and accumulate track outputs
+            rendered_sound = []
+            track_buffers = {name: [] for name in sound_node_to_play.get_track_names()} if should_export_tracks else None
+            
+            while True:
                 rendered_buffer = sound_node_to_play.render(BUFFER_SIZE, context=render_context)
-                rendered_sound = np.concatenate((rendered_sound, rendered_buffer))
-                # Clear chunk for next iteration
+                if len(rendered_buffer) == 0:
+                    break
+                rendered_sound.append(rendered_buffer)
+                
+                # Collect track outputs from this chunk
+                if should_export_tracks and sound_node_to_play.last_track_outputs:
+                    for track_name, track_data in sound_node_to_play.last_track_outputs.items():
+                        if len(track_data) > 0:
+                            track_buffers[track_name].append(track_data)
+                
                 render_context.clear_chunk()
+                if sum(len(c) for c in rendered_sound) >= sound_duration * SAMPLE_RATE:
+                    break
+            
+            rendered_sound = np.concatenate(rendered_sound) if rendered_sound else np.array([]).reshape(0, 2)
+            
+            # Concatenate track chunks
+            if should_export_tracks:
+                track_outputs = {
+                    name: np.concatenate(chunks) if chunks else np.array([]).reshape(0, 2)
+                    for name, chunks in track_buffers.items()
+                }
+            else:
+                track_outputs = None
 
         rendering_end_time = time.time()
 
-        # Normalize the combined wave
-        peak = np.max(np.abs(rendered_sound))
+        # Apply master gain
         rendered_sound *= RENDERED_MASTER_GAIN
-
-        save(rendered_sound, f"{sound_name_to_play}.wav")
+        
+        # Save files
+        if DO_SAVE_MULTITRACK and should_export_tracks and track_outputs:
+            # Save individual track stems
+            for track_name, track_data in track_outputs.items():
+                track_data *= RENDERED_MASTER_GAIN
+                track_filename = f"{sound_name_to_play}__{track_name}.wav"
+                save(track_data, track_filename)
+            
+            # Save mixdown
+            save(rendered_sound, f"{sound_name_to_play}.wav")
+        else:
+            # Single file export
+            save(rendered_sound, f"{sound_name_to_play}.wav")
 
         if DO_VISUALISE_OUTPUT:
-            visualise_wave(rendered_sound)
+            # Visualize mixdown (left channel if stereo)
+            if rendered_sound.ndim == 2:
+                visualise_wave(rendered_sound[:, 0])
+            else:
+                visualise_wave(rendered_sound)
 
+        # Calculate peak from mixdown
+        peak = np.max(np.abs(rendered_sound))
         print(f"Sound length: {len(rendered_sound) / SAMPLE_RATE:.2f} seconds")
         print(f"Render time: {rendering_end_time - rendering_start_time:.2f} seconds")
-        print ("Peak:", peak)
+        print("Peak:", peak)
 
-        # rendered_sound = normalise_wave(rendered_sound)
+        # Play back the mixdown
         rendered_sound = np.clip(rendered_sound, -1, 1)
         play(rendered_sound)
+
 
 if __name__ == "__main__":
     # Register signal handler for Ctrl-C to save recording

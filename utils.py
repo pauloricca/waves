@@ -15,14 +15,32 @@ def play(wave):
 
 
 def save(wave, filename):
-    # Normalize wave to 16-bit PCM format
-    wave = np.clip(wave, -1, 1)  # Ensure wave is in the range [-1, 1]
+    """
+    Save audio wave to WAV file. Supports both mono and stereo.
+    
+    Args:
+        wave: 1D array for mono, or 2D array of shape (num_samples, num_channels) for stereo/multichannel
+        filename: Output filename
+    """
+    # Clip wave to valid range
+    wave = np.clip(wave, -1, 1)
     wave = wave.astype(np.float32)
+    
+    # Convert to 16-bit PCM
     wave_int16 = np.int16(wave * np.iinfo(np.int16).max)
+    
     output_path = os.path.join(os.path.dirname(__file__), OUTPUT_DIR, filename)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    
     wavfile.write(output_path, SAMPLE_RATE, wave_int16)
-    print(f"Saved {filename}")
+    
+    # Print info about what was saved
+    if wave.ndim == 1:
+        print(f"Saved {filename} (mono)")
+    else:
+        num_channels = wave.shape[1]
+        print(f"Saved {filename} ({num_channels} channels)")
+
 
 
 # Cache for loaded WAV files

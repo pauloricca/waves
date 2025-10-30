@@ -75,14 +75,14 @@ class MidiInputManager:
             
             # If default device key is specified but not found, try auto-detect
             if MIDI_DEFAULT_DEVICE_KEY and MIDI_DEFAULT_DEVICE_KEY not in self._devices:
-                print(f"\nWarning: Default device '{MIDI_DEFAULT_DEVICE_KEY}' not available")
+                print(f"Warning: Default device '{MIDI_DEFAULT_DEVICE_KEY}' not available")
                 selected_port = self._auto_detect_port(available_ports)
                 if selected_port:
                     print(f"Auto-detected fallback device: {selected_port}")
                     self._open_device("default", selected_port)
         
         if not self._devices:
-            print("\nWarning: No MIDI devices opened")
+            print("Warning: No MIDI devices opened")
     
     def _auto_detect_port(self, available_ports):
         """Auto-detect a suitable MIDI port"""

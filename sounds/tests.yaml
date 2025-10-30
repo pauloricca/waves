@@ -1,3 +1,86 @@
+# Test stereo tracks node
+test_stereo:
+  tracks:
+    left:
+      osc:
+        type: sin
+        freq: 440
+        duration: 2
+    left_pan: -1
+    right:
+      osc:
+        type: sin
+        freq: 880
+        duration: 2
+    right_pan: 1
+    center:
+      osc:
+        type: sin
+        freq: 220
+        duration: 2
+    center_pan: 0
+
+# Test dynamic panning
+test_autopan:
+  tracks:
+    duration: 20
+    sound:
+      osc:
+        type: sin
+        amp:
+          osc:
+            type: sin
+            freq: 0.5
+            range: [-0.5, 0.5]
+        freq: 440
+    sound_pan:
+      osc:
+        type: sin
+        freq: 0.6
+        range: [-1, 1]
+    sound_2:
+      osc:
+        type: sin
+        amp:
+          osc:
+            type: sin
+            freq: 0.4
+            range: [-0.5, 0.5]
+        freq: 220
+    sound_2_pan:
+      osc:
+        type: sin
+        freq: 0.4
+        range: [-1, 1]
+    sound_3:
+      osc:
+        type: sin
+        amp:
+          osc:
+            type: sin
+            freq: 0.7
+            range: [-0.5, 0.5]
+        freq: 880
+    sound_3_pan:
+      osc:
+        type: sin
+        freq: 0.7
+        range: [-1, 1]
+    sound_4:
+      osc:
+        type: sin
+        amp:
+          osc:
+            type: sin
+            freq: 0.3
+            range: [-0.5, 0.5]
+        freq: 110
+    sound_4_pan:
+      osc:
+        type: sin
+        freq: 0.3
+        range: [-0.5, 0.5]
+
 # Test the input node with simple passthrough
 test_input:
   input:

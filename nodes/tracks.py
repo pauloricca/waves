@@ -1,0 +1,221 @@
+"""
+The tracks node is a special root-level node that manages multiple audio tracks with stereo panning.
+
+Features:
+- Accepts arbitrary named track arguments (e.g., percussion:, lead:, bass:)
+- Each track can have an associated _pan parameter (e.g., lead_pan: -0.5)
+- Pan values range from -1 (full left) to 1 (full right), default is 0 (center)
+- Pan can be a scalar or WavableValue for dynamic panning
+- Always outputs stereo (num_samples, 2) regardless of panning
+- Responsible for saving individual track stems and final mixdown
+- Uses equal-power panning for smooth stereo imaging
+
+Example YAML:
+  my_song:
+    tracks:
+      percussion:
+        osc:
+          type: sin
+          freq: 100
+      lead:
+        osc:
+          type: sin
+          freq: 440
+      lead_pan: -0.5  # Pan lead 50% to the left
+      bass:
+        osc:
+          type: sin
+          freq: 110
+      bass_pan:  # Dynamic panning with LFO
+        osc:
+          type: sin
+          freq: 0.5
+          range: [-1, 1]
+"""
+from __future__ import annotations
+import numpy as np
+from typing import Union, Dict
+from pydantic import ConfigDict
+from types import SimpleNamespace
+
+from nodes.node_utils.base_node import BaseNode, BaseNodeModel
+from nodes.node_utils.node_definition_type import NodeDefinition
+
+
+class TracksNodeModel(BaseNodeModel):
+    model_config = ConfigDict(extra='allow')  # Accept arbitrary track names and _pan parameters
+
+
+class TracksNode(BaseNode):
+    def __init__(self, model: TracksNodeModel, node_id: str, state=None, do_initialise_state=True):
+        super().__init__(model, node_id, state, do_initialise_state)
+        
+        # Cache for last rendered track outputs (used for stem export)
+        self.last_track_outputs = None
+        
+        # Parse tracks and their associated pan values from __pydantic_extra__
+        self.tracks = []  # List of {name, node, pan_node_or_value}
+        
+        if hasattr(model, '__pydantic_extra__') and model.__pydantic_extra__:
+            # First pass: identify all track names (non-_pan parameters and non-base-model-fields)
+            # Filter out: _pan suffixes and standard BaseNode parameters (duration, amp, etc.)
+            standard_params = {'duration', 'bpm', 'context'}
+            track_names = [
+                name for name in model.__pydantic_extra__.keys() 
+                if not name.endswith('_pan') and name not in standard_params
+            ]
+            
+            # Second pass: build track configs with their pan values
+            for track_name in track_names:
+                track_value = model.__pydantic_extra__[track_name]
+                pan_param_name = f"{track_name}_pan"
+                pan_value = model.__pydantic_extra__.get(pan_param_name, 0)  # Default to center
+                
+                # Instantiate track node
+                if isinstance(track_value, BaseNodeModel):
+                    track_node = self.instantiate_child_node(track_value, track_name)
+                else:
+                    raise ValueError(f"Track '{track_name}' must be a node, got {type(track_value)}")
+                
+                # Handle pan value (can be scalar or node for dynamic panning)
+                if isinstance(pan_value, BaseNodeModel):
+                    pan_node = self.instantiate_child_node(pan_value, pan_param_name)
+                    self.tracks.append({
+                        'name': track_name,
+                        'node': track_node,
+                        'pan': pan_node,
+                        'is_pan_dynamic': True
+                    })
+                else:
+                    # Static pan value
+                    self.tracks.append({
+                        'name': track_name,
+                        'node': track_node,
+                        'pan': float(pan_value),
+                        'is_pan_dynamic': False
+                    })
+    
+    def get_track_names(self):
+        """Return list of track names for file export"""
+        return [track['name'] for track in self.tracks]
+    
+    def get_track_outputs(self, num_samples=None, context=None, **params):
+        """
+        Render all tracks individually and return dict of {track_name: stereo_array}.
+        Used for exporting individual track stems.
+        """
+        track_outputs = {}
+        
+        for track in self.tracks:
+            # Render mono signal
+            mono_signal = track['node'].render(num_samples, context, **params)
+            
+            # If signal is empty, this track is done
+            if len(mono_signal) == 0:
+                track_outputs[track['name']] = np.array([], dtype=np.float32).reshape(0, 2)
+                continue
+            
+            # Get pan value (static or dynamic)
+            if track['is_pan_dynamic']:
+                pan_value = track['pan'].render(len(mono_signal), context, **params)
+                # Ensure pan_value matches mono_signal length
+                if len(pan_value) < len(mono_signal):
+                    # Pad with last value
+                    pan_value = np.pad(pan_value, (0, len(mono_signal) - len(pan_value)), 
+                                      mode='edge')
+                elif len(pan_value) > len(mono_signal):
+                    pan_value = pan_value[:len(mono_signal)]
+            else:
+                pan_value = track['pan']
+            
+            # Apply panning to create stereo
+            stereo_signal = self._apply_panning(mono_signal, pan_value)
+            track_outputs[track['name']] = stereo_signal
+        
+        return track_outputs
+    
+    def _apply_panning(self, mono_signal: np.ndarray, pan_value: Union[float, np.ndarray]) -> np.ndarray:
+        """
+        Apply equal-power panning to mono signal to create stereo output.
+        
+        Args:
+            mono_signal: 1D array of mono audio
+            pan_value: Scalar or 1D array of pan values from -1 (left) to 1 (right)
+        
+        Returns:
+            2D array of shape (num_samples, 2) with stereo audio
+        """
+        # Handle special cases for efficiency (no calculation needed)
+        is_scalar_pan = not isinstance(pan_value, np.ndarray)
+        
+        if is_scalar_pan:
+            if pan_value == -1:
+                # Full left
+                return np.stack([mono_signal, np.zeros_like(mono_signal)], axis=-1)
+            elif pan_value == 1:
+                # Full right
+                return np.stack([np.zeros_like(mono_signal), mono_signal], axis=-1)
+            elif pan_value == 0:
+                # Center - equal power means 0.707 in each channel
+                return np.stack([mono_signal * 0.7071067811865476, 
+                               mono_signal * 0.7071067811865476], axis=-1)
+        
+        # General case: equal-power panning
+        # Convert pan from [-1, 1] to [0, 1]
+        pan_normalized = (pan_value + 1) / 2
+        
+        # Equal power law using trigonometric functions
+        # At center, both channels are at sqrt(2)/2 ≈ 0.707
+        angle = pan_normalized * np.pi / 2
+        left_gain = np.cos(angle)
+        right_gain = np.sin(angle)
+        
+        # Apply gains
+        left_channel = mono_signal * left_gain
+        right_channel = mono_signal * right_gain
+        
+        return np.stack([left_channel, right_channel], axis=-1)
+    
+    def _do_render(self, num_samples=None, context=None, **params):
+        """
+        Render all tracks and mix them to stereo output.
+        Also caches track outputs in self.last_track_outputs for stem export.
+        
+        Returns:
+            2D array of shape (num_samples, 2) with mixed stereo audio
+        """
+        track_outputs = self.get_track_outputs(num_samples, context, **params)
+        
+        # Cache the track outputs for stem export
+        self.last_track_outputs = track_outputs
+        
+        # Check if all tracks are empty (finished rendering)
+        if all(len(output) == 0 for output in track_outputs.values()):
+            return np.array([], dtype=np.float32).reshape(0, 2)
+        
+        # Find the minimum length among non-empty tracks
+        non_empty_lengths = [len(output) for output in track_outputs.values() if len(output) > 0]
+        if not non_empty_lengths:
+            return np.array([], dtype=np.float32).reshape(0, 2)
+        
+        min_length = min(non_empty_lengths)
+        
+        # Mix all tracks together
+        # Start with zeros
+        mixed = np.zeros((min_length, 2), dtype=np.float32)
+        
+        for track_name, stereo_signal in track_outputs.items():
+            if len(stereo_signal) > 0:
+                # Truncate to min_length if needed
+                if len(stereo_signal) > min_length:
+                    stereo_signal = stereo_signal[:min_length]
+                mixed += stereo_signal
+        
+        return mixed
+
+
+TRACKS_DEFINITION = NodeDefinition(
+    name="tracks",
+    model=TracksNodeModel,
+    node=TracksNode
+)
