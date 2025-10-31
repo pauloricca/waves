@@ -166,29 +166,27 @@ envelope_trigger_test:
 # Test reset - sequencer resets to step 0 on bar
 sequencer_reset_test:
   tempo:
+    duration: 80
     bpm:
       osc:
-        freq: 1
-        range: [80, 100]
+        freq: 0.02
+        range: [100, 1000]
     signal:
       sequencer:
         trigger: beat_tick  # Advance fast
-        reset: bar_tick  # Reset on bar
+        # reset: bar_tick  # Reset on bar
         sequence:
-          - osc: { type: sin, freq: 220, amp: 0.2, duration: 0.2 }
-          - osc: { type: sin, freq: 247, amp: 0.2, duration: 0.2 }
-          - osc: { type: sin, freq: 277, amp: 0.2, duration: 0.2 }
-          - osc: { type: sin, freq: 330, amp: 0.2, duration: 0.2 }
-          - osc: { type: sin, freq: 370, amp: 0.2, duration: 0.2 }
-          - osc: { type: sin, freq: 415, amp: 0.2, duration: 0.2 }
-          - osc: { type: sin, freq: 440, amp: 0.2, duration: 0.2 }
-          - osc: { type: sin, freq: 415, amp: 0.2, duration: 0.2 }
-          - osc: { type: sin, freq: 440, amp: 0.2, duration: 0.2 }
-          - osc: { type: sin, freq: 415, amp: 0.2, duration: 0.2 }
-          - osc: { type: sin, freq: 440, amp: 0.2, duration: 0.2 }
-          - osc: { type: sin, freq: 415, amp: 0.2, duration: 0.2 }
-          - osc: { type: sin, freq: 440, amp: 0.2, duration: 0.2 }
-          - osc: { type: sin, freq: 4940, amp: 0.2, duration: 0.2 }
-        duration: 80
+          - osc:
+              type: sin
+              duration: 0.2
+              attack: 0.0002
+              release: 0.1
+              freq: 
+                - [350, 0.1]
+                - [50, 0.4]
+              amp:
+                hold:
+                  signal: rand([0.2, 0.5])
+        
 
 

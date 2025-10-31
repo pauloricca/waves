@@ -9,7 +9,7 @@ import json
 import os
 import time
 
-from config import MIDI_INPUT_DEVICES, MIDI_DEFAULT_DEVICE_KEY, DO_PERSIST_MIDI_CC_VALUES, MIDI_CC_SAVE_INTERVAL
+from config import MIDI_INPUT_DEVICES, MIDI_DEFAULT_DEVICE_KEY, DO_PERSIST_MIDI_CC_VALUES, MIDI_CC_SAVE_INTERVAL, MIDI_OUTPUT_DEVICE, MIDI_CLOCK_ENABLED
 
 
 # Debug settings
@@ -393,6 +393,210 @@ class MidiInputManager:
         if device_info:
             return device_info['queue']
         return None
+
+
+class MidiOutputManager:
+    """Singleton class for MIDI output, primarily for MIDI clock sync"""
+    
+    _instance = None
+    _lock = threading.Lock()
+    
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
+    
+    def __init__(self):
+        if self._initialized:
+            return
+            
+        self._initialized = True
+        self._outputs = []  # List of output ports
+        self._current_bpm = None
+        self._clock_enabled = False
+        self._samples_per_clock = None
+        self._sample_counter = 0
+        self._is_playing = False
+        
+        if MIDI_CLOCK_ENABLED:
+            self._initialize_outputs()
+    
+    def _initialize_outputs(self):
+        """Initialize all MIDI output devices"""
+        available_ports = mido.get_output_names()
+        
+        if not available_ports:
+            if MIDI_DEBUG:
+                print("Warning: No MIDI output devices available")
+            return
+        
+        # Open all available MIDI output ports
+        for port_name in available_ports:
+            try:
+                output = mido.open_output(port_name)
+                self._outputs.append(output)
+                if MIDI_DEBUG:
+                    print(f"Opened MIDI output: {port_name}")
+            except Exception as e:
+                if MIDI_DEBUG:
+                    print(f"Error opening MIDI output '{port_name}': {e}")
+    
+    def enable_clock(self, bpm: float):
+        """Enable MIDI clock output at the specified BPM"""
+        from config import SAMPLE_RATE
+        
+        if not self._outputs or not MIDI_CLOCK_ENABLED:
+            return
+        
+        self._current_bpm = bpm
+        self._clock_enabled = True
+        
+        # MIDI clock: 24 pulses per quarter note (PPQN)
+        # At 120 BPM: 120 beats/min = 2 beats/sec = 48 clocks/sec = 0.02083 sec/clock
+        # samples_per_clock = SAMPLE_RATE / (BPM / 60 * 24)
+        clocks_per_second = (bpm / 60.0) * 24.0
+        self._samples_per_clock = SAMPLE_RATE / clocks_per_second
+        self._sample_counter = 0
+        
+        # Send MIDI start message to all outputs
+        if not self._is_playing:
+            for output in self._outputs:
+                try:
+                    output.send(mido.Message('start'))
+                except Exception as e:
+                    if MIDI_DEBUG:
+                        print(f"Error sending MIDI start to {output.name}: {e}")
+            self._is_playing = True
+            if MIDI_DEBUG:
+                print(f"MIDI clock started at {bpm} BPM on {len(self._outputs)} device(s)")
+    
+    def disable_clock(self):
+        """Disable MIDI clock output"""
+        if not self._outputs:
+            return
+        
+        self._clock_enabled = False
+        
+        # Send MIDI stop message to all outputs
+        if self._is_playing:
+            for output in self._outputs:
+                try:
+                    output.send(mido.Message('stop'))
+                except Exception as e:
+                    if MIDI_DEBUG:
+                        print(f"Error sending MIDI stop to {output.name}: {e}")
+            self._is_playing = False
+            if MIDI_DEBUG:
+                print(f"MIDI clock stopped on {len(self._outputs)} device(s)")
+    
+    def update_bpm(self, bpm: float):
+        """Update BPM for MIDI clock (recalculates timing without stopping/starting)"""
+        from config import SAMPLE_RATE
+        
+        if not self._clock_enabled or not self._outputs:
+            return
+        
+        self._current_bpm = bpm
+        clocks_per_second = (bpm / 60.0) * 24.0
+        self._samples_per_clock = SAMPLE_RATE / clocks_per_second
+    
+    def process_samples(self, num_samples: int):
+        """Process a chunk of samples and send MIDI clock messages as needed"""
+        if not self._clock_enabled or not self._outputs or self._samples_per_clock is None:
+            return
+        
+        # Track how many samples we've processed and send clock messages accordingly
+        self._sample_counter += num_samples
+        
+        # Send clock messages for each full clock period that has passed
+        while self._sample_counter >= self._samples_per_clock:
+            for output in self._outputs:
+                try:
+                    output.send(mido.Message('clock'))
+                except Exception as e:
+                    if MIDI_DEBUG:
+                        print(f"Error sending MIDI clock to {output.name}: {e}")
+            
+            self._sample_counter -= self._samples_per_clock
+    
+    def shutdown(self):
+        """Clean shutdown: stop clock and close all outputs"""
+        self.disable_clock()
+        for output in self._outputs:
+            output.close()
+        self._outputs = []
+    
+    def _get_output(self, device_name: str = None):
+        """Get a specific output device by name, or use configured default"""
+        if device_name:
+            # Find output by name
+            for output in self._outputs:
+                if output.name == device_name:
+                    return output
+            if MIDI_DEBUG:
+                print(f"Warning: MIDI output device '{device_name}' not found")
+            return None
+        
+        # Use configured default device if specified
+        if MIDI_OUTPUT_DEVICE:
+            for output in self._outputs:
+                if output.name == MIDI_OUTPUT_DEVICE:
+                    return output
+        
+        # Fall back to first available output
+        if self._outputs:
+            return self._outputs[0]
+        
+        return None
+    
+    def send_note(self, device_name: str, channel: int, note: int, velocity: int, is_on: bool):
+        """Send a MIDI note on or note off message
+        
+        Args:
+            device_name: Name of MIDI device (None for default)
+            channel: MIDI channel (0-15)
+            note: MIDI note number (0-127)
+            velocity: Note velocity (0-127)
+            is_on: True for note on, False for note off
+        """
+        output = self._get_output(device_name)
+        if not output:
+            return
+        
+        try:
+            msg_type = 'note_on' if is_on else 'note_off'
+            msg = mido.Message(msg_type, channel=channel, note=note, velocity=velocity)
+            output.send(msg)
+            if MIDI_DEBUG:
+                print(f"MIDI {msg_type}: ch={channel} note={note} vel={velocity} -> {output.name}")
+        except Exception as e:
+            if MIDI_DEBUG:
+                print(f"Error sending MIDI note to {output.name}: {e}")
+    
+    def send_cc(self, device_name: str, channel: int, control: int, value: int):
+        """Send a MIDI CC (control change) message
+        
+        Args:
+            device_name: Name of MIDI device (None for default)
+            channel: MIDI channel (0-15)
+            control: CC number (0-127)
+            value: CC value (0-127)
+        """
+        output = self._get_output(device_name)
+        if not output:
+            return
+        
+        try:
+            msg = mido.Message('control_change', channel=channel, control=control, value=value)
+            output.send(msg)
+            if MIDI_DEBUG:
+                print(f"MIDI CC: ch={channel} cc={control} val={value} -> {output.name}")
+        except Exception as e:
+            if MIDI_DEBUG:
+                print(f"Error sending MIDI CC to {output.name}: {e}")
 
 
 def midi_note_to_frequency(note_number: int) -> float:

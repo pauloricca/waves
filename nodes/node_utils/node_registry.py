@@ -13,6 +13,7 @@ from nodes.non_realtime.invert import INVERT_DEFINITION
 from nodes.map import MAP_DEFINITION
 from nodes.midi import MIDI_DEFINITION
 from nodes.midi_cc import MIDI_CC_DEFINITION
+from nodes.midi_out import MIDI_OUT_DEFINITION
 from nodes.mix import MIX_DEFINITION
 from nodes.multiply import MULTIPLY_DEFINITION
 from nodes.oscillator import OSCILLATOR_DEFINITION
@@ -49,6 +50,7 @@ NODE_REGISTRY = [
     CONTEXT_DEFINITION,
     MIDI_DEFINITION,
     MIDI_CC_DEFINITION,
+    MIDI_OUT_DEFINITION,
     MIX_DEFINITION,
     MULTIPLY_DEFINITION,
     REFERENCE_DEFINITION,
