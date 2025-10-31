@@ -31,10 +31,20 @@ class MidiNode(BaseNode):
         self.device_key = model.device  # Store the device key
         
         # Persistent state for active notes (survives hot reload)
+        # Note: We store only the data, not the node instances - nodes are ephemeral
         if do_initialise_state:
-            self.state.active_notes = {}
+            self.state.active_notes = {}  # {note_id: {note_number, render_args, samples_rendered, is_in_sustain}}
             self.state.note_id_counter = 0
             self.state.note_number_to_ids = {}  # {note_number: [id1, id2, ...]}
+        
+        # Ephemeral: Node instances for active notes - recreated from state on hot reload
+        # Maps note_id -> sound_node instance
+        self.active_note_nodes = {}
+        
+        # Recreate node instances from state (for hot reload)
+        for note_id in self.state.active_notes.keys():
+            sound_node = self.instantiate_child_node(self.signal_model, "sounds", note_id)
+            self.active_note_nodes[note_id] = sound_node
         
         # Get the shared MIDI input manager
         self.midi_manager = MidiInputManager()
@@ -65,8 +75,12 @@ class MidiNode(BaseNode):
             oldest_note_data = self.state.active_notes[oldest_note_id]
             oldest_note_number = oldest_note_data['note_number']
             
-            # Remove it
+            # Remove it from state
             del self.state.active_notes[oldest_note_id]
+            
+            # Remove from ephemeral nodes
+            if oldest_note_id in self.active_note_nodes:
+                del self.active_note_nodes[oldest_note_id]
             
             # Clean up note_number_to_ids mapping
             if oldest_note_number in self.state.note_number_to_ids:
@@ -82,8 +96,9 @@ class MidiNode(BaseNode):
         note_index = self.state.note_id_counter
         self.state.note_id_counter += 1
 
-        # Create a new instance of the signal node for this note
+        # Create a new instance of the signal node for this note (ephemeral)
         sound_node = self.instantiate_child_node(self.signal_model, "sounds", note_index)
+        self.active_note_nodes[note_index] = sound_node
         
         # Setup render args - pass frequency and amplitude with aliases
         render_args = {
@@ -98,10 +113,9 @@ class MidiNode(BaseNode):
             'v': velocity_norm,  # Alias
         }
         
-        # Store the active note with unique ID
+        # Store the active note data (persistent state - no node objects)
         self.state.active_notes[note_index] = {
             'note_number': note_number,
-            'node': sound_node,
             'render_args': render_args,
             'samples_rendered': 0,
             'is_in_sustain': True
@@ -145,9 +159,15 @@ class MidiNode(BaseNode):
         
         for note_id, note_data in self.state.active_notes.items():
             note_number = note_data['note_number']
-            sound_node = note_data['node']
             render_args = note_data['render_args']
             is_in_sustain = note_data['is_in_sustain']
+            
+            # Get the node instance from the ephemeral dictionary
+            sound_node = self.active_note_nodes.get(note_id)
+            if sound_node is None:
+                # Node instance doesn't exist (shouldn't happen, but handle gracefully)
+                notes_to_remove.append((note_id, note_number))
+                continue
             
             # Merge render_args with params
             merged_params = self.get_params_for_children(params)
@@ -181,6 +201,10 @@ class MidiNode(BaseNode):
         for note_id, note_number in notes_to_remove:
             if note_id in self.state.active_notes:
                 del self.state.active_notes[note_id]
+            
+            # Also remove from ephemeral node instances
+            if note_id in self.active_note_nodes:
+                del self.active_note_nodes[note_id]
             
             # Clean up note_number_to_ids mapping
             if note_number in self.state.note_number_to_ids:

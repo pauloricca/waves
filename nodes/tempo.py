@@ -17,10 +17,19 @@ from nodes.wavable_value import WavableValue
 #     signal:
 #       expression:
 #         exp: "sin(t * tau / beat * 4) * 0.5"  # Oscillate 4 times per beat
+#
+# MIDI Clock Sync:
+#   tempo:
+#     source: external  # Get BPM from MIDI clock (default: internal)
+#     device: korg      # Optional: specify MIDI device key
+#     signal:
+#       # Your sound definition
 class TempoNodeModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     signal: BaseNodeModel  # The signal to render with tempo context
     bpm: Optional[WavableValue] = None  # BPM as WavableValue (scalar, expression, or node)
+    source: str = "internal"  # "internal" (use bpm param) or "external" (MIDI clock)
+    device: Optional[str] = None  # Optional MIDI device key for external sync
     is_pass_through: bool = True
 
 
@@ -28,9 +37,17 @@ class TempoNode(BaseNode):
     def __init__(self, model: TempoNodeModel, node_id: str, state=None, do_initialise_state=True):
         from nodes.node_utils.instantiate_node import instantiate_node
         from nodes.wavable_value import WavableValueNode, WavableValueModel
+        from nodes.node_utils.midi_utils import MidiInputManager
+        
         super().__init__(model, node_id, state, do_initialise_state)
         self.is_stereo = True  # Tempo is a pass-through node, supports stereo
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
+        self.source = model.source.lower()
+        self.device_key = model.device
+        
+        # Validate source parameter
+        if self.source not in ["internal", "external"]:
+            raise ValueError(f"Tempo source must be 'internal' or 'external', got '{self.source}'")
         
         # Wrap bpm in WavableValue if provided
         if model.bpm is not None:
@@ -38,29 +55,46 @@ class TempoNode(BaseNode):
         else:
             self.bpm_node = None
         
-        # TODO: Add MIDI clock support
-        # self.midi_clock_source = None
+        # Initialize MIDI manager for external sync
+        if self.source == "external":
+            self.midi_manager = MidiInputManager()
+
     
     def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
-        # Get BPM (from parameter or future MIDI clock)
-        if self.bpm_node is None:
-            # TODO: Get from MIDI clock when implemented
-            # For now, require explicit BPM
-            raise ValueError("Tempo node requires 'bpm' parameter (MIDI clock not yet implemented)")
-        
-        # Render BPM (handles scalars, expressions, and nodes)
-        num_samples_resolved = self.resolve_num_samples(num_samples)
-        if num_samples_resolved is None:
-            raise ValueError("Tempo node requires explicit duration")
-        
-        bpm_wave = self.bpm_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
-        
-        # Use first value if BPM is a wave (assume constant BPM for now)
-        # TODO: Support time-varying BPM in the future
-        bpm = float(bpm_wave[0]) if len(bpm_wave) > 0 else None
-        
-        if bpm is None:
-            raise ValueError("Tempo node: BPM evaluation returned no value")
+        # Get BPM based on source
+        if self.source == "external":
+            # Get BPM from MIDI clock
+            bpm = self.midi_manager.get_midi_clock_bpm(device_key=self.device_key)
+            
+            if bpm is None:
+                # No MIDI clock received yet
+                # Fall back to bpm parameter if provided
+                if self.bpm_node is not None:
+                    num_samples_resolved = self.resolve_num_samples(num_samples)
+                    if num_samples_resolved is None:
+                        raise ValueError("Tempo node requires explicit duration")
+                    
+                    bpm_wave = self.bpm_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+                    bpm = float(bpm_wave[0]) if len(bpm_wave) > 0 else None
+                    
+                    if bpm is None:
+                        raise ValueError("Tempo node: No MIDI clock available and BPM parameter evaluation returned no value")
+                else:
+                    raise ValueError("Tempo node: No MIDI clock available and no BPM parameter provided")
+        else:
+            # Internal source: use bpm parameter
+            if self.bpm_node is None:
+                raise ValueError("Tempo node with source='internal' requires 'bpm' parameter")
+            
+            num_samples_resolved = self.resolve_num_samples(num_samples)
+            if num_samples_resolved is None:
+                raise ValueError("Tempo node requires explicit duration")
+            
+            bpm_wave = self.bpm_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+            bpm = float(bpm_wave[0]) if len(bpm_wave) > 0 else None
+            
+            if bpm is None:
+                raise ValueError("Tempo node: BPM evaluation returned no value")
         
         # Calculate tempo-related values (assuming 4/4 time signature)
         # In 4/4: 1 bar = 4 beats

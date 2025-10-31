@@ -45,6 +45,10 @@ class MidiInputManager:
         # Track last MIDI message for display: (device_key, message_type, channel, data1, data2)
         self._last_message = None
         
+        # MIDI Clock tracking (per device)
+        # device_key -> {bpm, last_clock_time, clock_count, clock_times}
+        self._clock_state = {}
+        
         self._initialize_devices()
         
         if DO_PERSIST_MIDI_CC_VALUES:
@@ -112,6 +116,13 @@ class MidiInputManager:
                 'cc_values': {},  # (channel, cc_number) -> value
                 'cc_values_dirty': False,
                 'device_name': device_name
+            }
+            # Initialize clock state for this device
+            self._clock_state[device_key] = {
+                'bpm': None,
+                'last_clock_time': None,
+                'clock_count': 0,
+                'clock_times': []  # Rolling buffer for BPM calculation
             }
             if MIDI_DEBUG:
                 print(f"Opened MIDI device '{device_key}': {device_name}")
@@ -227,6 +238,20 @@ class MidiInputManager:
         device_info = self._devices.get(device_key)
         if not device_info:
             return
+        
+        # Handle MIDI clock messages for tempo sync
+        if message.type == 'clock':
+            self._handle_clock_message(device_key)
+        elif message.type == 'start':
+            # Reset clock on MIDI start
+            clock_state = self._clock_state.get(device_key)
+            if clock_state:
+                clock_state['clock_count'] = 0
+                clock_state['clock_times'] = []
+                clock_state['last_clock_time'] = None
+        elif message.type == 'stop':
+            # Could handle stop if needed
+            pass
             
         # Store CC values in device-specific dict for efficient lookup
         if message.type == 'control_change':
@@ -241,6 +266,69 @@ class MidiInputManager:
         
         # Also put in queue for backwards compatibility with nodes that want all messages
         device_info['queue'].put(message)
+    
+    def _handle_clock_message(self, device_key):
+        """Handle MIDI clock message and calculate BPM.
+        
+        MIDI sends 24 clock pulses per quarter note (beat).
+        By measuring the time between clock pulses, we can calculate BPM.
+        """
+        clock_state = self._clock_state.get(device_key)
+        if not clock_state:
+            return
+        
+        current_time = time.time()
+        
+        # Track clock times for averaging
+        if clock_state['last_clock_time'] is not None:
+            clock_state['clock_times'].append(current_time - clock_state['last_clock_time'])
+            
+            # Keep only the last 24 clock intervals (one beat) for averaging
+            if len(clock_state['clock_times']) > 24:
+                clock_state['clock_times'].pop(0)
+            
+            # Calculate BPM from average clock interval
+            # 24 clocks per beat, so 1 beat = average_interval * 24
+            if len(clock_state['clock_times']) >= 12:  # Need at least half a beat of data
+                avg_interval = sum(clock_state['clock_times']) / len(clock_state['clock_times'])
+                beat_duration = avg_interval * 24  # seconds per beat
+                bpm = 60.0 / beat_duration  # beats per minute
+                clock_state['bpm'] = bpm
+                
+                if MIDI_DEBUG:
+                    print(f"MIDI Clock BPM: {bpm:.1f}")
+        
+        clock_state['last_clock_time'] = current_time
+        clock_state['clock_count'] += 1
+    
+    def get_midi_clock_bpm(self, device_key=None):
+        """Get the current BPM from MIDI clock messages.
+        
+        Args:
+            device_key: Optional device key (from config). If None, uses default device.
+            
+        Returns:
+            The current BPM as a float, or None if no clock has been received yet
+        """
+        device_info = self._get_device(device_key)
+        if not device_info:
+            return None
+        
+        # Get the actual device_key that was selected
+        actual_device_key = None
+        for key, info in self._devices.items():
+            if info == device_info:
+                actual_device_key = key
+                break
+        
+        if actual_device_key is None:
+            return None
+        
+        clock_state = self._clock_state.get(actual_device_key)
+        if clock_state:
+            return clock_state['bpm']
+        return None
+
     
     def get_cc_value(self, channel, cc_number, device_key=None):
         """Get the current value for a specific CC on a specific channel.
