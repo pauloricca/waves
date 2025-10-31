@@ -1,3 +1,4 @@
+import math
 import numpy as np
 from config import SAMPLE_RATE
 from random import uniform, choice
@@ -21,6 +22,10 @@ GLOBAL_CONSTANTS = {
     'pi': np.pi,
     'tau': 2 * np.pi,
     'e': np.e,
+    'inf': math.inf,
+    'infinite': math.inf,
+    'infinity': math.inf,
+    
 
     'rand': rand,
     

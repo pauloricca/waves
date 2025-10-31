@@ -5,7 +5,7 @@ from config import SAMPLE_RATE, OSC_ENVELOPE_TYPE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
-from utils import empty_mono, time_to_samples
+from utils import empty_mono, time_to_samples, detect_triggers
 
 
 class EnvelopeModel(BaseNodeModel):
@@ -14,6 +14,7 @@ class EnvelopeModel(BaseNodeModel):
     sustain: Union[float, str] = 1.0 # sustain level (0 to 1) (or expression)
     release: Union[float, str] = 0 # length of release in seconds (or expression)
     gate: Optional[WavableValue] = 1.0 # gate signal (>= 0.5 = on, < 0.5 = trigger release)
+    trigger: Optional[WavableValue] = None # trigger signal (0→1 crossing retriggers envelope)
     signal: BaseNodeModel = None # If none, uses a constant signal of 1.0, effectively making it a simple envelope generator
     end: bool | None = None # if True, return empty array after release is complete (signals parent to stop rendering)
 
@@ -24,6 +25,7 @@ class EnvelopeNode(BaseNode):
         self.model = model
         self.signal_node = self.instantiate_child_node(model.signal, "signal") if model.signal is not None else None
         self.gate_node = self.instantiate_child_node(model.gate, "gate") if model.gate is not None else None
+        self.trigger_node = self.instantiate_child_node(model.trigger, "trigger") if model.trigger is not None else None
 
         # If no gate or end is defined, set end to True for envelope completion
         if model.end is None:
@@ -43,6 +45,7 @@ class EnvelopeNode(BaseNode):
             self.state.current_amplitude = 0.0  # Track actual current amplitude for smooth release
             self.state.previous_gate_state = True  # Track previous gate state for retrigger detection
             self.state.sustain_duration_samples = None  # For duration-based envelopes (drums)
+            self.state.last_trigger_value = 0.0  # For trigger edge detection
 
     def _do_render(self, num_samples, context=None, num_channels=1, **params):
         # Evaluate expression parameters
@@ -50,6 +53,20 @@ class EnvelopeNode(BaseNode):
         decay = self.eval_scalar(self.model.decay, context, **params)
         sustain = self.eval_scalar(self.model.sustain, context, **params)
         release = self.eval_scalar(self.model.release, context, **params)
+        
+        # Check for trigger events
+        should_retrigger = False
+        if self.trigger_node is not None:
+            trigger_wave = self.trigger_node.render(num_samples, context, **self.get_params_for_children(params))
+            if len(trigger_wave) < num_samples:
+                trigger_wave = np.pad(trigger_wave, (0, num_samples - len(trigger_wave)))
+            elif len(trigger_wave) > num_samples:
+                trigger_wave = trigger_wave[:num_samples]
+            trigger_indices, self.state.last_trigger_value = detect_triggers(trigger_wave, self.state.last_trigger_value)
+            
+            # If any triggers detected, retrigger the envelope
+            if len(trigger_indices) > 0:
+                should_retrigger = True
         
         # Check gate state to determine if we should start release or retrigger
         if self.gate_node is not None:
@@ -60,8 +77,8 @@ class EnvelopeNode(BaseNode):
             # This way we track where we end up, not where we started
             current_gate_high = gate[-1] >= 0.5 if isinstance(gate, np.ndarray) else gate >= 0.5
             
-            # Detect retrigger: gate went from low to high  
-            if not self.state.previous_gate_state and current_gate_high:
+            # Detect retrigger: gate went from low to high OR explicit trigger signal
+            if (not self.state.previous_gate_state and current_gate_high) or should_retrigger:
                 # Retrigger! Reset envelope to attack phase
                 # Store the current envelope value to start the new attack from
                 retrigger_start_amplitude = self.state.current_amplitude

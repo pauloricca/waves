@@ -1,0 +1,194 @@
+modulation:
+  tracks:
+    screech:
+      osc:
+        freq:
+          midi_cc:
+            cc: 16
+            range: 
+              - 0
+              - osc:
+                  type: saw
+                  amp:
+                    midi_cc:
+                      cc: 3
+                  freq:
+                    midi_cc:
+                      cc: 0
+                      range: [0, 200]
+                  range: [0, 10000]
+        phase:
+          osc:
+            type: tri
+            amp:
+              automation:
+                interval:
+                  osc:
+                    freq: .5
+                    range: [0.001, 0.5]
+                mode: ramp
+                steps:
+                  - 0
+                  - 1
+                  - 
+                  - 0
+                  - .5
+                  - 0
+            freq:
+              midi_cc:
+                cc: 17
+                range: [0, 5000]
+            phase:
+              osc:
+                type: sin
+                amp:
+                  automation:
+                    interval: .5
+                    mode: ramp
+                    steps:
+                      - 0
+                      - 0.5
+                      - 0
+                      - 1
+                      - 0
+                      - 0
+                freq:
+                  midi_cc:
+                    cc: 18
+                    range: [0, 10000]
+
+# Test MIDI clock sync - oscillator synced to external MIDI tempo
+midi_clock_test:
+  tempo:
+    source: external  # Get BPM from MIDI clock
+    bpm: 120          # Fallback if no MIDI clock available
+    signal:
+      expression:
+        exp: "sin(t * tau / beat) * 0.3"  # Sine wave at tempo beat rate
+        duration: 10
+
+# Test spawn node - trigger a kick sound on each beat
+spawn_test:
+  tempo:
+    bpm: 120
+    signal:
+      spawn:
+        trigger: beat_tick  # Trigger on each beat
+        signal:
+          envelope:
+            attack: 0.001
+            decay: 0.3
+            sustain: 0
+            release: 0.1
+            end: true
+            signal:
+              osc:
+                type: sin
+                freq: 
+                  - [150, 0.1]
+                  - 50
+                amp:
+                  hold:
+                    signal: rand([0.2, 0.5])
+        duration: 8
+
+# Test sequencer with triggers - advance steps on beat
+sequencer_trigger_test:
+  tempo:
+    bpm: 50
+    signal:
+      sequencer:
+        trigger: beat_tick  # Advance step on each beat
+        repeat: 1
+        sequence:
+          - osc:
+              type: sin
+              freq: 2200
+              duration: 0.2
+              amp: 0.3
+          - osc:
+              type: sin
+              freq: 330
+              duration: 0.2
+              amp: 0.3
+          - osc:
+              type: sin
+              freq: 440
+              duration: 0.2
+              amp: 0.3
+          - osc:
+              type: sin
+              freq: 550
+              duration: 0.2
+              amp: 0.3
+        duration: 30
+
+# Test automation with triggers - advance automation step on eighth notes
+automation_trigger_test:
+  tempo:
+    bpm: 120
+    signal:
+      osc:
+        type: sin
+        freq:
+          automation:
+            trigger: eighth_tick  # Advance on eighth notes
+            mode: step
+            repeat: 1
+            steps:
+              - 2200  # A3
+              - 330  # E4
+              - 440  # A4
+              - 550  # C#5
+              - 660  # E5
+              - 1880  # A5
+        amp: 0.3
+        duration: 60
+
+# Test envelope with trigger - retrigger envelope on beat
+envelope_trigger_test:
+  tempo:
+    bpm: 120
+    signal:
+      envelope:
+        trigger: beat_tick  # Retrigger on each beat
+        attack: 0.01
+        decay: 0.2
+        sustain: 0.3
+        release: 0.1
+        signal:
+          osc:
+            type: saw
+            freq: 110
+            amp: 0.4
+        duration: 4
+
+# Test reset - sequencer resets to step 0 on bar
+sequencer_reset_test:
+  tempo:
+    bpm:
+      osc:
+        freq: 1
+        range: [80, 100]
+    signal:
+      sequencer:
+        trigger: beat_tick  # Advance fast
+        reset: bar_tick  # Reset on bar
+        sequence:
+          - osc: { type: sin, freq: 220, amp: 0.2, duration: 0.2 }
+          - osc: { type: sin, freq: 247, amp: 0.2, duration: 0.2 }
+          - osc: { type: sin, freq: 277, amp: 0.2, duration: 0.2 }
+          - osc: { type: sin, freq: 330, amp: 0.2, duration: 0.2 }
+          - osc: { type: sin, freq: 370, amp: 0.2, duration: 0.2 }
+          - osc: { type: sin, freq: 415, amp: 0.2, duration: 0.2 }
+          - osc: { type: sin, freq: 440, amp: 0.2, duration: 0.2 }
+          - osc: { type: sin, freq: 415, amp: 0.2, duration: 0.2 }
+          - osc: { type: sin, freq: 440, amp: 0.2, duration: 0.2 }
+          - osc: { type: sin, freq: 415, amp: 0.2, duration: 0.2 }
+          - osc: { type: sin, freq: 440, amp: 0.2, duration: 0.2 }
+          - osc: { type: sin, freq: 415, amp: 0.2, duration: 0.2 }
+          - osc: { type: sin, freq: 440, amp: 0.2, duration: 0.2 }
+          - osc: { type: sin, freq: 4940, amp: 0.2, duration: 0.2 }
+        duration: 80
+
+

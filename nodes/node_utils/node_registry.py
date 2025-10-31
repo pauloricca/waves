@@ -23,6 +23,7 @@ from nodes.sequencer import SEQUENCER_DEFINITION
 from nodes.shuffle import SHUFFLE_DEFINITION
 from nodes.smooth import SMOOTH_DEFINITION
 from nodes.snap import SNAP_DEFINITION
+from nodes.spawn import SPAWN_DEFINITION
 from nodes.stereo import STEREO_DEFINITION
 from nodes.tempo import TEMPO_DEFINITION
 from nodes.tracks import TRACKS_DEFINITION
@@ -39,6 +40,7 @@ NODE_REGISTRY = [
     SMOOTH_DEFINITION,
     SNAP_DEFINITION,
     SELECT_DEFINITION,
+    SPAWN_DEFINITION,
     TEMPO_DEFINITION,
     INVERT_DEFINITION,
     SAMPLE_DEFINITION,

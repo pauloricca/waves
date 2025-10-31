@@ -8,6 +8,43 @@ from scipy.io import wavfile
 
 from config import *
 
+
+def detect_triggers(trigger_wave: np.ndarray, last_value: float, threshold: float = 0.5) -> tuple[list[int], float]:
+    """
+    Detect 0→1 crossings (triggers) in a wave signal.
+    
+    Args:
+        trigger_wave: NumPy array to analyze for triggers
+        last_value: The last value from the previous chunk (for edge detection across chunks)
+        threshold: Threshold value for detecting crossings (default: 0.5)
+    
+    Returns:
+        A tuple of (trigger_indices, new_last_value) where:
+        - trigger_indices: List of sample indices where triggers occurred in this chunk
+        - new_last_value: The last value in this chunk (to pass to next call)
+    
+    A trigger is detected when the value crosses the threshold from below to above.
+    """
+    triggers = []
+    
+    if len(trigger_wave) == 0:
+        return triggers, last_value
+    
+    # Check first sample against last value from previous chunk
+    if last_value < threshold and trigger_wave[0] >= threshold:
+        triggers.append(0)
+    
+    # Check for crossings within the chunk
+    for i in range(1, len(trigger_wave)):
+        if trigger_wave[i-1] < threshold and trigger_wave[i] >= threshold:
+            triggers.append(i)
+    
+    # Return the last value for next chunk
+    new_last_value = trigger_wave[-1]
+    
+    return triggers, new_last_value
+
+
 def play(wave):
     wave = np.clip(wave, -1, 1)
     sd.play(wave, samplerate=SAMPLE_RATE, blocking=True)

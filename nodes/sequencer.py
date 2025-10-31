@@ -1,4 +1,5 @@
 from __future__ import annotations
+import math
 from typing import List, Optional, Union
 import numpy as np
 from pydantic import ConfigDict
@@ -7,16 +8,18 @@ from sound_library import get_sound_model
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
-from utils import look_for_duration, empty_mono, time_to_samples, samples_to_time
+from utils import look_for_duration, empty_mono, time_to_samples, samples_to_time, detect_triggers
 
 
 class SequencerModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     interval: WavableValue = 0
-    repeat: int = 1
+    repeat: int = math.inf
     sequence: Optional[List[Union[BaseNodeModel, str, List[Union[str, BaseNodeModel]], None]]] = None
     chain: Optional[List[Union[str, BaseNodeModel]]] = None
     swing: WavableValue = 0
+    trigger: Optional[WavableValue] = None  # Optional trigger signal to advance steps
+    reset: Optional[WavableValue] = None  # Optional reset signal to reset to step 0
 
 
 class SequencerNode(BaseNode):
@@ -30,15 +33,22 @@ class SequencerNode(BaseNode):
         self.interval_node = self.instantiate_child_node(model.interval, "interval")
         self.swing_node = self.instantiate_child_node(model.swing, "swing")
         
+        # Optional trigger and reset nodes
+        self.trigger_node = self.instantiate_child_node(model.trigger, "trigger") if model.trigger is not None else None
+        self.reset_node = self.instantiate_child_node(model.reset, "reset") if model.reset is not None else None
+        
         # Persistent state for realtime playback (survives hot reload)
         if do_initialise_state:
             self.state.current_repeat = 0
             self.state.current_step = 0
+            self.state.next_step_to_trigger = 0  # In trigger mode, the next step that will be triggered
             self.state.time_in_current_step = 0  # Time elapsed in current step (seconds)
             self.state.all_active_sounds = []  # List of (sound_node, render_args, sound_duration, samples_rendered, step_index) tuples
             self.state.step_triggered = set()  # Set of (repeat, step) tuples that have been triggered
             self.state.sequence_complete = False  # Flag to indicate when sequence playback is done
             self.state.sound_instance_counter = 0  # Counter for unique sound instances
+            self.state.last_trigger_value = 0.0  # For trigger edge detection
+            self.state.last_reset_value = 0.0  # For reset edge detection
         
         # Non-persistent attributes
         self._last_chunk_samples = None
@@ -145,9 +155,37 @@ class SequencerNode(BaseNode):
         interval_wave = self.interval_node.render(num_samples_resolved, context, num_channels, **self.get_params_for_children(params))
         swing_wave = self.swing_node.render(num_samples_resolved, context, num_channels, **self.get_params_for_children(params))
         # Use first value if interval/swing is a wave (assume constant for now)
-        interval = float(interval_wave[0]) if len(interval_wave) > 0 else 0.0
-        swing = float(swing_wave[0]) if len(swing_wave) > 0 else 0.0
+        # Handle both mono and stereo arrays
+        if isinstance(interval_wave, np.ndarray) and interval_wave.ndim > 1:
+            interval = float(interval_wave[0, 0]) if interval_wave.size > 0 else 0.0
+        else:
+            interval = float(interval_wave[0]) if len(interval_wave) > 0 else 0.0
+        
+        if isinstance(swing_wave, np.ndarray) and swing_wave.ndim > 1:
+            swing = float(swing_wave[0, 0]) if swing_wave.size > 0 else 0.0
+        else:
+            swing = float(swing_wave[0]) if len(swing_wave) > 0 else 0.0
         swing = np.clip(swing, -1.0, 1.0)  # Ensure swing is in valid range
+        
+        # Render trigger and reset signals if provided
+        trigger_indices = []
+        reset_indices = []
+        
+        if self.trigger_node is not None:
+            trigger_wave = self.trigger_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+            if len(trigger_wave) < num_samples_resolved:
+                trigger_wave = np.pad(trigger_wave, (0, num_samples_resolved - len(trigger_wave)))
+            elif len(trigger_wave) > num_samples_resolved:
+                trigger_wave = trigger_wave[:num_samples_resolved]
+            trigger_indices, self.state.last_trigger_value = detect_triggers(trigger_wave, self.state.last_trigger_value)
+        
+        if self.reset_node is not None:
+            reset_wave = self.reset_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+            if len(reset_wave) < num_samples_resolved:
+                reset_wave = np.pad(reset_wave, (0, num_samples_resolved - len(reset_wave)))
+            elif len(reset_wave) > num_samples_resolved:
+                reset_wave = reset_wave[:num_samples_resolved]
+            reset_indices, self.state.last_reset_value = detect_triggers(reset_wave, self.state.last_reset_value)
         
         sequence = self.sequence or self.chain
         if not sequence:
@@ -163,7 +201,54 @@ class SequencerNode(BaseNode):
             output_wave = np.zeros(num_samples, dtype=np.float32)
         samples_written = 0
         
+        # Track which triggers we've processed this chunk
+        processed_triggers = set()
+        processed_resets = set()
+        
         while samples_written < num_samples:
+            # Determine if we're using trigger mode (has trigger input) or interval mode
+            using_trigger_mode = self.trigger_node is not None
+            
+            # Process reset triggers at the current sample position
+            for reset_idx in reset_indices:
+                if reset_idx == samples_written and reset_idx not in processed_resets:
+                    # Reset to step 0
+                    self.state.current_step = 0
+                    self.state.next_step_to_trigger = 0
+                    self.state.current_repeat = 0
+                    self.state.time_in_current_step = 0
+                    self.state.sequence_complete = False
+                    self.state.step_triggered = set()  # Clear triggered steps so they can trigger again
+                    processed_resets.add(reset_idx)
+            
+            # Process step triggers at the current sample position
+            for trigger_idx in trigger_indices:
+                if trigger_idx == samples_written and trigger_idx not in processed_triggers:
+                    # In trigger mode: trigger the next step and advance
+                    step_to_trigger = self.state.next_step_to_trigger
+                    
+                    # Trigger sounds for this step
+                    step_key = (self.state.current_repeat, step_to_trigger)
+                    if step_key not in self.state.step_triggered:
+                        new_sounds = self.create_sound_nodes_for_step(step_to_trigger, **params)
+                        self.state.all_active_sounds.extend(new_sounds)
+                        self.state.step_triggered.add(step_key)
+                    
+                    # Advance to next step
+                    self.state.next_step_to_trigger += 1
+                    self.state.current_step = step_to_trigger  # Update current_step to match what was just triggered
+                    self.state.time_in_current_step = 0
+                    processed_triggers.add(trigger_idx)
+                    
+                    # Check if we've now completed the sequence
+                    if self.state.next_step_to_trigger >= len(sequence):
+                        # We've finished the sequence steps - loop back immediately
+                        self.state.current_repeat += 1
+                        self.state.next_step_to_trigger = 0
+                        self.state.time_in_current_step = 0
+                        # Reset triggered steps for new repeat (but keep active sounds playing)
+                        self.state.step_triggered = set()
+            
             # Check if we've completed all repeats
             if self.state.current_repeat >= self.repeat:
                 self.state.sequence_complete = True
@@ -179,33 +264,39 @@ class SequencerNode(BaseNode):
                     return output_wave[:samples_written]
                 # Continue to render active sounds below
             
-            # Check if we've completed the sequence (but haven't finished all repeats)
-            elif self.state.current_step >= len(sequence):
-                # We've finished the sequence steps - loop back immediately
-                self.state.current_repeat += 1
-                self.state.current_step = 0
-                self.state.time_in_current_step = 0
-                # Reset triggered steps for new repeat (but keep active sounds playing)
-                self.state.step_triggered = set()
-                if self.state.current_repeat >= self.repeat:
-                    self.state.sequence_complete = True
-                continue
-            
-            # Define step_key for tracking
-            step_key = (self.state.current_repeat, self.state.current_step)
-            
-            # Check if we need to trigger new sounds for the current step (only if not complete)
-            if not self.state.sequence_complete:
-                if step_key not in self.state.step_triggered:
-                    # Trigger sounds for this step
-                    new_sounds = self.create_sound_nodes_for_step(self.state.current_step, **params)
-                    self.state.all_active_sounds.extend(new_sounds)
-                    self.state.step_triggered.add(step_key)
+            # In interval mode: check if we've completed the sequence and handle step advancement
+            if not using_trigger_mode:
+                # Check if we've completed the sequence (but haven't finished all repeats)
+                if self.state.current_step >= len(sequence):
+                    # We've finished the sequence steps - loop back immediately
+                    self.state.current_repeat += 1
+                    self.state.current_step = 0
+                    self.state.time_in_current_step = 0
+                    # Reset triggered steps for new repeat (but keep active sounds playing)
+                    self.state.step_triggered = set()
+                    if self.state.current_repeat >= self.repeat:
+                        self.state.sequence_complete = True
+                    continue
+                
+                # Define step_key for tracking
+                step_key = (self.state.current_repeat, self.state.current_step)
+                
+                # Check if we need to trigger new sounds for the current step (only if not complete)
+                if not self.state.sequence_complete:
+                    if step_key not in self.state.step_triggered:
+                        # Trigger sounds for this step
+                        new_sounds = self.create_sound_nodes_for_step(self.state.current_step, **params)
+                        self.state.all_active_sounds.extend(new_sounds)
+                        self.state.step_triggered.add(step_key)
             
             # Calculate how much time is left in this chunk
             remaining_samples = num_samples - samples_written
             
-            if self.sequence and not self.state.sequence_complete:
+            # Determine if we're using trigger mode (has trigger input) or interval mode
+            using_trigger_mode = self.trigger_node is not None
+            
+            if self.sequence and not self.state.sequence_complete and not using_trigger_mode:
+                # For sequence mode with interval: calculate based on interval with swing
                 # For sequence mode: calculate based on interval with swing
                 # Apply swing to odd steps (step % 2 == 1)
                 current_interval = interval
@@ -225,14 +316,31 @@ class SequencerNode(BaseNode):
                 step_remaining_time = current_interval - self.state.time_in_current_step
                 step_remaining_samples = time_to_samples(step_remaining_time )
                 samples_to_render = min(remaining_samples, step_remaining_samples)
+            elif using_trigger_mode:
+                # In trigger mode: render up to the next trigger (or reset) position, or to the end if none
+                next_trigger_pos = None
+                for trigger_idx in trigger_indices:
+                    if trigger_idx > samples_written:
+                        next_trigger_pos = trigger_idx
+                        break
+                for reset_idx in reset_indices:
+                    if reset_idx > samples_written:
+                        if next_trigger_pos is None or reset_idx < next_trigger_pos:
+                            next_trigger_pos = reset_idx
+                
+                if next_trigger_pos is not None:
+                    samples_to_render = next_trigger_pos - samples_written
+                else:
+                    samples_to_render = remaining_samples
             else:
                 # For chain mode or when sequence is complete: render all remaining samples
                 samples_to_render = remaining_samples
+            
             # Safeguard: if samples_to_render is 0 due to rounding, advance to next step
             # This can happen when time_in_current_step is very close to interval
             if samples_to_render <= 0:
-                if self.sequence and not self.state.sequence_complete:
-                    # Calculate current interval with swing
+                if self.sequence and not self.state.sequence_complete and not using_trigger_mode:
+                    # Calculate current interval with swing (only for interval mode)
                     current_interval = interval
                     if self.state.current_step % 2 == 1:
                         swing_factor = 1.0 + (swing * 0.5)
@@ -323,10 +431,13 @@ class SequencerNode(BaseNode):
             else:
                 output_wave[samples_written:samples_written + samples_to_render] = step_wave
             samples_written += samples_to_render
-            self.state.time_in_current_step += samples_to_time(samples_to_render)
             
-            # Check if we should advance to next step for sequence mode
-            if self.sequence and not self.state.sequence_complete:
+            # Only update time tracking if we're in interval mode (not trigger mode)
+            if not using_trigger_mode:
+                self.state.time_in_current_step += samples_to_time(samples_to_render)
+            
+            # Check if we should advance to next step for sequence mode (only in interval mode)
+            if self.sequence and not self.state.sequence_complete and not using_trigger_mode:
                 # Calculate current interval with swing
                 current_interval = interval
                 if self.state.current_step % 2 == 1:

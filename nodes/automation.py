@@ -63,11 +63,12 @@ freq:
 
 from __future__ import annotations
 from enum import Enum
+import math
 from typing import List, Optional
 import numpy as np
 from pydantic import ConfigDict
 from config import SAMPLE_RATE
-from utils import time_to_samples, samples_to_time, get_last_or_default
+from utils import time_to_samples, samples_to_time, get_last_or_default, detect_triggers
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
@@ -85,8 +86,10 @@ class AutomationModel(BaseNodeModel):
     interval: WavableValue = 1.0
     mode: AutomationMode = AutomationMode.STEP
     overlap: float = 0.1  # Crossfade time in seconds for overlap mode
-    repeat: int = 1
+    repeat: int = math.inf
     swing: WavableValue = 0
+    trigger: Optional[WavableValue] = None  # Optional trigger signal to advance steps
+    reset: Optional[WavableValue] = None  # Optional reset signal to reset to step 0
 
 
 class AutomationNode(BaseNode):
@@ -100,18 +103,25 @@ class AutomationNode(BaseNode):
         # Create interval and swing nodes
         self.interval_node = self.instantiate_child_node(model.interval, "interval")
         self.swing_node = self.instantiate_child_node(model.swing, "swing")
+        
+        # Optional trigger and reset nodes
+        self.trigger_node = self.instantiate_child_node(model.trigger, "trigger") if model.trigger is not None else None
+        self.reset_node = self.instantiate_child_node(model.reset, "reset") if model.reset is not None else None
 
         
         # Persistent state for realtime playback (survives hot reload)
         if do_initialise_state:
             self.state.current_repeat = 0
             self.state.current_step = 0
+            self.state.next_step_to_trigger = 0  # In trigger mode, the next step that will be triggered
             self.state.time_in_current_step = 0  # Time elapsed in current step (seconds)
             self.state.sequence_complete = False
             # For overlap mode, track the previous step's output for crossfading
             self.state.prev_step_buffer = None  # Buffer to store previous step's output during crossfade
             self.state.prev_step_index = None
             self.state.crossfade_progress = 0  # Samples rendered in current crossfade
+            self.state.last_trigger_value = 0.0  # For trigger edge detection
+            self.state.last_reset_value = 0.0  # For reset edge detection
 
         self.step_nodes = []
         for step_index, step_value in enumerate(model.steps):
@@ -159,9 +169,37 @@ class AutomationNode(BaseNode):
         # Get interval and swing values
         interval_wave = self.interval_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
         swing_wave = self.swing_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
-        interval = float(interval_wave[0]) if len(interval_wave) > 0 else 1.0
-        swing = float(swing_wave[0]) if len(swing_wave) > 0 else 0.0
+        # Handle both mono and stereo arrays
+        if isinstance(interval_wave, np.ndarray) and interval_wave.ndim > 1:
+            interval = float(interval_wave[0, 0]) if interval_wave.size > 0 else 1.0
+        else:
+            interval = float(interval_wave[0]) if len(interval_wave) > 0 else 1.0
+        
+        if isinstance(swing_wave, np.ndarray) and swing_wave.ndim > 1:
+            swing = float(swing_wave[0, 0]) if swing_wave.size > 0 else 0.0
+        else:
+            swing = float(swing_wave[0]) if len(swing_wave) > 0 else 0.0
         swing = np.clip(swing, -1.0, 1.0)  # Ensure swing is in valid range
+        
+        # Render trigger and reset signals if provided
+        trigger_indices = []
+        reset_indices = []
+        
+        if self.trigger_node is not None:
+            trigger_wave = self.trigger_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+            if len(trigger_wave) < num_samples_resolved:
+                trigger_wave = np.pad(trigger_wave, (0, num_samples_resolved - len(trigger_wave)))
+            elif len(trigger_wave) > num_samples_resolved:
+                trigger_wave = trigger_wave[:num_samples_resolved]
+            trigger_indices, self.state.last_trigger_value = detect_triggers(trigger_wave, self.state.last_trigger_value)
+        
+        if self.reset_node is not None:
+            reset_wave = self.reset_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+            if len(reset_wave) < num_samples_resolved:
+                reset_wave = np.pad(reset_wave, (0, num_samples_resolved - len(reset_wave)))
+            elif len(reset_wave) > num_samples_resolved:
+                reset_wave = reset_wave[:num_samples_resolved]
+            reset_indices, self.state.last_reset_value = detect_triggers(reset_wave, self.state.last_reset_value)
         
         if len(self.step_nodes) == 0:
             return np.zeros(num_samples_resolved, dtype=np.float32)
@@ -170,9 +208,56 @@ class AutomationNode(BaseNode):
         samples_written = 0
         samples_per_step = time_to_samples(interval )
         
+        # Track which triggers we've processed this chunk
+        processed_triggers = set()
+        processed_resets = set()
+        
+        # Determine if we're using trigger mode (has trigger input) or interval mode
+        using_trigger_mode = self.trigger_node is not None
+        
         while samples_written < num_samples_resolved:
-            # Check if we've completed the current repeat
-            if self.state.current_step >= len(self.step_nodes):
+            # Process reset triggers at the current sample position
+            for reset_idx in reset_indices:
+                if reset_idx == samples_written and reset_idx not in processed_resets:
+                    # Reset to step 0
+                    self.state.current_step = 0
+                    self.state.next_step_to_trigger = 0
+                    self.state.current_repeat = 0
+                    self.state.time_in_current_step = 0
+                    self.state.sequence_complete = False
+                    self.state.prev_step_buffer = None
+                    self.state.prev_step_index = None
+                    self.state.crossfade_progress = 0
+                    processed_resets.add(reset_idx)
+            
+            # Process step triggers at the current sample position
+            for trigger_idx in trigger_indices:
+                if trigger_idx == samples_written and trigger_idx not in processed_triggers:
+                    # In trigger mode: advance to the next step to trigger
+                    self.state.current_step = self.state.next_step_to_trigger
+                    self.state.next_step_to_trigger += 1
+                    self.state.time_in_current_step = 0
+                    self.state.prev_step_buffer = None
+                    self.state.crossfade_progress = 0
+                    processed_triggers.add(trigger_idx)
+                    
+                    # Check if we've now completed the current repeat
+                    if self.state.next_step_to_trigger >= len(self.step_nodes):
+                        self.state.current_repeat += 1
+                        if self.state.current_repeat >= self.repeat:
+                            # We've completed all repeats - stay at the last step forever
+                            self.state.sequence_complete = True
+                            self.state.next_step_to_trigger = len(self.step_nodes) - 1
+                        else:
+                            # Start next repeat from the beginning
+                            self.state.next_step_to_trigger = 0
+                            self.state.time_in_current_step = 0
+                            self.state.prev_step_buffer = None
+                            self.state.prev_step_index = None
+                            self.state.crossfade_progress = 0
+            
+            # In interval mode: check if we've completed the current repeat
+            if self.state.current_step >= len(self.step_nodes) and not using_trigger_mode:
                 self.state.current_repeat += 1
                 if self.state.current_repeat >= self.repeat:
                     # We've completed all repeats - stay at the last step forever
@@ -188,38 +273,97 @@ class AutomationNode(BaseNode):
                     self.state.crossfade_progress = 0
                     continue
             
-            # Calculate current interval with swing
-            # Apply swing to odd steps (step % 2 == 1)
-            current_interval = interval
-            if self.state.current_step % 2 == 1:
-                # Odd step: apply swing
-                # swing = -1 means shorter (0.5x), swing = 0 means normal (1x), swing = 1 means longer (1.5x)
-                swing_factor = 1.0 + (swing * 0.5)
-                current_interval = interval * swing_factor
+            # Determine which step to render
+            if using_trigger_mode:
+                # In trigger mode: only render if a trigger has happened
+                # We've been triggered if next_step_to_trigger > 0 OR if we're on a repeat > 0
+                has_been_triggered = (self.state.next_step_to_trigger > 0 or self.state.current_repeat > 0)
+                if not has_been_triggered:
+                    # No trigger yet - output silence
+                    chunk = np.zeros(num_samples_resolved - samples_written, dtype=np.float32)
+                    output_wave[samples_written:] = chunk
+                    break
+                step_to_render = self.state.current_step
             else:
-                # Even step: compensate for previous odd step's swing
-                swing_factor = 1.0 - (swing * 0.5)
-                current_interval = interval * swing_factor
+                # In interval mode: render current_step as normal
+                step_to_render = self.state.current_step
             
-            # Calculate how many samples we can render from current step
-            time_remaining_in_step = current_interval - self.state.time_in_current_step
-            samples_remaining_in_step = time_to_samples(time_remaining_in_step )
-            samples_to_render = min(samples_remaining_in_step, num_samples_resolved - samples_written)
+            # In trigger mode, render up to next trigger; in interval mode, calculate based on interval with swing
+            if using_trigger_mode:
+                # Trigger mode: render up to the next trigger (or reset) position, or to the end if none
+                next_trigger_pos = None
+                for trigger_idx in trigger_indices:
+                    if trigger_idx > samples_written:
+                        next_trigger_pos = trigger_idx
+                        break
+                for reset_idx in reset_indices:
+                    if reset_idx > samples_written:
+                        if next_trigger_pos is None or reset_idx < next_trigger_pos:
+                            next_trigger_pos = reset_idx
+                
+                if next_trigger_pos is not None:
+                    samples_to_render = next_trigger_pos - samples_written
+                else:
+                    samples_to_render = num_samples_resolved - samples_written
+            else:
+                # Interval mode: calculate current interval with swing
+                # Apply swing to odd steps (step % 2 == 1)
+                current_interval = interval
+                if self.state.current_step % 2 == 1:
+                    # Odd step: apply swing
+                    # swing = -1 means shorter (0.5x), swing = 0 means normal (1x), swing = 1 means longer (1.5x)
+                    swing_factor = 1.0 + (swing * 0.5)
+                    current_interval = interval * swing_factor
+                else:
+                    # Even step: compensate for previous odd step's swing
+                    swing_factor = 1.0 - (swing * 0.5)
+                    current_interval = interval * swing_factor
+                
+                # Calculate how many samples we can render from current step
+                time_remaining_in_step = current_interval - self.state.time_in_current_step
+                samples_remaining_in_step = time_to_samples(time_remaining_in_step )
+                samples_to_render = min(samples_remaining_in_step, num_samples_resolved - samples_written)
             
             if samples_to_render <= 0:
-                # Move to next step
-                self.state.current_step += 1
-                self.state.time_in_current_step = 0
-                self.state.prev_step_buffer = None
-                self.state.crossfade_progress = 0
-                continue
+                # Move to next step (only in interval mode)
+                if not using_trigger_mode:
+                    self.state.current_step += 1
+                    self.state.time_in_current_step = 0
+                    self.state.prev_step_buffer = None
+                    self.state.crossfade_progress = 0
+                    continue
+                else:
+                    # In trigger mode, this shouldn't happen - break to avoid infinite loop
+                    break
             
             # Render based on mode
             if self.mode == AutomationMode.STEP:
                 chunk = self._render_step_mode(samples_to_render, context, params)
             elif self.mode == AutomationMode.RAMP:
+                # For ramp mode, we need current_interval - calculate it if in interval mode
+                if not using_trigger_mode:
+                    current_interval = interval
+                    if self.state.current_step % 2 == 1:
+                        swing_factor = 1.0 + (swing * 0.5)
+                        current_interval = interval * swing_factor
+                    else:
+                        swing_factor = 1.0 - (swing * 0.5)
+                        current_interval = interval * swing_factor
+                else:
+                    current_interval = interval  # Use base interval for trigger mode
                 chunk = self._render_ramp_mode(samples_to_render, current_interval, context, params)
             elif self.mode == AutomationMode.OVERLAP:
+                # For overlap mode, we need current_interval - calculate it if in interval mode
+                if not using_trigger_mode:
+                    current_interval = interval
+                    if self.state.current_step % 2 == 1:
+                        swing_factor = 1.0 + (swing * 0.5)
+                        current_interval = interval * swing_factor
+                    else:
+                        swing_factor = 1.0 - (swing * 0.5)
+                        current_interval = interval * swing_factor
+                else:
+                    current_interval = interval  # Use base interval for trigger mode
                 chunk = self._render_overlap_mode(samples_to_render, current_interval, context, params)
             else:
                 chunk = np.zeros(samples_to_render, dtype=np.float32)
@@ -228,15 +372,25 @@ class AutomationNode(BaseNode):
             output_wave[samples_written:samples_written + len(chunk)] = chunk
             samples_written += len(chunk)
             
-            # Update time in current step
-            self.state.time_in_current_step += len(chunk) / SAMPLE_RATE
-            
-            # Check if we should move to next step
-            if self.state.time_in_current_step >= current_interval:
-                self.state.current_step += 1
-                self.state.time_in_current_step = 0
-                self.state.prev_step_buffer = None
-                self.state.crossfade_progress = 0
+            # Update time in current step (only in interval mode)
+            if not using_trigger_mode:
+                self.state.time_in_current_step += len(chunk) / SAMPLE_RATE
+                
+                # Check if we should move to next step (only in interval mode)
+                # Calculate current_interval with swing for the check
+                current_interval = interval
+                if self.state.current_step % 2 == 1:
+                    swing_factor = 1.0 + (swing * 0.5)
+                    current_interval = interval * swing_factor
+                else:
+                    swing_factor = 1.0 - (swing * 0.5)
+                    current_interval = interval * swing_factor
+                
+                if self.state.time_in_current_step >= current_interval:
+                    self.state.current_step += 1
+                    self.state.time_in_current_step = 0
+                    self.state.prev_step_buffer = None
+                    self.state.crossfade_progress = 0
         
         return output_wave
 
