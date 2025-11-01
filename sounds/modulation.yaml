@@ -16,16 +16,23 @@ modulation:
                     midi_cc:
                       cc: 0
                       range: [0, 200]
-                  range: [0, 10000]
+                  range: [0, 300]
         phase:
           osc:
-            type: tri
+            type: sin
             amp:
               automation:
                 interval:
-                  osc:
-                    freq: .5
-                    range: [0.001, 0.5]
+                  automation:
+                    interval: 5
+                    steps:
+                      - osc:
+                          freq: .5
+                          range: [0.001, 0.5]
+                      - osc:
+                          type: ramp
+                          freq: 0.5
+                          range: [0.001, 0.002]
                 mode: ramp
                 steps:
                   - 0
@@ -37,7 +44,7 @@ modulation:
             freq:
               midi_cc:
                 cc: 17
-                range: [0, 5000]
+                range: [0, 500]
             phase:
               osc:
                 type: sin
@@ -55,7 +62,7 @@ modulation:
                 freq:
                   midi_cc:
                     cc: 18
-                    range: [0, 10000]
+                    range: [0, 15000]
 
 # Test MIDI clock sync - oscillator synced to external MIDI tempo
 midi_clock_test:

@@ -13,7 +13,7 @@ from nodes.node_utils.midi_utils import (
 )
 
 
-class MidiModel(BaseNodeModel):
+class MidiInModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     channel: int = 0  # MIDI channel to listen to (0-15)
     signal: BaseNodeModel  # The sound/signal to play when a note is triggered
@@ -22,8 +22,8 @@ class MidiModel(BaseNodeModel):
     duration: float = math.inf
 
 
-class MidiNode(BaseNode):
-    def __init__(self, model: MidiModel, node_id: str, state=None, do_initialise_state=True):
+class MidiInNode(BaseNode):
+    def __init__(self, model: MidiInModel, node_id: str, state=None, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
         self.channel = model.channel
         self.signal_model = model.signal
@@ -218,4 +218,4 @@ class MidiNode(BaseNode):
         return output_wave
 
 
-MIDI_DEFINITION = NodeDefinition("midi", MidiNode, MidiModel)
+MIDI_IN_DEFINITION = NodeDefinition("midi_in", MidiInNode, MidiInModel)

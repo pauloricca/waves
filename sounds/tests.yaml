@@ -422,7 +422,7 @@ synth:
 
 # MIDI Example - Play sounds via MIDI input
 midi-test:
-  midi:
+  midi_in:
     channel: 0  # MIDI channel (0-15)
     signal:
       envelope:
@@ -436,7 +436,7 @@ midi-test:
 
 # MIDI with more complex sound
 midi-synth:
-  midi:
+  midi_in:
     channel: 0
     signal:
       envelope:
@@ -492,7 +492,7 @@ midi-env:
     feedback: 0.5
     repeats: 4
     signal:
-      midi:
+      midi_in:
         channel: 0
         signal:
           mix:
@@ -559,7 +559,7 @@ midi-env:
 
 # MIDI with more complex sound
 midi-fm:
-      midi:
+      midi_in:
         channel: 0
         signal:
           envelope:
@@ -1060,7 +1060,7 @@ test-envelope-retrigger:
 
 # Test snap with MIDI CC (if you have a MIDI controller connected)
 # This would snap continuous MIDI CC values to specific note frequencies
-test-snap-midi:
+test-snap-midi_in:
   context:
     gate:
       osc:

@@ -1,5 +1,5 @@
 drum-kit:
-  midi:
+  midi_in:
     duration: 10000
     device: akai
     signal:

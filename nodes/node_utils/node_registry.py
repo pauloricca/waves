@@ -11,7 +11,7 @@ from nodes.input import INPUT_DEFINITION
 from nodes.interval import INTERVAL_DEFINITION
 from nodes.non_realtime.invert import INVERT_DEFINITION
 from nodes.map import MAP_DEFINITION
-from nodes.midi import MIDI_DEFINITION
+from nodes.midi_in import MIDI_IN_DEFINITION
 from nodes.midi_cc import MIDI_CC_DEFINITION
 from nodes.midi_out import MIDI_OUT_DEFINITION
 from nodes.mix import MIX_DEFINITION
@@ -48,7 +48,7 @@ NODE_REGISTRY = [
     ENVELOPE_DEFINITION,
     EXPRESSION_DEFINITION,
     CONTEXT_DEFINITION,
-    MIDI_DEFINITION,
+    MIDI_IN_DEFINITION,
     MIDI_CC_DEFINITION,
     MIDI_OUT_DEFINITION,
     MIX_DEFINITION,
