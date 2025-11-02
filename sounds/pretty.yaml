@@ -17,6 +17,14 @@ pretty:
         scale: minor
     signal:
       tracks:
+        # percussion:
+        #   sequencer:
+        #     interval: 0.1
+        #     sequence:
+        #       - kick
+        #       - 
+        #       - 
+        #       -
         shimmer:
           retrigger:
             repeats: 3

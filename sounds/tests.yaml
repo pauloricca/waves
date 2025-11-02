@@ -8,6 +8,103 @@ test_stereo_node:
         freq: 440
         duration: 2
 
+# Test buffer node - basic offset mode
+test_buffer_offset:
+  buffer:
+    duration: 2
+    length: 2
+    offset: 0.1  # Read 100ms back from write head
+    signal:
+      osc:
+        type: sin
+        freq: 440
+
+# Test buffer node - position mode (like sample)
+test_buffer_position:
+  buffer:
+    duration: 2
+    length: 2
+    start: 0.0
+    end: 0.5
+    loop: true
+    file: samples/waves.wav
+
+# Test buffer node - named buffer write/read
+test_buffer_shared_write:
+  buffer:
+    duration: 2
+    name: A
+    length: 2
+    offset: 0.2  # Read 200ms back
+    signal:
+      osc:
+        type: sin
+        freq: 220
+
+# Test buffer node - speed control
+test_buffer_speed:
+  tracks:
+    duration: 20
+    # left_pan: -1
+    left_vol: 1
+    left:
+      buffer:
+        length: 1
+        name: "shared"
+        # file: samples/paulo.wav
+        speed: 1
+        loop: true
+        signal:
+          expression:
+            exp: sample * 0.2 + delayed * 0.9
+            sample:
+              # input: {}
+              sample:
+                file: samples/paulo.wav
+            delayed:
+              buffer:
+                name: "shared"
+                # start: 0.2
+                # end: 0.3
+                loop: true
+                offset:
+                  osc:
+                    freq: 4
+                    range: [0.2, 0.203]
+    right_pan: 1
+    right_vol: 0
+    right:
+      buffer:
+        name: "shared"
+        start: 0.1
+        end: 1
+        loop: true
+        # offset: 0
+        # offset:
+        #   osc:
+        #     freq: 0.2
+        #     range: [1, 0]
+        # speed: 0.5
+
+# Test buffer node - multiple readers from same buffer
+test_buffer_multi_read:
+  mix:
+    duration: 2
+    signals:
+      # Write to buffer "shared"
+      - buffer:
+          name: shared
+          length: 20
+          signal:
+            osc:
+              duration: 0.1
+              type: sin
+              freq: 440
+      # Read from buffer with short offset - needs duration to keep reading
+      - buffer:
+          name: shared
+          offset: 1
+
 # Test pass-through nodes (context/tempo) wrapping tracks
 test_pass_through_tracks:
   context:

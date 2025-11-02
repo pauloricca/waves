@@ -133,8 +133,27 @@ class TracksNode(BaseNode):
             
             # Check if we got mono or stereo
             if signal.ndim == 2:
-                # Already stereo - use as-is
-                stereo_signal = signal
+                # Signal is already stereo
+                # If we have a pan setting (not default center), mix to mono first then apply panning
+                # This ensures _pan always works, even for stereo sources
+                has_pan = track['is_pan_dynamic'] or track['pan'] != 0
+                
+                if has_pan:
+                    # Mix stereo to mono (average of left and right channels)
+                    mono_signal = np.mean(signal, axis=1).astype(np.float32)
+                    
+                    # Get pan value (static or dynamic)
+                    if track['is_pan_dynamic']:
+                        pan_value = track['pan'].render(len(mono_signal), context, **params)
+                        pan_value = match_length(pan_value, len(mono_signal))
+                    else:
+                        pan_value = track['pan']
+                    
+                    # Apply panning to create new stereo signal
+                    stereo_signal = apply_panning(mono_signal, pan_value)
+                else:
+                    # No pan setting - use stereo signal as-is
+                    stereo_signal = signal
             else:
                 # Mono - apply panning to create stereo
                 # Get pan value (static or dynamic)

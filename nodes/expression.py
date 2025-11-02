@@ -83,55 +83,28 @@ class ExpressionNode(BaseNode):
                 if isinstance(value, np.ndarray) and len(value) > num_samples:
                     eval_context[name] = value[:num_samples]
         
-        # Track the actual minimum number of samples from all child nodes
-        actual_num_samples = num_samples
-        
         # Evaluate all arguments and add to context
+        all_children_finished = True
         for name, value in self.args.items():
             if isinstance(value, BaseNode):
                 # Render node
                 wave = value.render(num_samples, context, 
                                    **self.get_params_for_children(params))
+                
+                # Track if any child is still producing samples
+                if len(wave) > 0:
+                    all_children_finished = False
+                
+                # If child returned fewer samples, pad with zeros
+                if len(wave) < num_samples:
+                    wave = np.pad(wave, (0, num_samples - len(wave)), mode='constant', constant_values=0)
+                
                 eval_context[name] = wave
-                # Track if child returned fewer samples
-                if len(wave) < actual_num_samples:
-                    actual_num_samples = len(wave)
             # Note: scalar values are handled below in compiled_args
         
-        # If any child returned fewer samples, we need to handle completion
-        if actual_num_samples < num_samples:
-            # If any child returned 0 samples, signal completion
-            if actual_num_samples == 0:
-                return empty_mono()
-            
-            # Otherwise, truncate all arrays to match the shortest child
-            num_samples = actual_num_samples
-            
-            # Save child node outputs before recreating context
-            child_outputs = {name: val for name, val in eval_context.items() 
-                           if name in self.args}
-            
-            # Update base context arrays to match
-            eval_context = get_expression_context(
-                render_params=params,
-                time=self.time_since_start,
-                num_samples=num_samples,
-                render_context=context
-            )
-            
-            # Truncate ALL arrays in eval_context to match num_samples
-            # This includes arrays from params (like 'v' from parent context)
-            for name in list(eval_context.keys()):
-                value = eval_context[name]
-                if isinstance(value, np.ndarray) and len(value) > num_samples:
-                    eval_context[name] = value[:num_samples]
-            
-            # Re-add child node outputs (already truncated if needed)
-            for name, value in child_outputs.items():
-                if isinstance(value, np.ndarray) and len(value) > num_samples:
-                    eval_context[name] = value[:num_samples]
-                else:
-                    eval_context[name] = value
+        # If all children have finished (returned empty arrays), signal completion
+        if all_children_finished and len(self.args) > 0:
+            return empty_mono()
         
         # Evaluate compiled arguments (expressions and constants)
         for name, compiled_info in self.compiled_args.items():

@@ -1,4 +1,5 @@
 from nodes.automation import AUTOMATION_DEFINITION
+from nodes.buffer import BUFFER_DEFINITION
 from nodes.context import CONTEXT_DEFINITION
 from nodes.delay import DELAY_DEFINITION
 from nodes.retrigger import RETRIGGER_DEFINITION
@@ -31,6 +32,7 @@ from nodes.tracks import TRACKS_DEFINITION
 
 NODE_REGISTRY = [
     AUTOMATION_DEFINITION,
+    BUFFER_DEFINITION,
     OSCILLATOR_DEFINITION,
     SEQUENCER_DEFINITION,
     DELAY_DEFINITION,
