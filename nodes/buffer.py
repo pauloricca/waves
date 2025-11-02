@@ -367,6 +367,23 @@ class BufferNode(BaseNode):
             
             # Read from buffer
             output = self.buffer_ref['data'][read_positions].copy()
+        elif np.allclose(speed, 1.0):
+            # Variable offset, constant speed=1 - vectorized with interpolation
+            # Calculate read positions for each sample
+            sample_indices = np.arange(num_samples)
+            read_positions = write_head - offset_samples - num_samples + sample_indices
+            read_positions = read_positions % self.buffer_length_samples
+            
+            # Interpolate (vectorized)
+            read_pos_int = read_positions.astype(int)
+            read_pos_frac = read_positions - read_pos_int
+            
+            # Get samples for interpolation
+            sample1 = self.buffer_ref['data'][read_pos_int]
+            sample2 = self.buffer_ref['data'][(read_pos_int + 1) % self.buffer_length_samples]
+            
+            # Linear interpolation
+            output = sample1 * (1 - read_pos_frac) + sample2 * read_pos_frac
         else:
             # Variable speed or offset - per-sample processing
             for i in range(num_samples):
