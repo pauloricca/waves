@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Dict
-from pydantic import RootModel, model_validator
+from pydantic import RootModel, model_validator, ValidationError
 import yaml
 import glob
 import os
@@ -14,6 +14,95 @@ sound_libraries: Dict[str, SoundLibraryModel] = {}
 sound_index: Dict[str, tuple[str, BaseNodeModel]] = {}
 # Temporary storage of raw YAML data during multi-file loading (for cross-file reference resolution)
 _raw_data_cache: Dict[str, dict] = {}
+
+
+def format_validation_error(error: ValidationError, filename: str, raw_data: dict = None) -> str:
+    """
+    Format a Pydantic ValidationError into a clean, readable error message.
+    
+    Args:
+        error: The ValidationError from Pydantic
+        filename: The YAML file where the error occurred
+        raw_data: The raw YAML data (to extract sound and node names)
+    
+    Returns:
+        A formatted error string
+    """
+    lines = [f"\n{'='*60}"]
+    lines.append(f"Validation Error in {filename}")
+    lines.append('='*60)
+    
+    for i, err in enumerate(error.errors()):
+        if i > 0:
+            lines.append('-'*60)
+            
+        location = err['loc']
+        msg = err['msg']
+        input_value = err.get('input', '')
+        
+        # Try to find which sound this error belongs to
+        sound_name = None
+        if raw_data and location:
+            # Check if first location element is a sound name
+            first = str(location[0])
+            if first in raw_data:
+                sound_name = first
+            else:
+                # Try to find by traversing the input value in raw_data
+                for snd_name, snd_data in raw_data.items():
+                    if _value_exists_in_dict(snd_data, input_value):
+                        sound_name = snd_name
+                        break
+        
+        # Extract path (excluding sound name and special keys)
+        path_parts = []
+        for loc in location:
+            loc_str = str(loc)
+            if loc_str not in ['__root__', 'root'] and loc_str != sound_name:
+                path_parts.append(loc_str)
+        
+        # Display the error
+        if sound_name:
+            lines.append(f"Sound: '{sound_name}'")
+        
+        if path_parts:
+            lines.append(f"Location: {' → '.join(path_parts)}")
+        
+        # Simplify and improve error messages
+        if 'Input should be a valid dictionary or instance of BaseNodeModel' in msg:
+            clean_msg = "Expected a node definition (e.g., {'node_type': {...}})"
+            if isinstance(input_value, str) and input_value.startswith('$'):
+                clean_msg += f"\nNote: ${input_value[1:]} syntax only works in expressions, not as direct node parameters"
+                clean_msg += "\nTo reference a node output, use: reference: {ref: " + input_value[1:] + "}"
+        else:
+            clean_msg = msg
+        
+        lines.append(f"Error: {clean_msg}")
+        
+        # Show the problematic value
+        if input_value is not None and len(str(input_value)) < 200:
+            lines.append(f"Got: {repr(input_value)}")
+    
+    lines.append('='*60)
+    return '\n'.join(lines)
+
+
+def _value_exists_in_dict(d, value, max_depth=10):
+    """Helper to check if a value exists somewhere in a nested dict"""
+    if max_depth <= 0:
+        return False
+    if not isinstance(d, dict):
+        return d == value
+    for v in d.values():
+        if v == value:
+            return True
+        if isinstance(v, dict) and _value_exists_in_dict(v, value, max_depth - 1):
+            return True
+        if isinstance(v, list):
+            for item in v:
+                if isinstance(item, dict) and _value_exists_in_dict(item, value, max_depth - 1):
+                    return True
+    return False
 
 
 def parse_node(data, available_sound_names=None, raw_sound_data=None, all_sound_names=None) -> BaseNodeModel:
@@ -98,12 +187,16 @@ def parse_node(data, available_sound_names=None, raw_sound_data=None, all_sound_
                 for filename, raw_data in _raw_data_cache.items():
                     if node_type in raw_data:
                         # Parse it now
-                        sound_data = {node_type: raw_data[node_type]}
-                        temp_library = SoundLibraryModel.model_validate(sound_data)
-                        sound_model = temp_library.root[node_type]
-                        # Update the index with the parsed model
-                        sound_index[node_type] = (filename, sound_model)
-                        break
+                        try:
+                            sound_data = {node_type: raw_data[node_type]}
+                            temp_library = SoundLibraryModel.model_validate(sound_data)
+                            sound_model = temp_library.root[node_type]
+                            # Update the index with the parsed model
+                            sound_index[node_type] = (filename, sound_model)
+                            break
+                        except ValidationError as e:
+                            print(format_validation_error(e, filename, sound_data))
+                            raise
                 
                 if sound_model is None:
                     raise ValueError(f"Could not find or parse sound '{node_type}' from cross-file reference")
@@ -163,6 +256,9 @@ def load_yaml_file(file_path: str) -> SoundLibraryModel:
         
         return library
     
+    except ValidationError as e:
+        print(format_validation_error(e, os.path.basename(file_path), raw_data))
+        raise
     except Exception as e:
         print(f"Error loading {file_path}: {e}")
         raise
@@ -233,9 +329,12 @@ def load_all_sound_libraries(directory: str = ".") -> Dict[str, SoundLibraryMode
                 sound_index[sound_name] = (filename, sound_model)
             
             print(f"Loaded {len(library.root)} sound(s) from {filename}")
+        except ValidationError as e:
+            print(format_validation_error(e, filename, raw_data))
+            return False
         except Exception as e:
             print(f"Error parsing {filename}: {e}")
-            raise
+            return False
     
     # Clear the cache after loading is complete
     _raw_data_cache.clear()
@@ -289,12 +388,16 @@ def reload_sound_library(filename: str, directory: str = ".") -> bool:
         _raw_data_cache[filename] = raw_data
         
         # Now parse the file with full knowledge of all sound names
-        library = SoundLibraryModel.model_validate(raw_data)
-        sound_libraries[filename] = library
-        
-        # Update the sound index with actual models
-        for sound_name, sound_model in library.root.items():
-            sound_index[sound_name] = (filename, sound_model)
+        try:
+            library = SoundLibraryModel.model_validate(raw_data)
+            sound_libraries[filename] = library
+            
+            # Update the sound index with actual models
+            for sound_name, sound_model in library.root.items():
+                sound_index[sound_name] = (filename, sound_model)
+        except ValidationError as e:
+            print(format_validation_error(e, filename, raw_data))
+            raise
         
         # Clear the cache after loading is complete
         _raw_data_cache.clear()
