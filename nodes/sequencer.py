@@ -390,6 +390,14 @@ class SequencerNode(BaseNode):
                     sounds_to_remove.append(i)
                     continue
                 
+                # Ensure sound_chunk matches requested num_channels
+                # If we requested stereo but got mono, duplicate to stereo
+                if num_channels == 2 and sound_chunk.ndim == 1:
+                    sound_chunk = np.column_stack([sound_chunk, sound_chunk])
+                # If we requested mono but got stereo, mix to mono
+                elif num_channels == 1 and sound_chunk.ndim == 2:
+                    sound_chunk = np.mean(sound_chunk, axis=1)
+                
                 # If the sound returns fewer samples than we asked for, it's finishing
                 # Update counter and mark for removal if we've caught up
                 if len(sound_chunk) < samples_to_render_from_sound:
