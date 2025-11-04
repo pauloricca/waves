@@ -366,14 +366,15 @@ def reload_sound_library(filename: str, directory: str = ".") -> bool:
         print(f"File {filename} not found")
         return False
     
+    # Preserve old state in case reload fails
+    old_library = sound_libraries.get(filename)
+    old_sound_index_entries = {}
+    if old_library:
+        for sound_name in old_library.root.keys():
+            if sound_name in sound_index and sound_index[sound_name][0] == filename:
+                old_sound_index_entries[sound_name] = sound_index[sound_name]
+    
     try:
-        # Remove old sounds from this file from the index
-        if filename in sound_libraries:
-            old_library = sound_libraries[filename]
-            for sound_name in old_library.root.keys():
-                if sound_name in sound_index and sound_index[sound_name][0] == filename:
-                    del sound_index[sound_name]
-        
         # Use C-based LibYAML loader if available
         try:
             Loader = yaml.CSafeLoader
@@ -395,8 +396,9 @@ def reload_sound_library(filename: str, directory: str = ".") -> bool:
                 set_user_variables(user_vars)
         
         # Pre-populate sound_index with sound names from this file (models will be None for now)
+        temp_sound_index = {}
         for sound_name in raw_data.keys():
-            sound_index[sound_name] = (filename, None)
+            temp_sound_index[sound_name] = (filename, None)
         
         # Store in cache for cross-file reference resolution
         _raw_data_cache[filename] = raw_data
@@ -404,6 +406,13 @@ def reload_sound_library(filename: str, directory: str = ".") -> bool:
         # Now parse the file with full knowledge of all sound names
         try:
             library = SoundLibraryModel.model_validate(raw_data)
+            
+            # Only update global state if validation succeeded
+            # Remove old sounds from this file from the index
+            for sound_name in old_sound_index_entries.keys():
+                del sound_index[sound_name]
+            
+            # Update with new library and index
             sound_libraries[filename] = library
             
             # Update the sound index with actual models
@@ -420,6 +429,9 @@ def reload_sound_library(filename: str, directory: str = ".") -> bool:
     
     except Exception as e:
         print(f"Error reloading {filename}: {e}")
+        # Clear the cache on error
+        _raw_data_cache.clear()
+        # Old state is already preserved (we didn't modify sound_index or sound_libraries)
         return False
 
 

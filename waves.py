@@ -114,12 +114,18 @@ def perform_hot_reload_background(sound_name_to_play: str, changed_filename: str
             old_node = current_sound_node
         
         # Reload only the changed file, or the file containing the sound if unknown
+        reload_success = False
         if changed_filename:
-            reload_sound_library(changed_filename)
+            reload_success = reload_sound_library(changed_filename)
         else:
             # Find which file contains this sound and reload it
             filename = get_sound_filename(sound_name_to_play)
-            reload_sound_library(filename)
+            reload_success = reload_sound_library(filename)
+        
+        # If reload failed (e.g., YAML syntax error), abort hot reload
+        if not reload_success:
+            print("Hot reload aborted due to reload failure (continuing with current sound)")
+            return
         
         new_model = get_sound_model(sound_name_to_play)
         
