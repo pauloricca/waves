@@ -110,23 +110,6 @@ class ExpressionNode(BaseNode):
         for name, compiled_info in self.compiled_args.items():
             result = evaluate_compiled(compiled_info, eval_context, num_samples)
             eval_context[name] = result
-            # DEBUG: Check if compiled arg created wrong-sized array
-            if isinstance(result, np.ndarray) and len(result) != num_samples:
-                print(f"DEBUG EXPR: Compiled arg '{name}' created array of length {len(result)}, expected {num_samples}")
-        
-        # DEBUG: Check all array sizes before evaluation
-        arrays_ok = True
-        for name, value in eval_context.items():
-            if isinstance(value, np.ndarray):
-                if len(value) != num_samples:
-                    print(f"DEBUG EXPR: {name} has length {len(value)}, expected {num_samples}")
-                    arrays_ok = False
-        
-        if not arrays_ok:
-            print(f"DEBUG EXPR: Expression: {self.exp_value}")
-            print(f"DEBUG EXPR: num_samples: {num_samples}")
-            print(f"DEBUG EXPR: self.args keys: {list(self.args.keys())}")
-            print(f"DEBUG EXPR: self.compiled_args keys: {list(self.compiled_args.keys())}")
         
         # Evaluate main expression
         result = evaluate_compiled((self.compiled_exp, self.exp_value, self.is_constant), eval_context, num_samples)

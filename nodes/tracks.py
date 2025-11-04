@@ -191,16 +191,16 @@ class TracksNode(BaseNode):
         if all(len(output) == 0 for output in track_outputs.values()):
             return empty_stereo()
         
-        # Find the minimum length among non-empty tracks
+        # Find the maximum length among non-empty tracks (we want to render until ALL tracks finish)
         non_empty_lengths = [len(output) for output in track_outputs.values() if len(output) > 0]
         if not non_empty_lengths:
             return empty_stereo()
         
-        min_length = min(non_empty_lengths)
+        max_length = max(non_empty_lengths)
         
         # Mix all tracks together with volume applied
         # Start with zeros
-        mixed = np.zeros((min_length, 2), dtype=np.float32)
+        mixed = np.zeros((max_length, 2), dtype=np.float32)
         
         for track in self.tracks:
             track_name = track['name']
@@ -209,9 +209,14 @@ class TracksNode(BaseNode):
             if stereo_signal is None or len(stereo_signal) == 0:
                 continue
             
-            # Truncate to min_length if needed
-            if len(stereo_signal) > min_length:
-                stereo_signal = stereo_signal[:min_length]
+            # Pad or truncate to max_length
+            if len(stereo_signal) < max_length:
+                # Pad with zeros if this track is shorter
+                padding = np.zeros((max_length - len(stereo_signal), 2), dtype=np.float32)
+                stereo_signal = np.vstack([stereo_signal, padding])
+            elif len(stereo_signal) > max_length:
+                # Truncate if somehow longer (shouldn't happen but defensive)
+                stereo_signal = stereo_signal[:max_length]
             
             # Get volume value (static or dynamic)
             if track['is_vol_dynamic']:

@@ -8,39 +8,45 @@ modulation:
             range: 
               - 0
               - osc:
-                  type: saw
+                  type: ramp
                   amp:
                     midi_cc:
                       cc: 3
                   freq:
                     midi_cc:
                       cc: 0
-                      range: [0, 200]
-                  range: [0, 300]
+                      range: [0, 50]
+                  range: [100, 300]
         phase:
           osc:
             type: sin
             amp:
-              automation:
-                interval:
+              expression:
+                exp: amp_amp * signal
+                amp_amp:
+                  midi_cc:
+                    cc: 1
+                signal:
                   automation:
-                    interval: 5
+                    interval:
+                      automation:
+                        interval: 5
+                        steps:
+                          - osc:
+                              freq: .5
+                              range: [0.001, 0.5]
+                          - osc:
+                              type: ramp
+                              freq: 0.5
+                              range: [0.001, 0.002]
+                    mode: ramp
                     steps:
-                      - osc:
-                          freq: .5
-                          range: [0.001, 0.5]
-                      - osc:
-                          type: ramp
-                          freq: 0.5
-                          range: [0.001, 0.002]
-                mode: ramp
-                steps:
-                  - 0
-                  - 1
-                  - 
-                  - 0
-                  - .5
-                  - 0
+                      - 0
+                      - 1
+                      - 
+                      - 0
+                      - .5
+                      - 0
             freq:
               midi_cc:
                 cc: 17
@@ -49,16 +55,22 @@ modulation:
               osc:
                 type: sin
                 amp:
-                  automation:
-                    interval: .5
-                    mode: ramp
-                    steps:
-                      - 0
-                      - 0.5
-                      - 0
-                      - 1
-                      - 0
-                      - 0
+                  expression:
+                    exp: amp_amp * signal
+                    amp_amp:
+                      midi_cc:
+                        cc: 2
+                    signal:
+                      automation:
+                        interval: .5
+                        mode: ramp
+                        steps:
+                          - 0
+                          - 0.5
+                          - 0
+                          - 1
+                          - 0
+                          - 0
                 freq:
                   midi_cc:
                     cc: 18

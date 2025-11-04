@@ -1,6 +1,34 @@
+kick-drum:
+  tracks:
+    click:
+      osc:
+        type: sqr
+        freq: 800
+        duration: 0.001
+    thump:
+      osc:
+        freq: 70
+        duration: 2
+        release: 0.1
+
+
+kick-test:
+  tempo:
+    bpm: 130
+    signal:
+      sequencer:
+        interval: beat / 4
+        repeat: 1000
+        sequence:
+          - kick-drum
+          - 
+          - 
+          -
+
+
 oscar:
   retrigger:
-    duration: 1
+    duration: 10
     time: 0.3
     repeats: 4
     signal:
