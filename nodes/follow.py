@@ -52,7 +52,7 @@ osc:
 
 class FollowModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
-    signal: BaseNodeModel = None
+    signal: WavableValue = None
     range: Tuple[WavableValue, WavableValue] = (0.0, 1.0)
     attack: Union[float, str] = 0.01  # seconds (or expression)
     release: Union[float, str] = 0.1  # seconds (or expression)
@@ -79,12 +79,16 @@ class FollowNode(BaseNode):
         attack = self.eval_scalar(self.model.attack, context, **params)
         release = self.eval_scalar(self.model.release, context, **params)
         
-        # Get the input signal
-        signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))
+        # Get the input signal (always request mono for envelope following)
+        signal_wave = self.signal_node.render(num_samples, context, num_channels=1, **self.get_params_for_children(params))
         
         # If signal is done, we're done
         if len(signal_wave) == 0:
             return np.array([], dtype=np.float32)
+        
+        # Ensure mono signal - if stereo somehow got through, average the channels
+        if signal_wave.ndim == 2:
+            signal_wave = np.mean(signal_wave, axis=1)
         
         actual_num_samples = len(signal_wave)
         

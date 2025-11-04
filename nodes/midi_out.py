@@ -31,7 +31,7 @@ class MidiOutNodeModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     device: Optional[str] = None  # MIDI device name (from config or explicit)
     channel: int = 0  # MIDI channel (0-15)
-    signal: Optional[BaseNodeModel] = None  # Optional signal to pass through
+    signal: Optional[WavableValue] = None  # Optional signal to pass through
     
     # Note-specific parameters
     note: Optional[WavableValue] = None  # MIDI note number (0-127)

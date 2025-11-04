@@ -19,7 +19,7 @@ from nodes.wavable_value import WavableValue
 # All parameters support WavableValues for dynamic modulation.
 class SnapNodeModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
-    signal: BaseNodeModel  # The input signal to snap
+    signal: WavableValue  # The input signal to snap
     values: Optional[List[WavableValue]] = None  # Explicit list of values to snap to
     range: Optional[List[WavableValue]] = None  # [min, max] range to generate values from
     interval: Optional[WavableValue] = None  # Step size for generating values from range

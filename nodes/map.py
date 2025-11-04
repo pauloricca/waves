@@ -8,75 +8,37 @@ from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.node_utils.range_mapper import RangeMapper
 from nodes.wavable_value import WavableValue
 
-"""
-Map Node
+from nodes.node_utils.base_node import BaseNode, BaseNodeModel
+from nodes.node_utils.node_definition_type import NodeDefinition
+from nodes.wavable_value import WavableValue
+from nodes.node_utils.range_mapper import RangeMapper
 
-Maps values from one range to another, with optional clipping.
+"""
+Map node: maps values from one range to another
+
+This node takes an input signal and maps it from an input range to an output range.
+Optionally applies clipping to keep values within the target range.
 
 Parameters:
-- signal: The input signal to map (required)
-- from: Tuple of [min, max] defining the source range (optional, defaults to [0, 1])
-- to: Tuple of [min, max] defining the target range (required)
-- clip: Tuple of [min, max] to clip the output (optional)
+- signal: Input signal
+- from_range: Input range [min, max] (default: [0, 1])
+- range: Output range [min, max] (default: [0, 1])
+- clip: Whether to clip output to range (default: True)
 
-All tuple parameters can be specified in YAML using either:
-1. Bracket syntax: [value1, value2]
-2. List syntax:
-   - value1
-   - value2
-
-Each value can be a scalar or a WavableValue (dynamic value).
-
-Examples:
-
-# Basic mapping from default [0, 1] to [-1, 1]
+Example:
 map:
   signal:
     osc:
       type: sin
-      freq: 440
-  to: [-1, 1]
-
-# Map from [-1, 1] to [0, 1] (normalize)
-map:
-  signal:
-    osc:
-      type: sin
-      freq: 440
-  from: [-1, 1]
-  to: [0, 1]
-
-# Map with clipping
-map:
-  signal:
-    osc:
-      type: sin
-      freq: 440
-  to: [-2, 2]
-  clip: [-0.5, 0.5]
-
-# Using list syntax with dynamic values
-map:
-  signal:
-    osc:
-      type: sin
-      freq: 440
-  to:
-    - osc:
-        type: sin
-        freq: 0.5
-        min: -1
-        max: 0
-    - osc:
-        type: sin
-        freq: 0.5
-        min: 0
-        max: 1
+      freq: 1
+  from_range: [-1, 1]    # sine wave naturally in [-1, 1]
+  range: [200, 800]      # map to frequency range
+  clip: true
 """
 
 class MapModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
-    signal: BaseNodeModel = None
+    signal: WavableValue = None
     from_: Optional[Tuple[WavableValue, WavableValue]] = None  # Using trailing underscore to avoid keyword conflict
     to: Tuple[WavableValue, WavableValue]
     clip: Optional[Tuple[WavableValue, WavableValue]] = None

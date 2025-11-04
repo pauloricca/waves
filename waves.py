@@ -395,6 +395,7 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
     # Unwrap pass-through nodes (like context, tempo) to find the actual signal node
     from nodes.tracks import TracksNode
     innermost_node = get_innermost_node(sound_node)
+    # TracksNode always outputs stereo, other stereo-capable nodes might too
     num_channels = 2 if isinstance(innermost_node, TracksNode) else 1
 
     with sd.OutputStream(callback=audio_callback, blocksize=BUFFER_SIZE, samplerate=SAMPLE_RATE, channels=num_channels): #, latency='low'
@@ -616,5 +617,29 @@ if __name__ == "__main__":
             main()
         except KeyboardInterrupt:
             sys.exit(0)
+        except SyntaxError as e:
+            # Clean display of expression syntax errors
+            print(f"\n{'='*60}")
+            print(f"ERROR: {e}")
+            print('='*60)
+            sys.exit(1)
+        except Exception as e:
+            # For other errors, show a cleaner message but still include traceback
+            print(f"\n{'='*60}")
+            print(f"ERROR: {e}")
+            print('='*60)
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
     else:
-        main()
+        try:
+            main()
+        except SyntaxError as e:
+            # Clean display of expression syntax errors
+            print(f"\n{'='*60}")
+            print(f"ERROR: {e}")
+            print('='*60)
+            sys.exit(1)
+        except Exception as e:
+            # For other errors, show the full traceback in non-hot-reload mode
+            raise

@@ -26,7 +26,7 @@ class DelayModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     time: WavableValue  # Delay time in seconds
     mode: DelayMode = DelayMode.DIGITAL  # DIGITAL or TAPE mode
-    signal: BaseNodeModel = None
+    signal: WavableValue = None
 
 class DelayNode(BaseNode):
     def __init__(self, model: DelayModel, node_id: str, state, do_initialise_state=True):

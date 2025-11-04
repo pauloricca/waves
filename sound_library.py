@@ -32,7 +32,21 @@ def format_validation_error(error: ValidationError, filename: str, raw_data: dic
     lines.append(f"Validation Error in {filename}")
     lines.append('='*60)
     
-    for i, err in enumerate(error.errors()):
+    # Group errors by location path to avoid showing duplicate errors for Union types
+    # For Union types, Pydantic creates one error per union member with type names in the path
+    # We need to filter out type names like 'str', 'int', 'float', etc.
+    errors_by_location = {}
+    union_type_names = {'str', 'int', 'float', 'list', 'dict', 'bool', 'none', 'NoneType'}
+    
+    for err in error.errors():
+        # Create a location key excluding union type names
+        loc_key = tuple(loc for loc in err['loc'] if str(loc) not in union_type_names)
+        
+        # Only keep the first error for each unique location
+        if loc_key not in errors_by_location:
+            errors_by_location[loc_key] = err
+    
+    for i, (loc_key, err) in enumerate(errors_by_location.items()):
         if i > 0:
             lines.append('-'*60)
             
@@ -54,11 +68,11 @@ def format_validation_error(error: ValidationError, filename: str, raw_data: dic
                         sound_name = snd_name
                         break
         
-        # Extract path (excluding sound name and special keys)
+        # Extract path (excluding sound name, special keys, and union type names)
         path_parts = []
         for loc in location:
             loc_str = str(loc)
-            if loc_str not in ['__root__', 'root'] and loc_str != sound_name:
+            if loc_str not in ['__root__', 'root'] and loc_str != sound_name and loc_str not in union_type_names:
                 path_parts.append(loc_str)
         
         # Display the error

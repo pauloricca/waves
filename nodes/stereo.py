@@ -1,43 +1,61 @@
-"""
-Stereo node - converts mono signal to stereo with panning.
-
-Takes a mono signal and applies panning to create stereo output.
-The pan parameter can be static or dynamic (WavableValue).
-
-Example:
-  stereo:
-    pan: -0.5  # Pan 50% left
-    signal:
-      osc:
-        type: sin
-        freq: 440
-
-  # Dynamic panning
-  stereo:
-    pan:
-      osc:
-        type: sin
-        freq: 2
-        range: [-1, 1]
-    signal:
-      osc:
-        type: sin
-        freq: 440
-"""
-
 from __future__ import annotations
 import numpy as np
 from pydantic import ConfigDict
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from nodes.node_utils.panning import apply_panning
 from nodes.wavable_value import WavableValue
+from nodes.node_utils.panning import apply_panning
 from utils import match_length, empty_mono, empty_stereo
 
+"""
+Stereo Node
+
+Converts a mono signal to stereo with optional panning and per-channel gain.
+This is the fundamental stereo signal generator in the system.
+
+Parameters:
+- signal: Input mono signal
+- pan: Pan position (-1 = left, 0 = center, 1 = right). Can be static or dynamic (WavableValue).
+       Uses equal-power panning law for natural stereo imaging.
+- left: Left channel gain multiplier (default: 1.0). Can be static or dynamic.
+- right: Right channel gain multiplier (default: 1.0). Can be static or dynamic.
+
+Output: 2D array of shape (num_samples, 2) with [left, right] channels.
+
+Examples:
+
+# Pan a sine wave to the left
+stereo:
+  signal:
+    osc:
+      type: sin
+      freq: 440
+  pan: -1
+
+# Dynamic panning with an LFO
+stereo:
+  signal:
+    osc:
+      type: sin
+      freq: 440
+  pan:
+    osc:
+      type: sin
+      freq: 0.5
+      range: [-1, 1]
+
+# Custom channel gains
+stereo:
+  signal:
+    sample:
+      file: kick.wav
+  left: 0.8
+  right: 1.2
+"""
 
 class StereoNodeModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
-    signal: BaseNodeModel = None
+    signal: WavableValue = None
     pan: WavableValue = 0.0  # Pan position: -1 (left) to 1 (right), default center
 
 

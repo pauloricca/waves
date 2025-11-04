@@ -18,7 +18,15 @@ class ExpressionNode(BaseNode):
         super().__init__(model, node_id, state, do_initialise_state)
         
         # Compile the main expression using centralized function
-        self.compiled_exp, self.exp_value, self.is_constant = compile_expression(model.exp)
+        try:
+            self.compiled_exp, self.exp_value, self.is_constant = compile_expression(model.exp)
+        except SyntaxError as e:
+            # Add context about which node has the error
+            # Clean up node_id by removing model class names for readability
+            clean_id = node_id.replace('NodeModel', '').replace('.root.', '.')
+            raise SyntaxError(
+                f"\nExpression syntax error in '{clean_id}':\n{str(e)}"
+            ) from e
         
         # Store all extra arguments (both nodes and raw values)
         # Pydantic with extra='allow' stores them in __pydantic_extra__

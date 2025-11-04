@@ -17,7 +17,7 @@ class ShuffleModel(BaseNodeModel):
     chunks: int | None = None  # Number of chunks to split the signal into
     invert: float = 0.1 # percentage of the chunk to invert
     crossfade: WavableValue = 0.0  # crossfade time in seconds between chunks
-    signal: BaseNodeModel = None
+    signal: WavableValue = None
     seed: int | None = None  # Add seed parameter
 
 class ShuffleNode(BaseNode):

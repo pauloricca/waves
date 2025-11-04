@@ -27,7 +27,7 @@ class FilterModel(BaseNodeModel):
     cutoff: WavableValue  # Cutoff frequency in Hz
     peak: WavableValue = 0.0  # A value between -1 and 1 that translates to a 0.5 to 50 Q factor
     type: str = "lowpass"
-    signal: BaseNodeModel = None
+    signal: WavableValue = None
 
 class FilterNode(BaseNode):
     def __init__(self, model: FilterModel, node_id: str, state, do_initialise_state=True):

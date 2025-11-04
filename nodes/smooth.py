@@ -4,12 +4,13 @@ import numpy as np
 from pydantic import ConfigDict
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
+from nodes.wavable_value import WavableValue
 from utils import empty_mono
 
 class SmoothModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     step: float = 0.01
-    signal: BaseNodeModel = None
+    signal: WavableValue = None
 
 class SmoothNode(BaseNode):
     def __init__(self, model: SmoothModel, node_id: str, state=None, do_initialise_state=True):

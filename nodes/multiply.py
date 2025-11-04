@@ -52,7 +52,7 @@ class MultiplyNodeModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     number: Optional[WavableValue] = None  # Number of copies to create
     items: Optional[List[WavableValue]] = None  # List of items to iterate over (foreach mode)
-    signal: BaseNodeModel  # The signal to multiply
+    signal: WavableValue  # The signal to multiply
 
 
 class MultiplyNode(BaseNode):

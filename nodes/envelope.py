@@ -15,7 +15,7 @@ class EnvelopeModel(BaseNodeModel):
     release: Union[float, str] = 0 # length of release in seconds (or expression)
     gate: Optional[WavableValue] = 1.0 # gate signal (>= 0.5 = on, < 0.5 = trigger release)
     trigger: Optional[WavableValue] = None # trigger signal (0→1 crossing retriggers envelope)
-    signal: BaseNodeModel = None # If none, uses a constant signal of 1.0, effectively making it a simple envelope generator
+    signal: WavableValue = None # If none, uses a constant signal of 1.0, effectively making it a simple envelope generator
     end: bool | None = None # if True, return empty array after release is complete (signals parent to stop rendering)
 
 

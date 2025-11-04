@@ -5,6 +5,7 @@ from pydantic import ConfigDict
 
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
+from nodes.wavable_value import WavableValue
 from nodes.node_utils.midi_utils import (
     MidiInputManager, 
     midi_note_to_frequency, 
@@ -16,7 +17,7 @@ from nodes.node_utils.midi_utils import (
 class MidiInModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     channel: int = 0  # MIDI channel to listen to (0-15)
-    signal: BaseNodeModel  # The sound/signal to play when a note is triggered
+    signal: WavableValue  # The sound/signal to play when a note is triggered
     voices: int = 16  # Maximum number of simultaneous voices (polyphony limit)
     device: str | None = None  # Optional device key from config, None = use default
     duration: float = math.inf

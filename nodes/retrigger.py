@@ -1,24 +1,3 @@
-"""
-Retrigger node - creates delayed repeats of a signal with feedback.
-
-Supports stereo output when num_channels=2 is requested:
-- spread (0-1): Controls stereo width of retriggers. 0 = all centered, 1 = full spread
-- movement (Hz): Speed of rotation in stereo field (0 = static positions)
-
-Example:
-  retrigger:
-    time: 0.15        # Time between retriggers
-    repeats: 5        # Number of retriggers
-    feedback: 0.7     # Volume decay per retrigger
-    spread: 1.0       # Full stereo spread
-    movement: 0.5     # Rotate at 0.5 Hz
-    signal:
-      osc:
-        type: sin
-        freq: 440
-        duration: 0.05
-"""
-    
 from __future__ import annotations
 import numpy as np
 from pydantic import ConfigDict
@@ -26,7 +5,29 @@ from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.node_utils.panning import apply_panning
+from nodes.wavable_value import WavableValue
 from utils import add_waves, empty_mono, empty_stereo
+
+"""
+Retrigger Node
+
+Re-triggers a child signal at a specified interval. Each retrigger starts the child signal
+from the beginning, overlaying it on top of previous triggers still playing out.
+
+Parameters:
+- signal: The signal to retrigger
+- interval: Time in seconds between retriggers (can be a WavableValue for dynamic timing)
+- duration: Total duration of the retrigger node output in seconds
+
+Example:
+retrigger:
+  signal:
+    osc:
+      type: sin
+      freq: 440
+  interval: 0.5    # Retrigger every 0.5 seconds
+  duration: 4.0    # Run for 4 seconds total
+"""
 
 class RetriggerModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
@@ -35,7 +36,7 @@ class RetriggerModel(BaseNodeModel):
     feedback: float = 0.3
     spread: float = 0.0  # Stereo spread: 0 = all centered, 1 = full stereo spread
     movement: float = 0.0  # How quickly retriggers move in stereo field (cycles per second)
-    signal: BaseNodeModel = None
+    signal: WavableValue = None
 
 class RetriggerNode(BaseNode):
     def __init__(self, model: RetriggerModel, node_id: str, state, do_initialise_state=True):

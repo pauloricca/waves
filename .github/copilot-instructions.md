@@ -636,5 +636,4 @@ When adding new features we should consider the following ideas for future work 
 - When passing positional arguments to functions or methods and the arguments have the same name as the variables, we should just pass them without specifying the name to avoid "name=name" argument passing.
 - **Boolean naming convention**: All boolean variables in Python code (not model parameters) should be named with a prefix: `is_`, `do_`, `are_`, or `has_`. Examples: `is_active`, `do_loop`, `are_nodes_ready`, `has_state`. Model parameters can have simpler names for cleaner YAML (e.g., `loop: true`).
 - Very important: Use vectorised numpy operations when possible, avoid "for" loops over numpy arrays because this is a realtime application dealing with very large arrays.
-- The timeout and gtimeout commands are not available on my system, avoid using them.
 - Don't bother doing intensive testing, just run a basic check after each task to check that the code compilies.

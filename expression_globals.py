@@ -203,8 +203,16 @@ def compile_expression(expr):
         import re
         processed_expr = re.sub(r'\$([a-zA-Z_][a-zA-Z0-9_]*)', r'\1', expr)
         
-        # String expression - compile it
-        return (compile(processed_expr, '<expression>', 'eval'), None, False)
+        # String expression - compile it with better error message
+        try:
+            return (compile(processed_expr, '<expression>', 'eval'), None, False)
+        except SyntaxError as e:
+            # Provide a more helpful error message
+            raise SyntaxError(
+                f"Invalid expression syntax: '{expr}'\n"
+                f"Error: {e.msg} at position {e.offset}\n"
+                f"Processed expression: '{processed_expr}'"
+            ) from e
     elif hasattr(expr, 'co_code'):
         # Already compiled
         return (expr, None, False)

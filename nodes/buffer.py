@@ -99,7 +99,7 @@ class BufferModel(BaseNodeModel):
     file: str = None  # Optional: load audio file into buffer
     
     # Write parameters
-    signal: BaseNodeModel = None  # Optional: signal to write to buffer
+    signal: WavableValue = None  # Optional: signal to write to buffer
     
     # Read parameters - two modes:
     # Mode 1: Offset-based (relative to write head)

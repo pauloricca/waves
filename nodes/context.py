@@ -12,7 +12,7 @@ from utils import empty_mono
 # rendered first and added as variables to the render params before rendering the signal.
 class ContextNodeModel(BaseNodeModel):
     model_config = ConfigDict(extra='allow')  # Allow arbitrary named parameters
-    signal: BaseNodeModel
+    signal: WavableValue
     is_pass_through: bool = True
 
 

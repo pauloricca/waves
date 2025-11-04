@@ -35,12 +35,13 @@ from typing import List
 from pydantic import ConfigDict
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
+from nodes.wavable_value import WavableValue
 from utils import add_waves, empty_mono
 
 
 class MixModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
-    signals: List[BaseNodeModel] = []
+    signals: List[WavableValue] = []
 
 
 class MixNode(BaseNode):

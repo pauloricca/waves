@@ -38,7 +38,7 @@ from config import SAMPLE_RATE
 #       # Your sound definition
 class TempoNodeModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
-    signal: BaseNodeModel  # The signal to render with tempo context
+    signal: WavableValue  # The signal to render with tempo context
     bpm: Optional[WavableValue] = None  # BPM as WavableValue (scalar, expression, or node)
     source: str = "internal"  # "internal" (use bpm param) or "external" (MIDI clock)
     device: Optional[str] = None  # Optional MIDI device key for external sync
@@ -50,6 +50,7 @@ class TempoNode(BaseNode):
         from nodes.node_utils.midi_utils import MidiInputManager, MidiOutputManager
         
         super().__init__(model, node_id, state, do_initialise_state)
+        self.model = model  # Store model for is_pass_through check
         self.is_stereo = True  # Tempo is a pass-through node, supports stereo
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
         self.source = model.source.lower()
