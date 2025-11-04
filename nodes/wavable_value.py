@@ -17,8 +17,9 @@ class InterpolationTypes(str, Enum):
     STEP = "STEP"
 
 
-WavableValue = Union[float, int, List[Union[float, List[float]]], BaseNodeModel, str]
-WavableValueNotModel = Union[float, int, List[Union[float, List[float]]], str]
+# Allow strings (expressions) within interpolation lists
+WavableValue = Union[float, int, List[Union[float, str, List[Union[float, str]]]], BaseNodeModel, str]
+WavableValueNotModel = Union[float, int, List[Union[float, str, List[Union[float, str]]]], str]
 
 class WavableValueModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
@@ -43,8 +44,31 @@ class WavableValueNode(BaseNode):
             self.value_type = 'scalar'
         elif isinstance(model.value, list):
             self.value_type = 'interpolated'
+            # Pre-compile expressions in interpolation lists
+            self._compile_interpolation_expressions()
         else:
             self.value_type = 'unknown'
+    
+    def _compile_interpolation_expressions(self):
+        """Pre-compile any expression strings found in interpolation lists."""
+        from expression_globals import compile_expression
+        self.compiled_interpolation = []
+        for item in self.value:
+            if isinstance(item, str):
+                # Single expression
+                self.compiled_interpolation.append(compile_expression(item))
+            elif isinstance(item, list):
+                # [value, position] - compile value if it's a string
+                if isinstance(item[0], str):
+                    compiled_value = compile_expression(item[0])
+                    # Keep position as-is (it should be numeric)
+                    self.compiled_interpolation.append([compiled_value, item[1]])
+                else:
+                    # Already numeric
+                    self.compiled_interpolation.append(item)
+            else:
+                # Already numeric
+                self.compiled_interpolation.append(item)
 
     def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         from expression_globals import get_expression_context, evaluate_compiled
@@ -83,7 +107,11 @@ class WavableValueNode(BaseNode):
                 raise ValueError("Duration must be set somewhere above interpolated values.")
             
             if self.interpolated_values is None or len(self.interpolated_values) != time_to_samples(duration ):
-                self.interpolated_values = interpolate_values(self.value, time_to_samples(duration ), self.interpolation_type)
+                # Evaluate any expressions in the interpolation list first
+                from expression_globals import get_expression_context, evaluate_compiled
+                eval_context = get_expression_context(params, self.time_since_start, 1, context)
+                evaluated_values = self._evaluate_interpolation_list(eval_context)
+                self.interpolated_values = interpolate_values(evaluated_values, time_to_samples(duration ), self.interpolation_type)
 
             if num_samples is None:
                 # Return the entire interpolated values
@@ -97,6 +125,44 @@ class WavableValueNode(BaseNode):
                 interpolated_values_section = np.concatenate([interpolated_values_section, padding])
 
             return interpolated_values_section.copy()
+    
+    def _evaluate_interpolation_list(self, eval_context):
+        """Evaluate any compiled expressions in the interpolation list."""
+        from expression_globals import evaluate_compiled
+        
+        evaluated = []
+        for item in self.compiled_interpolation:
+            if isinstance(item, tuple):
+                # It's a compiled expression tuple (compiled_code, const_value, is_constant)
+                value = evaluate_compiled(item, eval_context, num_samples=None)
+                # Ensure it's a simple float
+                if isinstance(value, np.ndarray):
+                    value = float(value[0]) if len(value) > 0 else 0.0
+                elif isinstance(value, (int, float)):
+                    value = float(value)
+                evaluated.append(value)
+            elif isinstance(item, list):
+                # [value/compiled, position]
+                if isinstance(item[0], tuple):
+                    # It's a compiled expression
+                    value = evaluate_compiled(item[0], eval_context, num_samples=None)
+                    # Ensure it's a simple float
+                    if isinstance(value, np.ndarray):
+                        value = float(value[0]) if len(value) > 0 else 0.0
+                    elif isinstance(value, (int, float)):
+                        value = float(value)
+                    evaluated.append([value, item[1]])
+                else:
+                    # Already numeric
+                    evaluated.append(item)
+            else:
+                # Already numeric - ensure it's float
+                if isinstance(item, (int, float)):
+                    evaluated.append(float(item))
+                else:
+                    evaluated.append(item)
+        
+        return evaluated
 
 
 

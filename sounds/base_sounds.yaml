@@ -3,13 +3,43 @@ kick-drum:
     click:
       osc:
         type: sqr
-        freq: 800
-        duration: 0.001
+        freq: 200
+        duration: 0.002
+        amp: [0.3, 0]
     thump:
       osc:
-        freq: 70
-        duration: 2
-        release: 0.1
+        freq: [800, [100, 0.1], 100]
+        duration: 0.05
+        amp: [0.4, 0]
+    body:
+      osc:
+        freq: [100, [50, 0.2], 50]
+        duration: 0.2
+        amp: [1, 0]
+
+
+kick-drum-dynamic:
+  context:
+    tune: 50
+    signal:
+      tracks:
+        click:
+          osc:
+            type: sqr
+            freq: tune * 4
+            duration: 0.002
+            amp: [0.3, 0]
+        thump:
+          osc:
+            freq: [tune * 16, [tune * 2, 0.1]]
+            duration: 0.05
+            amp: [0.4, 0]
+        body:
+          osc:
+            freq: [tune * 2, [50, 0.2]]
+            duration: 0.2
+            amp: [1, 0]
+
 
 
 kick-test:
@@ -20,7 +50,7 @@ kick-test:
         interval: beat / 4
         repeat: 1000
         sequence:
-          - kick-drum
+          - kick-drum-dynamic
           - 
           - 
           -
