@@ -141,7 +141,8 @@ def get_expression_context(render_params: dict, time: float, num_samples: int, r
     1. Global constants (lowest priority - base layer)
     2. User variables
     3. Render params  
-    4. Special runtime variables (highest priority)
+    4. Referenced node outputs (from render_context)
+    5. Special runtime variables (highest priority)
     
     Optimized: Start with global constants, layer on top to minimize dict operations.
     """
@@ -156,6 +157,13 @@ def get_expression_context(render_params: dict, time: float, num_samples: int, r
     # Layer on render params (overwrite user vars if there's a conflict)
     if render_params:
         context.update(render_params)
+    
+    # Add referenced node outputs from render_context
+    # These are injected as variables so they can be used in expressions
+    if render_context is not None:
+        for node_id, output in render_context.node_outputs_by_id.items():
+            # Make output available both as-is for direct reference
+            context[node_id] = output
     
     # Add runtime-specific values (highest priority - overwrite everything)
     context['time'] = time
@@ -173,6 +181,10 @@ def compile_expression(expr):
     """
     Compile an expression for evaluation.
     
+    Supports $node_id syntax sugar for node references:
+    - "$my_node * 2" is equivalent to "my_node * 2" where my_node is a referenced node output
+    - The $ is optional but makes it clear that you're referencing a node
+    
     Args:
         expr: Can be a string (expression to compile), numeric value (returns as-is),
               or already compiled code object (returns as-is)
@@ -186,8 +198,13 @@ def compile_expression(expr):
         # Numeric constant - no compilation needed
         return (None, float(expr), True)
     elif isinstance(expr, str):
+        # Preprocess: Replace $node_id with node_id (syntax sugar for node references)
+        # Use regex to find $identifier patterns and strip the $
+        import re
+        processed_expr = re.sub(r'\$([a-zA-Z_][a-zA-Z0-9_]*)', r'\1', expr)
+        
         # String expression - compile it
-        return (compile(expr, '<expression>', 'eval'), None, False)
+        return (compile(processed_expr, '<expression>', 'eval'), None, False)
     elif hasattr(expr, 'co_code'):
         # Already compiled
         return (expr, None, False)

@@ -1403,3 +1403,53 @@ test_interval_pentatonic:
             mode: step
             steps: [0, 2, 4, 6, 8]
         scale: [0, 2, 4, 7, 9]  # Major pentatonic
+
+# Test $ syntax for node references in expressions
+test_dollar_reference:
+  mix:
+    duration: 2
+    signals:
+      # Define an LFO with an id
+      - osc:
+          id: my_lfo
+          type: sin
+          freq: 2
+          range: [200, 800]
+      
+      # Use it directly in an expression with $ syntax (no quotes needed!)
+      - osc:
+          type: sin
+          freq:
+            expression:
+              exp: $my_lfo  # Syntax sugar for referencing my_lfo
+      
+      # Use it in a more complex expression
+      - osc:
+          type: tri
+          freq:
+            expression:
+              exp: $my_lfo * 1.5  # Modulate with multiplication
+      
+      # Use it directly as a WavableValue without quotes
+      - osc:
+          type: saw
+          freq: $my_lfo * 0.5  # $ works in string expressions without quotes!
+
+# Test $ syntax with multiple references
+test_dollar_multi_reference:
+  expression:
+    duration: 2
+    exp: $lfo1 + $lfo2 * 0.5  # Combine multiple referenced nodes
+    lfo1:
+      osc:
+        id: lfo1
+        type: sin
+        freq: 3
+        range: [0, 1]
+    lfo2:
+      osc:
+        id: lfo2
+        type: tri
+        freq: 5
+        range: [-1, 1]
+

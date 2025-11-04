@@ -145,6 +145,55 @@ my_sound:
 - With render params: `freq: "root_note * 2"`
 - Array operations: `exp: "clip(signal * 2, -1, 1)"` (distortion)
 - Time-based: `exp: "sin(t * tau * 440) * 0.5"` (synthesize from scratch)
+- Node references: `freq: $my_lfo * 2` (use output of node with id="my_lfo")
+
+**Node references in expressions ($ syntax):**
+You can reference the output of any node with an `id` field directly in expressions using the `$node_id` syntax:
+
+```yaml
+my_sound:
+  mix:
+    signals:
+      # Define an LFO with an id
+      - osc:
+          id: my_lfo
+          type: sin
+          freq: 2
+          range: [200, 800]
+      
+      # Reference it in an expression with $ syntax (no quotes needed!)
+      - osc:
+          type: sin
+          freq: $my_lfo  # Syntax sugar - automatically references the node's output
+      
+      # Use in more complex expressions
+      - osc:
+          type: tri
+          freq: $my_lfo * 1.5  # Combine with math operations
+      
+      # Multiple references in one expression
+      - expression:
+          exp: $lfo1 + $lfo2 * 0.5
+          lfo1:
+            osc:
+              id: lfo1
+              type: sin
+              freq: 3
+          lfo2:
+            osc:
+              id: lfo2
+              type: tri
+              freq: 5
+```
+
+The `$` prefix is syntax sugar that makes it clear you're referencing a node. It's equivalent to:
+```yaml
+freq:
+  reference:
+    ref: my_lfo
+```
+
+But much more concise and readable, especially when combining multiple references or using them in complex expressions.
 
 **User variables:**
 Define global variables at the top of waves.yaml:
@@ -207,30 +256,50 @@ my_sound:
 ```
 
 **Referencing a node:**
+
+There are two ways to reference a node with an `id`:
+
+1. **Using the `reference` node (verbose)**:
 ```yaml
 my_sound:
   mix:
     signals:
-      # Define an LFO with an id
       - osc:
           id: shared_lfo
           type: sin
           freq: 2
           range: [200, 800]
       
-      # Use it to modulate frequency of multiple oscillators
       - osc:
           type: sin
           freq:
             reference:
               ref: shared_lfo
+```
+
+2. **Using `$` syntax in expressions (concise)**:
+```yaml
+my_sound:
+  mix:
+    signals:
+      - osc:
+          id: shared_lfo
+          type: sin
+          freq: 2
+          range: [200, 800]
       
+      # Direct reference with $ syntax (no quotes needed!)
+      - osc:
+          type: sin
+          freq: $shared_lfo
+      
+      # Combine with math operations
       - osc:
           type: tri
-          freq:
-            reference:
-              ref: shared_lfo
+          freq: $shared_lfo * 1.5
 ```
+
+The `$` syntax is syntax sugar that's much more concise and readable, especially when combining multiple references or using them in complex expressions. See `instructions/DOLLAR_SYNTAX.md` for full documentation.
 
 **Feedback loops:**
 Nodes can reference themselves or create circular dependencies. The system automatically detects and controls feedback loops using recursion depth tracking:

@@ -41,7 +41,7 @@ class OscillatorModel(BaseNodeModel):
     release: float = 0 # Release time in seconds
     scale: float = 1.0 # Perlin/wander variation rate (higher = faster changes)
     seed: Optional[float] = None # Perlin/wander noise seed
-    range: Optional[Tuple[WavableValue, WavableValue]] = None # Output range [min, max] - supports WavableValues
+    range: Optional[Tuple[WavableValue, WavableValue]] = None # Amplitude output range [min, max]
     
     @field_validator("type", mode="before")
     @classmethod
