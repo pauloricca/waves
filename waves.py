@@ -413,6 +413,11 @@ def main():
 
     if not load_all_sound_libraries(SOUNDS_DIR):
         return
+    
+    # Initialize MIDI system early to avoid hiccups during playback
+    # This ensures MIDI devices are detected and opened before audio starts
+    from nodes.node_utils.midi_utils import MidiInputManager
+    MidiInputManager()
 
     if len(sys.argv) < 2:
         print("Usage: python waves.py <sound-name> [param1VALUE] [param2VALUE] ...")
