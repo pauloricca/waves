@@ -5,6 +5,7 @@ from pydantic import ConfigDict
 from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
+from nodes.node_utils.range_mapper import RangeMapper
 from nodes.wavable_value import WavableValue
 
 """
@@ -62,8 +63,12 @@ class FollowNode(BaseNode):
         super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
-        self.range_min_node = self.instantiate_child_node(model.range[0], "range_min")
-        self.range_max_node = self.instantiate_child_node(model.range[1], "range_max")
+        
+        # Create range mapper with [0, 1] as source range (envelope output is normalized)
+        self.range_mapper = RangeMapper.from_model_range(
+            self, model.range, "range", 
+            from_range=(0.0, 1.0)
+        )
         
         # Persistent state for realtime rendering (survives hot reload)
         if do_initialise_state:
@@ -82,16 +87,6 @@ class FollowNode(BaseNode):
             return np.array([], dtype=np.float32)
         
         actual_num_samples = len(signal_wave)
-        
-        # Get the output range
-        range_min = self.range_min_node.render(actual_num_samples, context, **self.get_params_for_children(params))
-        range_max = self.range_max_node.render(actual_num_samples, context, **self.get_params_for_children(params))
-        
-        # Ensure range values are arrays
-        if not isinstance(range_min, np.ndarray):
-            range_min = np.full(actual_num_samples, range_min, dtype=np.float32)
-        if not isinstance(range_max, np.ndarray):
-            range_max = np.full(actual_num_samples, range_max, dtype=np.float32)
         
         # Calculate attack and release coefficients
         # These determine how much of the new value vs old value to use
@@ -124,8 +119,11 @@ class FollowNode(BaseNode):
         # Store the last value for the next chunk
         self.state.envelope_value = current_value
         
-        # Map from [0, 1] to the output range
-        output_wave = range_min + envelope_output * (range_max - range_min)
+        # Map from [0, 1] to the output range using RangeMapper
+        if self.range_mapper:
+            output_wave = self.range_mapper.map(envelope_output, actual_num_samples, context, **params)
+        else:
+            output_wave = envelope_output
         
         return output_wave
 

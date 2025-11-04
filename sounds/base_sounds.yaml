@@ -18,6 +18,23 @@ kick-drum:
         amp: [1, 0]
 
 
+# Test dynamic range with LFO modulating oscillator range
+test-dynamic-range:
+  osc:
+    type: sin
+    freq: 440
+    duration: 10
+    range:
+      - osc:
+          type: sin
+          freq: 50
+          range: [-1, -0.1]
+      - osc:
+          type: sin
+          freq: 300
+          range: [1, 0.1]
+
+
 kick-drum-dynamic:
   context:
     tune: 50

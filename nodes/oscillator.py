@@ -9,6 +9,7 @@ from config import DO_NORMALISE_EACH_SOUND, OSC_ENVELOPE_TYPE, SAMPLE_RATE
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import InterpolationTypes, WavableValue
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
+from nodes.node_utils.range_mapper import RangeMapper
 from vnoise import Noise
 
 from utils import multiply_waves, empty_mono, time_to_samples, samples_to_time
@@ -40,7 +41,7 @@ class OscillatorModel(BaseNodeModel):
     release: float = 0 # Release time in seconds
     scale: float = 1.0 # Perlin/wander variation rate (higher = faster changes)
     seed: Optional[float] = None # Perlin/wander noise seed
-    range: Optional[Tuple[float, float]] = None # Output range [min, max]
+    range: Optional[Tuple[WavableValue, WavableValue]] = None # Output range [min, max] - supports WavableValues
     
     @field_validator("type", mode="before")
     @classmethod
@@ -76,6 +77,9 @@ class OscillatorNode(BaseNode):
         self.phase_mod = self.instantiate_child_node(model.phase, "phase_mod") if model.phase else None
         self.pulse_width = self.instantiate_child_node(model.pulse_width, "pulse_width")
         self.seed = self.model.seed or random.randint(0, 10000)
+        
+        # Create range mapper if range is specified
+        self.range_mapper = RangeMapper.from_model_range(self, model.range)
         
         # Persistent state (survives hot reload)
         if do_initialise_state:
@@ -326,11 +330,9 @@ class OscillatorNode(BaseNode):
             total_wave = np.clip(total_wave, -1, 1)  # Ensure wave is in the range [-1, 1]
             total_wave = total_wave.astype(np.float32)  # Convert to float32 for sounddevice
 
-        # Convert from [-1, 1] to [min, max] using range parameter
-        if self.model.range is not None:
-            min_val, max_val = self.model.range
-            total_wave = (total_wave + 1) / 2  # Convert from [-1, 1] to [0, 1]
-            total_wave = total_wave * (max_val - min_val) + min_val  # Scale to [min, max]
+        # Apply range mapping if specified
+        if self.range_mapper:
+            total_wave = self.range_mapper.map(total_wave, num_samples, context, **params)
 
         return total_wave
     

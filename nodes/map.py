@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 from typing import Optional, Tuple
 import numpy as np
@@ -6,6 +5,7 @@ from pydantic import ConfigDict, field_validator, model_validator
 from config import *
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
+from nodes.node_utils.range_mapper import RangeMapper
 from nodes.wavable_value import WavableValue
 
 """
@@ -110,17 +110,12 @@ class MapNode(BaseNode):
         self.model = model
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
         
-        # Initialize from range (default to [0, 1])
-        if self.model.from_ is None:
-            self.from_min = self.instantiate_child_node(0, "from_min")
-            self.from_max = self.instantiate_child_node(1, "from_max")
-        else:
-            self.from_min = self.instantiate_child_node(self.model.from_[0], "from_min")
-            self.from_max = self.instantiate_child_node(self.model.from_[1], "from_max")
-        
-        # Initialize to range (required)
-        self.to_min = self.instantiate_child_node(self.model.to[0], "to_min")
-        self.to_max = self.instantiate_child_node(self.model.to[1], "to_max")
+        # Create range mapper with optional from range (defaults to [0, 1])
+        from_range = model.from_ if model.from_ is not None else (0.0, 1.0)
+        self.range_mapper = RangeMapper.from_model_range(
+            self, model.to, "to",
+            from_range=from_range, from_attribute_name="from"
+        )
         
         # Initialize clip range (optional)
         if self.model.clip is not None:
@@ -153,61 +148,14 @@ class MapNode(BaseNode):
     
     def _apply_mapping(self, signal_wave, num_samples, context, params):
         """Apply mapping to the signal wave"""
-        child_params = self.get_params_for_children(params)
-        
-        from_min_wave = self.from_min.render(num_samples, context, **child_params)
-        from_max_wave = self.from_max.render(num_samples, context, **child_params)
-        to_min_wave = self.to_min.render(num_samples, context, **child_params)
-        to_max_wave = self.to_max.render(num_samples, context, **child_params)
-        
-        # Ensure all waves have the same length as signal_wave
-        for wave_name, wave in [('from_min', from_min_wave), ('from_max', from_max_wave), 
-                                 ('to_min', to_min_wave), ('to_max', to_max_wave)]:
-            if isinstance(wave, np.ndarray) and len(wave) != len(signal_wave):
-                if wave_name == 'from_min':
-                    from_min_wave = np.interp(np.linspace(0, 1, len(signal_wave)), 
-                                              np.linspace(0, 1, len(wave)), wave)
-                elif wave_name == 'from_max':
-                    from_max_wave = np.interp(np.linspace(0, 1, len(signal_wave)), 
-                                              np.linspace(0, 1, len(wave)), wave)
-                elif wave_name == 'to_min':
-                    to_min_wave = np.interp(np.linspace(0, 1, len(signal_wave)), 
-                                            np.linspace(0, 1, len(wave)), wave)
-                elif wave_name == 'to_max':
-                    to_max_wave = np.interp(np.linspace(0, 1, len(signal_wave)), 
-                                            np.linspace(0, 1, len(wave)), wave)
-
-        # Map the wave from [from_min, from_max] to [to_min, to_max]
-        # Vectorized normalization using NumPy's broadcasting
-        from_range = from_max_wave - from_min_wave
-        
-        # Check if we have arrays or scalars
-        is_array_from = isinstance(from_min_wave, np.ndarray) and isinstance(from_max_wave, np.ndarray)
-        is_array_to = isinstance(to_min_wave, np.ndarray) and isinstance(to_max_wave, np.ndarray)
-        
-        if is_array_from or is_array_to:
-            # Handle division by zero: where from_range is 0, use midpoint of to range
-            with np.errstate(divide='ignore', invalid='ignore'):
-                normalized = np.where(from_range != 0, 
-                                     (signal_wave - from_min_wave) / from_range,
-                                     0.5)  # Use 0.5 (middle) when range is 0
-            
-            # Apply to target range
-            signal_wave = to_min_wave + (to_max_wave - to_min_wave) * normalized
-        else:
-            # Both are scalars
-            if from_range != 0:
-                normalized = (signal_wave - from_min_wave) / from_range
-                signal_wave = to_min_wave + (to_max_wave - to_min_wave) * normalized
-            else:
-                # Handle case where from_min equals from_max to avoid division by zero
-                signal_wave = np.full_like(signal_wave, (to_min_wave + to_max_wave) / 2)
+        # Apply range mapping using RangeMapper
+        mapped_wave = self.range_mapper.map(signal_wave, num_samples, context, **params)
 
         # Clip the wave to the specified range if provided
         if self.clip_min is not None or self.clip_max is not None:
-            signal_wave = np.clip(signal_wave, self.clip_min, self.clip_max)
+            mapped_wave = np.clip(mapped_wave, self.clip_min, self.clip_max)
 
-        return signal_wave
+        return mapped_wave
 
 
 MAP_DEFINITION = NodeDefinition("map", MapNode, MapModel)

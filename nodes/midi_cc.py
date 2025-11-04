@@ -7,8 +7,9 @@ from pydantic import ConfigDict, field_validator
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.node_utils.midi_utils import MidiInputManager, MIDI_DEBUG
+from nodes.node_utils.range_mapper import RangeMapper
 from nodes.wavable_value import WavableValue
-from utils import ensure_array, get_last_or_default
+from utils import get_last_or_default
 
 
 class MidiCCModel(BaseNodeModel):
@@ -44,9 +45,12 @@ class MidiCCNode(BaseNode):
         
         # Instantiate child nodes for dynamic parameters
         self.cc_node = self.instantiate_child_node(model.cc, "cc")
-        # Extract min and max from range tuple
-        self.min_node = self.instantiate_child_node(model.range[0], "range_0")
-        self.max_node = self.instantiate_child_node(model.range[1], "range_1")
+        
+        # Create range mapper with [0, 1] as source range (MIDI CC is normalized to 0-1)
+        self.range_mapper = RangeMapper.from_model_range(
+            self, model.range, "range",
+            from_range=(0.0, 1.0)
+        )
         
         # Persistent state for CC tracking (survives hot reload)
         if do_initialise_state:
@@ -117,29 +121,29 @@ class MidiCCNode(BaseNode):
         else:
             cc_number = float(cc_wave)
         
-        # Render min and max values (can be dynamic per-sample)
-        min_wave = self.min_node.render(num_samples, context, **params_for_children)
-        max_wave = self.max_node.render(num_samples, context, **params_for_children)
-        
-        # Ensure they're arrays of the right length
-        min_wave = ensure_array(min_wave, num_samples)
-        if len(min_wave) == 1:
-            min_wave = np.full(num_samples, min_wave[0], dtype=np.float32)
-            
-        max_wave = ensure_array(max_wave, num_samples)
-        if len(max_wave) == 1:
-            max_wave = np.full(num_samples, max_wave[0], dtype=np.float32)
-        
         # Process any pending MIDI messages using the current CC number
         self._process_midi_messages(cc_number)
         
-        # Map the normalized value (0-1) to the min-max range for each sample
-        # This allows the range to change over time while the MIDI value stays constant
-        target_wave = min_wave + (self.state.current_normalized_value * (max_wave - min_wave))
+        # Create a normalized (0-1) wave filled with the current CC value
+        normalized_wave = np.full(num_samples, self.state.current_normalized_value, dtype=np.float32)
         
         # Initialize last_output_value if this is the first render
         if self.state.last_output_value is None:
-            self.state.last_output_value = target_wave[0] if num_samples > 0 else 0.0
+            # Get the initial output value by mapping the normalized value
+            if self.range_mapper:
+                initial_output = self.range_mapper.map(
+                    np.array([self.state.current_normalized_value], dtype=np.float32),
+                    1, context, **params
+                )
+                self.state.last_output_value = initial_output[0]
+            else:
+                self.state.last_output_value = self.state.current_normalized_value
+        
+        # Map from [0, 1] to the output range using RangeMapper
+        if self.range_mapper:
+            target_wave = self.range_mapper.map(normalized_wave, num_samples, context, **params)
+        else:
+            target_wave = normalized_wave
         
         # When rendering a single sample, return the target value directly without smoothing
         if num_samples == 1:
