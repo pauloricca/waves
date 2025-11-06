@@ -53,9 +53,11 @@ def create_loudness_meter(loudness: float, width: int = 20) -> str:
     # Full blocks
     filled_part = '█' * full_blocks + partial_char
     # Empty part
-    empty_part = ' ' * (width - full_blocks - (1 if partial_char else 0))
+    # Use grey color for empty blocks
+    grey_code = '\033[90m'
+    empty_part = f"{grey_code}{'|' * (width - full_blocks - (1 if partial_char else 0))}{reset_code}"
     
-    return f"[{color_code}{filled_part}{reset_code}{empty_part}]"
+    return f"{color_code}{filled_part}{reset_code}{empty_part}"
 
 
 def format_stats_line(cpu_usage_percent: float, elapsed_seconds: float, is_recording: bool, loudness: float = 0.0, show_loudness: bool = False, midi_message: str = None) -> str:

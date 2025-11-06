@@ -8,7 +8,7 @@ from typing import Optional, TYPE_CHECKING
 from pydantic import BaseModel
 
 from constants import RenderArgs
-from utils import empty_mono, empty_stereo, time_to_samples, samples_to_time
+from utils import empty_mono, empty_stereo, time_to_samples, samples_to_time, to_stereo
 
 if TYPE_CHECKING:
     from nodes.wavable_value import WavableValue
@@ -145,7 +145,7 @@ class BaseNode:
                 if len(mono_result) == 0:
                     return empty_stereo()
                 # Duplicate mono to stereo (center panned)
-                result = np.stack([mono_result, mono_result], axis=-1)
+                result = to_stereo(mono_result)
             else:
                 # Parent wants mono and we're mono - normal rendering
                 result = self._do_render(num_samples, context, num_channels, **params)

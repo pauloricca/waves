@@ -4,7 +4,7 @@ from typing import Union
 from pydantic import ConfigDict
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from utils import empty_mono
+from utils import empty_mono, empty_stereo, to_stereo, to_mono, is_stereo
 
 
 class ExpressionNodeModel(BaseNodeModel):
@@ -16,6 +16,9 @@ class ExpressionNode(BaseNode):
     def __init__(self, model: ExpressionNodeModel, node_id: str, state=None, do_initialise_state=True):
         from expression_globals import compile_expression
         super().__init__(model, node_id, state, do_initialise_state)
+        
+        # ExpressionNode is stereo-capable - it can process and pass through stereo signals
+        self.is_stereo = True
         
         # Compile the main expression using centralized function
         try:
@@ -95,8 +98,8 @@ class ExpressionNode(BaseNode):
         all_children_finished = True
         for name, value in self.args.items():
             if isinstance(value, BaseNode):
-                # Render node
-                wave = value.render(num_samples, context, 
+                # Render node - pass num_channels to allow stereo children
+                wave = value.render(num_samples, context, num_channels,
                                    **self.get_params_for_children(params))
                 
                 # Track if any child is still producing samples
@@ -105,14 +108,23 @@ class ExpressionNode(BaseNode):
                 
                 # If child returned fewer samples, pad with zeros
                 if len(wave) < num_samples:
-                    wave = np.pad(wave, (0, num_samples - len(wave)), mode='constant', constant_values=0)
+                    if not is_stereo(wave):
+                        # Mono - simple padding
+                        wave = np.pad(wave, (0, num_samples - len(wave)), mode='constant', constant_values=0)
+                    else:
+                        # Stereo or multi-channel - pad only time axis (first dimension)
+                        pad_width = [(0, num_samples - len(wave))] + [(0, 0)] * (wave.ndim - 1)
+                        wave = np.pad(wave, pad_width, mode='constant', constant_values=0)
                 
                 eval_context[name] = wave
             # Note: scalar values are handled below in compiled_args
         
         # If all children have finished (returned empty arrays), signal completion
         if all_children_finished and len(self.args) > 0:
-            return empty_mono()
+            if num_channels == 1:
+                return empty_mono()
+            else:
+                return empty_stereo()
         
         # Evaluate compiled arguments (expressions and constants)
         for name, compiled_info in self.compiled_args.items():
@@ -139,8 +151,13 @@ class ExpressionNode(BaseNode):
                 output = result.astype(np.float32)
         elif isinstance(result, (int, float, np.number)):
             output = np.full(num_samples, float(result), dtype=np.float32)
+            if num_channels == 2:
+                output = to_stereo(output)
         else:
             raise ValueError(f"Expression returned unsupported type: {type(result)}")
+        
+        # Handle channel mismatch (expression result might be stereo/mono regardless of request)
+        output = to_mono(output) if num_channels == 1 else to_stereo(output)
         
         # Track samples rendered
         self.state.total_samples_rendered += len(output)

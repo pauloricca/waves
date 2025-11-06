@@ -75,6 +75,11 @@ def apply_params_to_model(model: BaseNodeModel, params: Dict[str, Any]) -> BaseN
     """
     Apply parameters to a node model by creating a deep copy and setting attributes.
     
+    Special handling for sub-patches:
+    - If params contains 'signal' and model has 'input_signal' (even if it also has 'signal'),
+      PREFER mapping 'signal' to 'input_signal' for sub-patch compatibility.
+    - This allows sub-patches to use 'input_signal' internally while accepting 'signal' externally.
+    
     Args:
         model: The node model to apply parameters to
         params: Dictionary of parameter names to values
@@ -90,7 +95,12 @@ def apply_params_to_model(model: BaseNodeModel, params: Dict[str, Any]) -> BaseN
     
     # Apply each parameter that exists in the model
     for param_name, param_value in params.items():
-        if hasattr(model_copy, param_name):
+        # Special case: map 'signal' to 'input_signal' if input_signal exists
+        # This enables the pattern where sub-patches use input_signal internally
+        # but accept signal externally (common pattern for reusable components)
+        if param_name == 'signal' and hasattr(model_copy, 'input_signal'):
+            setattr(model_copy, 'input_signal', param_value)
+        elif hasattr(model_copy, param_name):
             setattr(model_copy, param_name, param_value)
     
     return model_copy

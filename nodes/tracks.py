@@ -41,7 +41,7 @@ from types import SimpleNamespace
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.node_utils.panning import apply_panning
-from utils import match_length, empty_stereo
+from utils import match_length, empty_stereo, to_mono, is_stereo
 
 
 class TracksNodeModel(BaseNodeModel):
@@ -132,7 +132,7 @@ class TracksNode(BaseNode):
                 continue
             
             # Check if we got mono or stereo
-            if signal.ndim == 2:
+            if is_stereo(signal):
                 # Signal is already stereo
                 # If we have a pan setting (not default center), mix to mono first then apply panning
                 # This ensures _pan always works, even for stereo sources
@@ -140,7 +140,7 @@ class TracksNode(BaseNode):
                 
                 if has_pan:
                     # Mix stereo to mono (average of left and right channels)
-                    mono_signal = np.mean(signal, axis=1).astype(np.float32)
+                    mono_signal = to_mono(signal)
                     
                     # Get pan value (static or dynamic)
                     if track['is_pan_dynamic']:

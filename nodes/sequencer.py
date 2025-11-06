@@ -8,7 +8,7 @@ from sound_library import get_sound_model
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
-from utils import look_for_duration, empty_mono, time_to_samples, samples_to_time, detect_triggers
+from utils import look_for_duration, empty_mono, time_to_samples, samples_to_time, detect_triggers, to_stereo, to_mono, is_stereo
 
 
 class SequencerModel(BaseNodeModel):
@@ -75,9 +75,12 @@ class SequencerNode(BaseNode):
         if sounds_in_step is None:
             return []
         
-        # Ensure sound_names is always a list
+        # Ensure sound_names is always a list (split comma-separated strings if present)
         if not isinstance(sounds_in_step, list):
-            sounds_in_step = [sounds_in_step]
+            if isinstance(sounds_in_step, str) and ',' in sounds_in_step:
+                sounds_in_step = [s.strip() for s in sounds_in_step.split(',')]
+            else:
+                sounds_in_step = [sounds_in_step]
         
         # Create nodes for each sound in the step
         sound_nodes_data = []
@@ -391,12 +394,7 @@ class SequencerNode(BaseNode):
                     continue
                 
                 # Ensure sound_chunk matches requested num_channels
-                # If we requested stereo but got mono, duplicate to stereo
-                if num_channels == 2 and sound_chunk.ndim == 1:
-                    sound_chunk = np.column_stack([sound_chunk, sound_chunk])
-                # If we requested mono but got stereo, mix to mono
-                elif num_channels == 1 and sound_chunk.ndim == 2:
-                    sound_chunk = np.mean(sound_chunk, axis=1)
+                sound_chunk = to_stereo(sound_chunk) if num_channels == 2 else to_mono(sound_chunk)
                 
                 # If the sound returns fewer samples than we asked for, it's finishing
                 # Update counter and mark for removal if we've caught up
@@ -409,7 +407,7 @@ class SequencerNode(BaseNode):
                 
                 # Mix into step wave (pad if needed)
                 if len(sound_chunk) < len(step_wave):
-                    if num_channels == 2 and sound_chunk.ndim == 2:
+                    if num_channels == 2 and is_stereo(sound_chunk):
                         # Stereo padding
                         sound_chunk = np.pad(sound_chunk, ((0, len(step_wave) - len(sound_chunk)), (0, 0)))
                     else:

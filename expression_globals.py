@@ -16,6 +16,37 @@ def rand(a: float | list, b: float | None = None) -> float:
     # Regular case: uniform between a and b
     return uniform(a, b)
 
+
+# Helper to apply sign-preserving power
+def _sign_preserving_pow(b, e):
+    if isinstance(b, (int, float)):
+        return np.sign(b) * (np.abs(b) ** e)
+    else:  # numpy array
+        # Handle broadcasting for stereo/multi-channel arrays
+        # If b is 2D and e is 1D, reshape e to (n, 1) for proper broadcasting
+        if isinstance(e, np.ndarray) and b.ndim == 2 and e.ndim == 1:
+            e = e.reshape(-1, 1)
+        elif isinstance(e, np.ndarray) and isinstance(b, np.ndarray) and e.ndim == 2 and b.ndim == 1:
+            b = b.reshape(-1, 1)
+        return np.sign(b) * np.power(np.abs(b), e)
+
+
+def pow(base: int | float | np.ndarray, exponent: int | float | np.ndarray) -> float | np.ndarray:
+    """Power function that handles scalars and arrays.
+    For audio signals with negative values, applies power to absolute value
+    and preserves the sign (common technique for audio compression/expansion)."""    
+    if isinstance(base, (int, float)) and isinstance(exponent, (int, float)):
+        return _sign_preserving_pow(base, exponent)
+
+    if isinstance(base, np.ndarray) and isinstance(exponent, np.ndarray):
+        return _sign_preserving_pow(base, exponent)
+
+    if isinstance(base, (int, float)) and isinstance(exponent, np.ndarray):
+        return _sign_preserving_pow(base, exponent)
+
+    if isinstance(base, np.ndarray) and isinstance(exponent, (int, float)):
+        return _sign_preserving_pow(base, exponent)
+
 # Global constants and functions available in all expressions
 GLOBAL_CONSTANTS = {
     # Math constants
@@ -44,13 +75,14 @@ GLOBAL_CONSTANTS = {
     'log2': np.log2,
     'exp': np.exp,
     'sqrt': np.sqrt,
-    'pow': np.power,
+    'pow': pow,
     'max': np.maximum,
     'min': np.minimum,
     'floor': np.floor,
     'ceil': np.ceil,
     'round': np.round,
     'sign': np.sign,
+    'where': np.where,
     
     # Useful aggregations
     'sum': np.sum,

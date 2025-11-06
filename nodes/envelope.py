@@ -5,7 +5,7 @@ from config import SAMPLE_RATE, OSC_ENVELOPE_TYPE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
-from utils import empty_mono, time_to_samples, detect_triggers
+from utils import empty_mono, time_to_samples, detect_triggers, is_stereo
 
 
 class EnvelopeModel(BaseNodeModel):
@@ -22,6 +22,7 @@ class EnvelopeModel(BaseNodeModel):
 class EnvelopeNode(BaseNode):
     def __init__(self, model: EnvelopeModel, node_id: str, state, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
+        self.is_stereo = True  # Pass-through stereo node - handles both mono and stereo signals
         self.model = model
         self.signal_node = self.instantiate_child_node(model.signal, "signal") if model.signal is not None else None
         self.gate_node = self.instantiate_child_node(model.gate, "gate") if model.gate is not None else None
@@ -124,12 +125,15 @@ class EnvelopeNode(BaseNode):
             self.state.release_started = True
         
         # Get the signal from the child node. if no signal is defined, render ones
-        signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(
-            params)) if self.signal_node is not None else np.ones(num_samples, dtype=np.float32)
+        signal_wave = self.signal_node.render(num_samples, context, num_channels, **self.get_params_for_children(
+            params)) if self.signal_node is not None else (np.ones(num_samples, dtype=np.float32) if num_channels == 1 else np.ones((num_samples, 2), dtype=np.float32))
         
         # If signal is exhausted, create silent output instead of returning empty
         if len(signal_wave) == 0:
-            signal_wave = np.zeros(num_samples, dtype=np.float32)
+            signal_wave = np.zeros(num_samples, dtype=np.float32) if num_channels == 1 else np.zeros((num_samples, 2), dtype=np.float32)
+        
+        # Determine if signal is stereo (2D array)
+        is_stereo_signal = is_stereo(signal_wave)
         
         # Track which samples have been processed to avoid double-processing
         processed_samples = 0
@@ -151,7 +155,10 @@ class EnvelopeNode(BaseNode):
             # Apply fade in to the current chunk
             if len(self.state.fade_in_multiplier) > 0 and len(signal_wave) > processed_samples:
                 fade_samples = min(len(self.state.fade_in_multiplier), len(signal_wave) - processed_samples)
-                signal_wave[processed_samples:processed_samples + fade_samples] *= self.state.fade_in_multiplier[:fade_samples]
+                multiplier = self.state.fade_in_multiplier[:fade_samples]
+                if is_stereo_signal:
+                    multiplier = multiplier[:, np.newaxis]  # Reshape for broadcasting with stereo
+                signal_wave[processed_samples:processed_samples + fade_samples] *= multiplier
                 # Track the current amplitude
                 if fade_samples > 0:
                     self.state.current_amplitude = self.state.fade_in_multiplier[fade_samples - 1]
@@ -184,7 +191,10 @@ class EnvelopeNode(BaseNode):
             # Apply decay to the current chunk
             if len(self.state.decay_multiplier) > 0 and len(signal_wave) > processed_samples:
                 fade_samples = min(len(self.state.decay_multiplier), len(signal_wave) - processed_samples)
-                signal_wave[processed_samples:processed_samples + fade_samples] *= self.state.decay_multiplier[:fade_samples]
+                multiplier = self.state.decay_multiplier[:fade_samples]
+                if is_stereo_signal:
+                    multiplier = multiplier[:, np.newaxis]  # Reshape for broadcasting with stereo
+                signal_wave[processed_samples:processed_samples + fade_samples] *= multiplier
                 # Track the current amplitude
                 if fade_samples > 0:
                     self.state.current_amplitude = self.state.decay_multiplier[fade_samples - 1]
@@ -224,7 +234,10 @@ class EnvelopeNode(BaseNode):
             # Apply fade out to the current chunk
             if self.state.fade_out_multiplier is not None and len(signal_wave) > processed_samples:
                 fade_samples = min(len(self.state.fade_out_multiplier), len(signal_wave) - processed_samples)
-                signal_wave[processed_samples:processed_samples + fade_samples] *= self.state.fade_out_multiplier[:fade_samples]
+                multiplier = self.state.fade_out_multiplier[:fade_samples]
+                if is_stereo_signal:
+                    multiplier = multiplier[:, np.newaxis]  # Reshape for broadcasting with stereo
+                signal_wave[processed_samples:processed_samples + fade_samples] *= multiplier
                 # Track the current amplitude during release
                 if fade_samples > 0:
                     self.state.current_amplitude = self.state.fade_out_multiplier[fade_samples - 1]

@@ -6,7 +6,7 @@ from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.node_utils.panning import apply_panning
 from nodes.wavable_value import WavableValue
-from utils import add_waves, empty_mono, empty_stereo
+from utils import add_waves, empty_mono, empty_stereo, to_stereo
 
 """
 Retrigger Node
@@ -187,9 +187,7 @@ class RetriggerNode(BaseNode):
         if len(self.state.carry_over) > 0:
             if is_stereo:
                 # Ensure carry_over is stereo
-                if self.state.carry_over.ndim == 1:
-                    # Convert mono carry over to stereo
-                    self.state.carry_over = np.stack([self.state.carry_over, self.state.carry_over], axis=-1)
+                self.state.carry_over = to_stereo(self.state.carry_over)
                 delayed_wave[:len(self.state.carry_over)] += self.state.carry_over[:len(delayed_wave)]
             else:
                 delayed_wave = add_waves(delayed_wave, self.state.carry_over[:len(delayed_wave)])

@@ -71,7 +71,7 @@ def save(wave, filename):
     wavfile.write(output_path, SAMPLE_RATE, wave_int16)
     
     # Print info about what was saved
-    if wave.ndim == 1:
+    if not is_stereo(wave):
         print(f"Saved {filename} (mono)")
     else:
         num_channels = wave.shape[1]
@@ -367,3 +367,56 @@ def get_last_or_default(array: np.ndarray, default=0):
         Last value of array, or default if empty
     """
     return array[-1] if len(array) > 0 else default
+
+
+def is_stereo(wave: np.ndarray) -> bool:
+    """
+    Check if a wave is in stereo format (2D array).
+    
+    Args:
+        wave: Audio wave array to check
+        
+    Returns:
+        True if stereo (2D), False if mono (1D)
+    """
+    return wave.ndim == 2
+
+
+def to_stereo(wave: np.ndarray) -> np.ndarray:
+    """
+    Converts a mono or stereo wave to stereo format.
+    If already stereo, returns as-is.
+    If mono, duplicates the signal to both channels (center panned).
+    
+    Args:
+        wave: 1D mono array or 2D stereo array
+        
+    Returns:
+        2D stereo array of shape (num_samples, 2)
+    """
+    if is_stereo(wave):
+        # Already stereo, return as-is
+        return wave
+    else:
+        # Mono to stereo - duplicate channels (center panned)
+        return np.stack([wave, wave], axis=-1)
+
+
+def to_mono(wave: np.ndarray) -> np.ndarray:
+    """
+    Converts a mono or stereo wave to mono format.
+    If already mono, returns as-is.
+    If stereo, mixes both channels equally (averaging).
+    
+    Args:
+        wave: 1D mono array or 2D stereo array
+        
+    Returns:
+        1D mono array
+    """
+    if not is_stereo(wave):
+        # Already mono, return as-is
+        return wave
+    else:
+        # Stereo to mono - average both channels
+        return np.mean(wave, axis=1).astype(np.float32)

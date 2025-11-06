@@ -44,6 +44,5 @@ DO_SAVE_MULTITRACK = True  # Save individual track stems when using tracks node 
 DO_VISUALISE_OUTPUT = False
 DISPLAY_RENDER_STATS = True
 DO_ONLY_VISUALISE_ONE_BUFFER = False
-VISUALISATION_FPS = 20  # Lower FPS reduces CPU usage and audio interference
 
 DISABLE_GARBAGE_COLLECTION = False

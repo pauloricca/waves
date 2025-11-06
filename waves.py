@@ -17,7 +17,7 @@ from sound_library import get_sound_model, load_all_sound_libraries, reload_soun
 from nodes.node_utils.base_node import BaseNode
 from nodes.node_utils.instantiate_node import instantiate_node
 from nodes.node_utils.render_context import RenderContext
-from utils import look_for_duration, play, save, visualise_wave
+from utils import look_for_duration, play, save, visualise_wave, is_stereo as check_is_stereo
 from display_stats import run_visualizer_and_stats
 
 rendered_sounds: dict[np.ndarray] = {}
@@ -340,7 +340,7 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
         audio_data *= RENDERED_MASTER_GAIN
 
         # Detect if stereo (2D array) or mono (1D array)
-        is_stereo = audio_data.ndim == 2
+        is_stereo = check_is_stereo(audio_data)
         
         # For visualization and recording, use mono (left channel if stereo)
         if is_stereo:
@@ -550,7 +550,7 @@ def main():
 
         if DO_VISUALISE_OUTPUT:
             # Visualize mixdown (left channel if stereo)
-            if rendered_sound.ndim == 2:
+            if check_is_stereo(rendered_sound):
                 visualise_wave(rendered_sound[:, 0])
             else:
                 visualise_wave(rendered_sound)

@@ -7,6 +7,7 @@ from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.node_utils.range_mapper import RangeMapper
 from nodes.wavable_value import WavableValue
+from utils import to_mono
 
 """
 Follow Node (Envelope Follower)
@@ -86,9 +87,8 @@ class FollowNode(BaseNode):
         if len(signal_wave) == 0:
             return np.array([], dtype=np.float32)
         
-        # Ensure mono signal - if stereo somehow got through, average the channels
-        if signal_wave.ndim == 2:
-            signal_wave = np.mean(signal_wave, axis=1)
+        # Ensure mono signal - if stereo, convert to mono
+        signal_wave = to_mono(signal_wave)
         
         actual_num_samples = len(signal_wave)
         
