@@ -8,6 +8,78 @@ test_stereo_node:
         freq: 440
         duration: 2
 
+# Test pitch detection node - simple tone
+test_pitch_simple:
+  pitch:
+    duration: 3
+    signal:
+      osc:
+        type: sin
+        freq: 440  # Should detect ~440 Hz
+
+# Test pitch detection node - changing frequency
+test_pitch_changing:
+  mix:
+    duration: 3
+    signals:
+      # Original signal with frequency sweep
+      - osc:
+          type: sin
+          freq: [440, [220, 0.5], 880]  # Sweep from 440 to 220 to 880
+      
+      # Pitch detection output (sonified by using as oscillator frequency)
+      - osc:
+          type: saw
+          amp: 0.3
+          freq:
+            pitch:
+              smoothing: 0.95  # Heavy smoothing for stability
+              signal:
+                osc:
+                  type: sin
+                  freq: [440, [220, 0.5], 880]
+
+# Test pitch detection node - with sample
+test_pitch_sample:
+  osc:
+    duration: 3
+    type: sin
+    amp: 0.3
+    freq:
+      pitch:
+        min_freq: 60
+        max_freq: 2000
+        smoothing: 0.9
+        signal:
+          sample:
+            file: samples/waves.wav
+            loop: true
+
+
+voice:
+  tracks:
+    voz_vol: 0
+    voz:
+      input:
+        id: voz
+    instrument:
+      osc:
+        duration: 300
+        type: tri
+        amp:
+          follow:
+            signal: $voz * 30
+        freq:
+          snap:
+            values: [A5, B5, C5, D5, E5, F5, G5]
+            signal:
+              pitch:
+                min_freq: 60
+                max_freq: 2000
+                smoothing: 0.9
+                signal: $voz
+
+
 # Test buffer node - basic offset mode
 test_buffer_offset:
   buffer:

@@ -13,6 +13,7 @@ from nodes.interval import INTERVAL_DEFINITION
 from nodes.non_realtime.invert import INVERT_DEFINITION
 from nodes.map import MAP_DEFINITION
 from nodes.midi_in import MIDI_IN_DEFINITION
+from nodes.pitch import PITCH_DEFINITION
 from nodes.midi_cc import MIDI_CC_DEFINITION
 from nodes.midi_out import MIDI_OUT_DEFINITION
 from nodes.mix import MIX_DEFINITION
@@ -60,6 +61,7 @@ NODE_REGISTRY = [
     FOLLOW_DEFINITION,
     INPUT_DEFINITION,
     INTERVAL_DEFINITION,
+    PITCH_DEFINITION,
     STEREO_DEFINITION,
     TRACKS_DEFINITION,
 ]
