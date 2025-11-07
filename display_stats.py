@@ -234,4 +234,4 @@ def run_visualizer_and_stats(
                 # Silently ignore visualization errors to avoid breaking audio
                 pass
         
-        time.sleep(1.0 / 20)  # 20 FPS for visualization
+        time.sleep(1.0 / VISUALISATION_FPS)  # 20 FPS for visualization
