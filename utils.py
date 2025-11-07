@@ -14,7 +14,7 @@ _terminal_size_cache: os.terminal_size | None = None
 _terminal_env_snapshot: tuple[str | None, str | None] | None = None
 
 
-def _get_cached_terminal_size() -> os.terminal_size:
+def get_cached_terminal_size() -> os.terminal_size:
     """Return the cached terminal size, refreshing if environment hints change."""
     global _terminal_size_cache, _terminal_env_snapshot
 
@@ -146,9 +146,9 @@ def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_l
         wave = wave[0:BUFFER_SIZE]
 
     if force_terminal_refresh or not has_printed_visualisation or not replace_previous:
-        terminal_size = _get_cached_terminal_size()
+        terminal_size = get_cached_terminal_size()
     else:
-        terminal_size = _terminal_size_cache or _get_cached_terminal_size()
+        terminal_size = _terminal_size_cache or get_cached_terminal_size()
 
     visualisation_width = terminal_size.columns
     visualisation_height_resolution_halved = (VISUALISATION_ROW_HEIGHT * 4) // 2

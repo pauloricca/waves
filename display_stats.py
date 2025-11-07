@@ -10,7 +10,7 @@ import numpy as np
 from collections import deque
 
 from config import *
-from utils import visualise_wave
+from utils import get_cached_terminal_size, visualise_wave
 from nodes.node_utils.midi_utils import get_last_midi_message_display
 
 
@@ -191,16 +191,20 @@ def run_visualizer_and_stats(
                     midi_message=midi_message
                 )
                 
+                # Track current lines for next iteration
+                current_lines = 0
+                
                 if DO_VISUALISE_OUTPUT:
+                    # Visualisation prints VISUALISATION_ROW_HEIGHT lines
                     visualise_wave(
                         np.array(visualised_wave_buffer),
                         do_normalise=False,
                         replace_previous=True,
                         extra_lines=1
                     )
+                    # Note: visualise_wave handles its own clearing
         
                 if DISPLAY_RENDER_STATS:
-                    # Clear line and print stats only (no visualization)
                     # Get monitored nodes
                     from nodes.node_utils.monitor_registry import get_monitor_registry
                     monitor_lines = get_monitor_registry().get_display_lines()
@@ -214,13 +218,13 @@ def run_visualizer_and_stats(
                     output_lines.append(stats_text)
                     
                     # Get terminal width for padding
-                    try:
-                        term_width = shutil.get_terminal_size((80, 20)).columns
-                    except Exception:
-                        term_width = 80
+                    term_width = get_cached_terminal_size().columns
                     
-                    # Move cursor up to overwrite previous output if we printed before
-                    if last_printed_lines > 0:
+                    # Only move cursor up if:
+                    # 1. We're NOT visualizing (visualise_wave handles its own clearing)
+                    # 2. We printed lines last time
+                    # 3. The line count matches (prevents clearing boot messages)
+                    if not DO_VISUALISE_OUTPUT and last_printed_lines > 0 and last_printed_lines == len(output_lines):
                         print(f"\033[{last_printed_lines}A", end='')
                     
                     # Print all lines with padding
@@ -228,8 +232,12 @@ def run_visualizer_and_stats(
                         padded_line = line.ljust(term_width)
                         print(padded_line, flush=True)
                     
-                    # Update line count for next iteration
-                    last_printed_lines = len(output_lines)
+                    # Track how many lines we printed (only when not visualizing)
+                    if not DO_VISUALISE_OUTPUT:
+                        current_lines = len(output_lines)
+                
+                # Update last_printed_lines for next iteration
+                last_printed_lines = current_lines
             except Exception:
                 # Silently ignore visualization errors to avoid breaking audio
                 pass

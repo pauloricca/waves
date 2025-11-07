@@ -44,7 +44,7 @@ DO_SAVE_MULTITRACK = True  # Save individual track stems when using tracks node 
 DO_VISUALISE_OUTPUT = True
 DISPLAY_RENDER_STATS = True
 DO_ONLY_VISUALISE_ONE_BUFFER = False
-DO_SCRAMBLE_VISUALISATION_ROWS = True  # Scramble row order for interesting glitch effect
-VISUALISATION_FPS = 20
+DO_SCRAMBLE_VISUALISATION_ROWS = False  # Scramble row order for interesting glitch effect
+VISUALISATION_FPS = 50
 
 DISABLE_GARBAGE_COLLECTION = False
