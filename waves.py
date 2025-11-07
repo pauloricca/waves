@@ -207,8 +207,15 @@ def save_recording(sound_name=None):
         return
     
     try:
-        # Convert deque to numpy array
-        recorded_audio = np.array(recording_buffer, dtype=np.float32)
+        def concatenate_blocks(blocks: deque) -> np.ndarray:
+            if len(blocks) == 0:
+                return np.array([], dtype=np.float32)
+            if len(blocks) == 1:
+                return np.array(blocks[0], dtype=np.float32, copy=True)
+            return np.concatenate([np.asarray(block, dtype=np.float32) for block in blocks], axis=0)
+
+        # Convert deque of numpy blocks into a single array
+        recorded_audio = concatenate_blocks(recording_buffer)
         
         # Use sound name if provided, otherwise fall back to default
         base_filename = f"{sound_name}.wav" if sound_name else "realtime_recording.wav"
@@ -225,7 +232,7 @@ def save_recording(sound_name=None):
         if DO_SAVE_MULTITRACK and recording_is_explicit_tracks and isinstance(innermost_recording_node, TracksNode) and recording_track_buffers:
             for track_name, track_buffer in recording_track_buffers.items():
                 if len(track_buffer) > 0:
-                    track_audio = np.array(track_buffer, dtype=np.float32)
+                    track_audio = concatenate_blocks(track_buffer)
                     track_filename = f"{sound_name}__{track_name}.wav"
                     unique_track_filename = get_unique_filename(track_filename)
                     save(track_audio, unique_track_filename)
@@ -277,6 +284,15 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
     last_render_time = 0
     active_sound_node = sound_node  # Local reference to current node
     stored_sound_name = sound_name  # Store the sound name for hot reload
+
+    def determine_output_channels(node: BaseNode) -> int:
+        """Infer the number of output channels for a node."""
+        from nodes.tracks import TracksNode
+
+        innermost = get_innermost_node(node)
+        return 2 if isinstance(innermost, TracksNode) else 1
+
+    output_channels_ref = [determine_output_channels(sound_node)]
     
     # References for display thread (using lists so they can be modified in nested scope)
     should_stop_ref = [False]
@@ -291,7 +307,7 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
         global yaml_changed, hot_reload_pending_node, hot_reload_in_progress, current_sound_node, current_sound_model
         nonlocal should_stop, last_render_time, active_sound_node, render_context
         rendering_start_time = time.time()
-        
+
         # Check if a hot reload has finished and swap in the new node
         if hot_reload_pending_node is not None:
             with hot_reload_lock:
@@ -301,7 +317,10 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
                     active_sound_node = new_node
                     current_sound_node = new_node
                     hot_reload_pending_node = None
-                    
+
+                    # Update expected output channel count for the new node
+                    output_channels_ref[0] = determine_output_channels(new_node)
+
                     # Clear stale node instance references in the render context
                     # This prevents segfaults from keeping pointers to deleted nodes
                     render_context.clear_node_instances()
@@ -328,7 +347,8 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
             )
             reload_thread.start()
 
-        audio_data = active_sound_node.render(frames, context=render_context) 
+        audio_data = active_sound_node.render(frames, context=render_context)
+        audio_data = np.asarray(audio_data)
 
         if len(audio_data) == 0:
             should_stop = True
@@ -339,9 +359,18 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
         # Apply master gain
         audio_data *= RENDERED_MASTER_GAIN
 
-        # Detect if stereo (2D array) or mono (1D array)
-        is_stereo = check_is_stereo(audio_data)
-        
+        # Use cached channel information, falling back to runtime detection if layout changes
+        if audio_data.ndim == 2 and audio_data.shape[1] == 2:
+            if output_channels_ref[0] != 2:
+                output_channels_ref[0] = 2
+            is_stereo = True
+        elif audio_data.ndim == 1:
+            if output_channels_ref[0] != 1:
+                output_channels_ref[0] = 1
+            is_stereo = False
+        else:
+            is_stereo = output_channels_ref[0] == 2
+
         # For visualization and recording, use mono (left channel if stereo)
         if is_stereo:
             mono_for_vis = audio_data[:, 0]  # Left channel
@@ -350,35 +379,35 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
 
         # Add to recording buffer if recording is enabled (before clipping for visualization)
         if recording_active and recording_buffer is not None:
-            recording_buffer.extend(audio_data)  # Store full stereo for recording
-            
+            recording_buffer.append(np.array(audio_data, copy=True))  # Store full stereo for recording
+
             # Also record individual tracks if this is a multi-track recording
             # Need to unwrap pass-through nodes to get to the TracksNode
             innermost_active_node = get_innermost_node(active_sound_node)
             if recording_track_buffers and hasattr(innermost_active_node, 'last_track_outputs') and innermost_active_node.last_track_outputs:
                 for track_name, track_data in innermost_active_node.last_track_outputs.items():
                     if track_name in recording_track_buffers and len(track_data) > 0:
-                        recording_track_buffers[track_name].extend(track_data)
+                        recording_track_buffers[track_name].append(np.array(track_data, copy=True))
 
         visualised_wave_buffer.extend(mono_for_vis)  # Visualize left channel only
 
-        clipped_audio_data = np.clip(audio_data, -1.0, 1.0)
+        # Clip in-place to avoid additional allocations on the realtime thread
+        if not audio_data.flags.writeable:
+            audio_data = np.array(audio_data, copy=True)
+        np.clip(audio_data, -1.0, 1.0, out=audio_data)
 
-        # If we got fewer samples than requested, pad with zeros or stop
-        if len(clipped_audio_data) < frames:
-            # This is the last chunk - pad with zeros and then stop
-            if is_stereo:
-                padding = np.zeros((frames - len(clipped_audio_data), 2))
-            else:
-                padding = np.zeros(frames - len(clipped_audio_data))
-            clipped_audio_data = np.concatenate([clipped_audio_data, padding])
-            should_stop = True
+        # Prepare output buffer without per-chunk allocations
+        outdata.fill(0)
+        frames_rendered = len(audio_data)
+        frames_to_copy = min(frames_rendered, frames)
 
-        # Reshape for output: stereo stays (n, 2), mono becomes (n, 1)
         if is_stereo:
-            outdata[:] = clipped_audio_data
+            outdata[:frames_to_copy, :2] = audio_data[:frames_to_copy]
         else:
-            outdata[:] = clipped_audio_data.reshape(-1, 1)
+            outdata[:frames_to_copy, 0] = audio_data[:frames_to_copy]
+
+        if frames_rendered < frames:
+            should_stop = True
 
 
         rendering_end_time = time.time()
@@ -396,13 +425,7 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
         )
         vis_thread.start()
 
-    # Detect if the sound node outputs stereo
-    # We need to check this before starting the stream
-    # Unwrap pass-through nodes (like context, tempo) to find the actual signal node
-    from nodes.tracks import TracksNode
-    innermost_node = get_innermost_node(sound_node)
-    # TracksNode always outputs stereo, other stereo-capable nodes might too
-    num_channels = 2 if isinstance(innermost_node, TracksNode) else 1
+    num_channels = output_channels_ref[0]
 
     with sd.OutputStream(callback=audio_callback, blocksize=BUFFER_SIZE, samplerate=SAMPLE_RATE, channels=num_channels): #, latency='low'
         while not should_stop:
