@@ -4,6 +4,13 @@ from pydantic import RootModel, model_validator, ValidationError
 import yaml
 import glob
 import os
+from dataclasses import dataclass
+
+
+try:
+    YAML_LOADER = yaml.CSafeLoader
+except AttributeError:  # pragma: no cover - fallback when LibYAML unavailable
+    YAML_LOADER = yaml.SafeLoader
 
 from nodes.node_utils.base_node import BaseNodeModel
 
@@ -14,6 +21,16 @@ sound_libraries: Dict[str, SoundLibraryModel] = {}
 sound_index: Dict[str, tuple[str, BaseNodeModel]] = {}
 # Temporary storage of raw YAML data during multi-file loading (for cross-file reference resolution)
 _raw_data_cache: Dict[str, dict] = {}
+
+
+@dataclass
+class _LibraryFileState:
+    mtime: float
+    raw_data: dict
+    user_vars: dict | None = None
+
+
+_library_state: Dict[str, _LibraryFileState] = {}
 
 
 def format_validation_error(error: ValidationError, filename: str, raw_data: dict = None) -> str:
@@ -233,7 +250,7 @@ class SoundLibraryModel(RootModel[Dict[str, BaseNodeModel]]):
         available_sound_names = set(data.keys())
         # Get all sound names across all files for cross-file references
         all_sound_names = set(sound_index.keys())
-        
+
         # Parse all sounds with knowledge of available sound names and raw data
         return {k: parse_node(v, available_sound_names, data, all_sound_names) for k, v in data.items()}
 
@@ -244,32 +261,42 @@ class SoundLibraryModel(RootModel[Dict[str, BaseNodeModel]]):
         return self.root.keys()
 
 
-def load_yaml_file(file_path: str) -> SoundLibraryModel:
-    """Load and parse a single YAML file."""
+def _apply_user_variables(user_vars: dict | None) -> None:
+    if user_vars:
+        from expression_globals import set_user_variables
+        set_user_variables(user_vars)
+
+
+def _load_raw_data_for_file(file_path: str) -> tuple[dict, dict | None]:
     with open(file_path) as file:
-        # Use the C-based LibYAML loader if available (much faster for hot reload)
-        # Falls back to SafeLoader if LibYAML is not installed
-        try:
-            Loader = yaml.CSafeLoader
-        except AttributeError:
-            Loader = yaml.SafeLoader
-        raw_data = yaml.load(file, Loader=Loader)
-    
+        raw_data = yaml.load(file, Loader=YAML_LOADER)
+
     if raw_data is None:
         raw_data = {}
-    
-    # Extract and set user variables if present (only from main waves.yaml)
+
+    user_vars = None
     if os.path.basename(file_path) == 'waves.yaml':
         user_vars = raw_data.pop('vars', None)
-        if user_vars:
-            from expression_globals import set_user_variables
-            set_user_variables(user_vars)
-    
+        _apply_user_variables(user_vars)
+
+    return raw_data, user_vars
+
+
+def load_yaml_file(file_path: str) -> SoundLibraryModel:
+    """Load and parse a single YAML file."""
+    raw_data, user_vars = _load_raw_data_for_file(file_path)
+
     try:
         library = SoundLibraryModel.model_validate(raw_data)
-        
+
+        _library_state[os.path.basename(file_path)] = _LibraryFileState(
+            mtime=os.path.getmtime(file_path),
+            raw_data=raw_data,
+            user_vars=user_vars,
+        )
+
         return library
-    
+
     except ValidationError as e:
         print(format_validation_error(e, os.path.basename(file_path), raw_data))
         raise
@@ -280,88 +307,132 @@ def load_yaml_file(file_path: str) -> SoundLibraryModel:
 
 def load_all_sound_libraries(directory: str = ".") -> Dict[str, SoundLibraryModel]:
     """Load all .yaml files in the directory into the sound library."""
-    global sound_libraries, sound_index, _raw_data_cache
-    
-    # Find all .yaml files in the directory
-    yaml_files = glob.glob(os.path.join(directory, "*.yaml"))
-    
-    if not yaml_files:
+    global sound_libraries, sound_index, _raw_data_cache, _library_state
+
+    yaml_paths = glob.glob(os.path.join(directory, "*.yaml"))
+    if not yaml_paths:
         raise ValueError(f"No .yaml files found in {directory}")
-    
-    # Clear existing libraries and index
-    sound_libraries.clear()
-    sound_index.clear()
+
+    files_by_name = {os.path.basename(path): path for path in yaml_paths}
+    load_order = sorted(files_by_name.keys())
+
+    # Remove any state for files that disappeared
+    removed_files = set(sound_libraries.keys()) - set(files_by_name.keys())
+    for filename in removed_files:
+        sound_libraries.pop(filename, None)
+        _library_state.pop(filename, None)
+    for sound_name in list(sound_index.keys()):
+        if sound_index[sound_name][0] in removed_files:
+            del sound_index[sound_name]
+
+    # First pass: gather raw data for all files so we know every sound name up-front.
     _raw_data_cache.clear()
-    
-    # Use C-based LibYAML loader if available (much faster)
-    try:
-        Loader = yaml.CSafeLoader
-    except AttributeError:
-        Loader = yaml.SafeLoader
-    
-    # FIRST PASS: Load all raw YAML data and extract user variables
-    raw_data_by_file = {}
-    for yaml_file in yaml_files:
-        filename = os.path.basename(yaml_file)
+    raw_data_by_file: Dict[str, dict] = {}
+    user_vars_by_file: Dict[str, dict | None] = {}
+    mtimes: Dict[str, float] = {}
+    needs_parse: Dict[str, bool] = {}
+
+    for filename in load_order:
+        file_path = files_by_name[filename]
+        mtime = os.path.getmtime(file_path)
+        state = _library_state.get(filename)
+
+        if state and state.mtime == mtime and filename in sound_libraries:
+            raw_data = state.raw_data
+            user_vars = state.user_vars
+            # Ensure user variables stay applied between loads
+            _apply_user_variables(user_vars)
+            needs_parse[filename] = False
+        else:
+            raw_data, user_vars = _load_raw_data_for_file(file_path)
+            needs_parse[filename] = True
+
+        raw_data = raw_data or {}
+        raw_data_by_file[filename] = raw_data
+        user_vars_by_file[filename] = user_vars
+        mtimes[filename] = mtime
+        _raw_data_cache[filename] = raw_data
+
+    # Remove any stale index entries for files that will be reparsed
+    previous_entries: Dict[str, Dict[str, tuple[str, BaseNodeModel]]] = {}
+    for sound_name in list(sound_index.keys()):
+        filename, model = sound_index[sound_name]
+        if needs_parse.get(filename):
+            previous_entries.setdefault(filename, {})[sound_name] = (filename, model)
+            del sound_index[sound_name]
+
+    # Pre-populate the index with placeholders so cross-file references resolve
+    for filename in load_order:
+        raw_data = raw_data_by_file[filename]
+        for sound_name in raw_data.keys():
+            sound_index.setdefault(sound_name, (filename, None))
+
+    # Second pass: validate and build models now that all names are known
+    for filename in load_order:
+        raw_data = raw_data_by_file[filename]
         try:
-            with open(yaml_file) as file:
-                raw_data = yaml.load(file, Loader=Loader)
-            
-            if raw_data is None:
-                raw_data = {}
-            
-            # Extract and set user variables if present (only from main waves.yaml)
-            if filename == 'waves.yaml':
-                user_vars = raw_data.pop('vars', None)
-                if user_vars:
-                    from expression_globals import set_user_variables
-                    set_user_variables(user_vars)
-            
-            raw_data_by_file[filename] = raw_data
-            
-            # Store in cache for cross-file reference resolution
-            _raw_data_cache[filename] = raw_data
-            
-            # Pre-populate sound_index with all sound names (models will be None for now)
-            for sound_name in raw_data.keys():
-                if sound_name in sound_index:
-                    print(f"Warning: Sound '{sound_name}' defined in multiple files. Using definition from {filename}")
-                sound_index[sound_name] = (filename, None)
-            
-        except Exception as e:
-            print(f"Error loading {filename}: {e}")
-            raise
-    
-    # SECOND PASS: Parse all YAML data now that sound_index has all sound names
-    for filename, raw_data in raw_data_by_file.items():
-        try:
-            library = SoundLibraryModel.model_validate(raw_data)
-            sound_libraries[filename] = library
-            
-            # Update the sound index with actual models IMMEDIATELY so they're available for subsequent files
+            if not needs_parse.get(filename, True):
+                library = sound_libraries.get(filename)
+                if library is None:
+                    library = SoundLibraryModel.model_validate(raw_data)
+                    sound_libraries[filename] = library
+                    _library_state[filename] = _LibraryFileState(
+                        mtime=mtimes[filename],
+                        raw_data=raw_data,
+                        user_vars=user_vars_by_file[filename],
+                    )
+            else:
+                library = SoundLibraryModel.model_validate(raw_data)
+                sound_libraries[filename] = library
+                _library_state[filename] = _LibraryFileState(
+                    mtime=mtimes[filename],
+                    raw_data=raw_data,
+                    user_vars=user_vars_by_file[filename],
+                )
+
+            # Remove sounds that no longer exist in the file
+            for sound_name in list(sound_index.keys()):
+                if sound_index[sound_name][0] == filename and sound_name not in raw_data:
+                    del sound_index[sound_name]
+
             for sound_name, sound_model in library.root.items():
+                existing = sound_index.get(sound_name)
+                if existing and existing[0] != filename:
+                    print(
+                        f"Warning: Sound '{sound_name}' defined in multiple files. Using definition from {filename}"
+                    )
                 sound_index[sound_name] = (filename, sound_model)
-            
+
             print(f"Loaded {len(library.root)} sound(s) from {filename}")
         except ValidationError as e:
             print(format_validation_error(e, filename, raw_data))
+            # Restore previous index entries if validation fails
+            for sound_name, entry in previous_entries.get(filename, {}).items():
+                sound_index[sound_name] = entry
+            for sound_name in list(sound_index.keys()):
+                if sound_index[sound_name][0] == filename and sound_name not in previous_entries.get(filename, {}):
+                    del sound_index[sound_name]
             return False
         except Exception as e:
-            print(f"Error parsing {filename}: {e}")
+            print(f"Error loading {filename}: {e}")
+            for sound_name, entry in previous_entries.get(filename, {}).items():
+                sound_index[sound_name] = entry
+            for sound_name in list(sound_index.keys()):
+                if sound_index[sound_name][0] == filename and sound_name not in previous_entries.get(filename, {}):
+                    del sound_index[sound_name]
             return False
-    
-    # Clear the cache after loading is complete
+
     _raw_data_cache.clear()
-    
+
     return sound_libraries
 
 
 def reload_sound_library(filename: str, directory: str = ".") -> bool:
     """Reload a single YAML file and update the sound library."""
-    global sound_libraries, sound_index, _raw_data_cache
-    
+    global sound_libraries, sound_index, _raw_data_cache, _library_state
+
     file_path = os.path.join(directory, filename)
-    
+
     if not os.path.exists(file_path):
         print(f"File {filename} not found")
         return False
@@ -375,63 +446,35 @@ def reload_sound_library(filename: str, directory: str = ".") -> bool:
                 old_sound_index_entries[sound_name] = sound_index[sound_name]
     
     try:
-        # Use C-based LibYAML loader if available
-        try:
-            Loader = yaml.CSafeLoader
-        except AttributeError:
-            Loader = yaml.SafeLoader
-        
-        # Load raw YAML data
-        with open(file_path) as file:
-            raw_data = yaml.load(file, Loader=Loader)
-        
-        if raw_data is None:
-            raw_data = {}
-        
-        # Extract and set user variables if present (only from main waves.yaml)
-        if filename == 'waves.yaml':
-            user_vars = raw_data.pop('vars', None)
-            if user_vars:
-                from expression_globals import set_user_variables
-                set_user_variables(user_vars)
-        
-        # Pre-populate sound_index with sound names from this file (models will be None for now)
-        temp_sound_index = {}
-        for sound_name in raw_data.keys():
-            temp_sound_index[sound_name] = (filename, None)
-        
-        # Store in cache for cross-file reference resolution
+        _raw_data_cache.clear()
+        for existing_filename, state in _library_state.items():
+            if existing_filename != filename:
+                _raw_data_cache[existing_filename] = state.raw_data
+
+        raw_data, user_vars = _load_raw_data_for_file(file_path)
         _raw_data_cache[filename] = raw_data
-        
-        # Now parse the file with full knowledge of all sound names
+
         try:
             library = SoundLibraryModel.model_validate(raw_data)
-            
-            # Only update global state if validation succeeded
-            # Remove old sounds from this file from the index
-            for sound_name in old_sound_index_entries.keys():
-                del sound_index[sound_name]
-            
-            # Update with new library and index
-            sound_libraries[filename] = library
-            
-            # Update the sound index with actual models
-            for sound_name, sound_model in library.root.items():
-                sound_index[sound_name] = (filename, sound_model)
         except ValidationError as e:
             print(format_validation_error(e, filename, raw_data))
             raise
-        
-        # Clear the cache after loading is complete
+
+        for sound_name in old_sound_index_entries.keys():
+            del sound_index[sound_name]
+
+        sound_libraries[filename] = library
+        for sound_name, sound_model in library.root.items():
+            sound_index[sound_name] = (filename, sound_model)
+
+        _library_state[filename] = _LibraryFileState(mtime=os.path.getmtime(file_path), raw_data=raw_data, user_vars=user_vars)
+
         _raw_data_cache.clear()
-        
         return True
-    
+
     except Exception as e:
         print(f"Error reloading {filename}: {e}")
-        # Clear the cache on error
         _raw_data_cache.clear()
-        # Old state is already preserved (we didn't modify sound_index or sound_libraries)
         return False
 
 

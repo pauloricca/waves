@@ -91,9 +91,8 @@ class OscillatorNode(BaseNode):
             self.state.wander_position = 0.0  # Current position for wander oscillator
             self.state.wander_velocity = 0.0  # Current velocity for wander oscillator
             self.state.wander_rng = None  # Random number generator for wander (initialized on first use)
-        
-        self.fase_in_multiplier: np.ndarray = None
-        self.fase_out_multiplier: np.ndarray = None
+            self.state.fase_in_multiplier = None  # Attack envelope multiplier buffer
+            self.state.fase_out_multiplier = None  # Release envelope multiplier buffer
 
 
     def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
@@ -290,25 +289,25 @@ class OscillatorNode(BaseNode):
         attack_number_of_samples = time_to_samples(self.model.attack )
 
         if attack_number_of_samples > 0:
-            if self.fase_in_multiplier is None:
+            if self.state.fase_in_multiplier is None:
                 if OSC_ENVELOPE_TYPE == "linear":
-                    self.fase_in_multiplier = np.linspace(0, 1, attack_number_of_samples)
+                    self.state.fase_in_multiplier = np.linspace(0, 1, attack_number_of_samples)
                 else:
-                    self.fase_in_multiplier = 1 - np.exp(-np.linspace(0, 5, attack_number_of_samples))
+                    self.state.fase_in_multiplier = 1 - np.exp(-np.linspace(0, 5, attack_number_of_samples))
             
-            total_wave = multiply_waves(total_wave, self.fase_in_multiplier[:len(total_wave)])
-            self.fase_in_multiplier = self.fase_in_multiplier[len(total_wave):]  # Keep the rest for next render
+            total_wave = multiply_waves(total_wave, self.state.fase_in_multiplier[:len(total_wave)])
+            self.state.fase_in_multiplier = self.state.fase_in_multiplier[len(total_wave):]  # Keep the rest for next render
 
         if self.duration is not None:
             release_number_of_samples = time_to_samples(self.model.release )
             full_number_of_samples = time_to_samples(self.duration )
 
             if release_number_of_samples > 0:
-                if self.fase_out_multiplier is None:
+                if self.state.fase_out_multiplier is None:
                     if OSC_ENVELOPE_TYPE == "linear":
-                        self.fase_out_multiplier = np.linspace(1, 0, release_number_of_samples)
+                        self.state.fase_out_multiplier = np.linspace(1, 0, release_number_of_samples)
                     else:
-                        self.fase_out_multiplier = np.exp(-np.linspace(0, 5, release_number_of_samples))
+                        self.state.fase_out_multiplier = np.exp(-np.linspace(0, 5, release_number_of_samples))
                 
                 start_of_release = full_number_of_samples - release_number_of_samples
 
@@ -318,17 +317,17 @@ class OscillatorNode(BaseNode):
                         # Release starts within this chunk
                         # Calculate how much we should pad the fade out, so that it starts at the right place
                         fade_out_padding = start_of_release - self.number_of_chunks_rendered
-                        # Pad the left of self.fase_out_multiplier with ones
+                        # Pad the left of self.state.fase_out_multiplier with ones
                         ones_padding = np.ones(fade_out_padding)
-                        padded_fade_out = np.concatenate([ones_padding, self.fase_out_multiplier])
-                        self.fase_out_multiplier = padded_fade_out
+                        padded_fade_out = np.concatenate([ones_padding, self.state.fase_out_multiplier])
+                        self.state.fase_out_multiplier = padded_fade_out
                     
                     # Apply fade out
-                    if len(self.fase_out_multiplier) < len(total_wave):
+                    if len(self.state.fase_out_multiplier) < len(total_wave):
                         # If we don't have enough fade out samples, we pad with ones
-                        self.fase_out_multiplier = np.concatenate([self.fase_out_multiplier, np.zeros(len(total_wave) - len(self.fase_out_multiplier))])
-                    total_wave = multiply_waves(total_wave, self.fase_out_multiplier[:len(total_wave)])
-                    self.fase_out_multiplier = self.fase_out_multiplier[len(total_wave):]  # Keep the rest for next render
+                        self.state.fase_out_multiplier = np.concatenate([self.state.fase_out_multiplier, np.zeros(len(total_wave) - len(self.state.fase_out_multiplier))])
+                    total_wave = multiply_waves(total_wave, self.state.fase_out_multiplier[:len(total_wave)])
+                    self.state.fase_out_multiplier = self.state.fase_out_multiplier[len(total_wave):]  # Keep the rest for next render
 
         if DO_NORMALISE_EACH_SOUND:
             total_wave = np.clip(total_wave, -1, 1)  # Ensure wave is in the range [-1, 1]

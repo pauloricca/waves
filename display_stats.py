@@ -1,16 +1,42 @@
 """
-Display statistics and visualization for real-time audio playback.
+Display statistics during playback.
 Handles CPU usage, elapsed time, and recording status display.
 """
+import sys
+import os
 import time
+import shutil
 import numpy as np
 from collections import deque
-import os
-import shutil
 
-from config import BUFFER_SIZE, SAMPLE_RATE, DO_VISUALISE_OUTPUT, DISPLAY_RENDER_STATS
+from config import *
 from utils import visualise_wave
 from nodes.node_utils.midi_utils import get_last_midi_message_display
+
+
+# Global rolling average tracker for CPU usage
+cpu_usage_samples = deque(maxlen=1000)  # Keep last 1000 samples for rolling average
+
+
+def get_average_cpu_usage() -> float:
+    """Calculate the average CPU usage from collected samples."""
+    if len(cpu_usage_samples) == 0:
+        return 0.0
+    return sum(cpu_usage_samples) / len(cpu_usage_samples)
+
+
+def clear_cpu_usage_samples():
+    """Clear CPU usage samples (useful for hot reload or new playback)."""
+    cpu_usage_samples.clear()
+
+
+def print_average_cpu_usage():
+    """Print the average CPU usage. Called on exit."""
+    avg_cpu = get_average_cpu_usage()
+    if len(cpu_usage_samples) > 0:
+        print(f"\n{'='*60}")
+        print(f"Average CPU usage: {avg_cpu:.2f}% (based on {len(cpu_usage_samples)} samples)")
+        print('='*60)
 
 
 def create_loudness_meter(loudness: float, width: int = 20) -> str:
@@ -60,7 +86,7 @@ def create_loudness_meter(loudness: float, width: int = 20) -> str:
     return f"{color_code}{filled_part}{reset_code}{empty_part}"
 
 
-def format_stats_line(cpu_usage_percent: float, elapsed_seconds: float, is_recording: bool, loudness: float = 0.0, show_loudness: bool = False, midi_message: str = None) -> str:
+def format_stats_line(cpu_usage_percent: float, elapsed_seconds: float, is_recording: bool, loudness: float = 0.0, midi_message: str = None) -> str:
     """
     Format the statistics line with CPU usage, elapsed time, and recording status.
     
@@ -78,10 +104,9 @@ def format_stats_line(cpu_usage_percent: float, elapsed_seconds: float, is_recor
     # Build parts list starting with optional loudness meter
     parts = []
     
-    # Add loudness meter if requested
-    if show_loudness:
-        loudness_meter = create_loudness_meter(loudness, width=24)
-        parts.append(loudness_meter)
+    # Add loudness meter
+    loudness_meter = create_loudness_meter(loudness, width=24)
+    parts.append(loudness_meter)
     
     # Format CPU usage
     cpu_text = f"CPU usage: {cpu_usage_percent:.2f}%"
@@ -147,6 +172,9 @@ def run_visualizer_and_stats(
                 # Calculate CPU usage percentage
                 cpu_usage_percent = 100 * last_render_time_ref[0] / (BUFFER_SIZE / SAMPLE_RATE)
                 
+                # Track CPU usage for rolling average
+                cpu_usage_samples.append(cpu_usage_percent)
+                
                 # Calculate loudness (peak of recent samples)
                 buffer_array = np.array(visualised_wave_buffer)
                 loudness = np.max(np.abs(buffer_array)) if len(buffer_array) > 0 else 0.0
@@ -160,7 +188,6 @@ def run_visualizer_and_stats(
                     elapsed,
                     recording_active_ref[0],
                     loudness,
-                    show_loudness=not DO_VISUALISE_OUTPUT,
                     midi_message=midi_message
                 )
                 
@@ -171,16 +198,8 @@ def run_visualizer_and_stats(
                         replace_previous=True,
                         extra_lines=1
                     )
-                    if DISPLAY_RENDER_STATS:
-                        # Show monitored nodes above stats line
-                        from nodes.node_utils.monitor_registry import get_monitor_registry
-                        monitor_lines = get_monitor_registry().get_display_lines()
-                        if monitor_lines:
-                            for line in monitor_lines:
-                                print(line, flush=True)
-                            print()  # Blank line separator
-                        print(stats_text, flush=True)
-                elif DISPLAY_RENDER_STATS:
+        
+                if DISPLAY_RENDER_STATS:
                     # Clear line and print stats only (no visualization)
                     # Get monitored nodes
                     from nodes.node_utils.monitor_registry import get_monitor_registry
