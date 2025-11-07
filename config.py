@@ -41,8 +41,9 @@ DO_RECORD_REAL_TIME = False  # Enable to save real-time playback to file
 DO_SAVE_MULTITRACK = True  # Save individual track stems when using tracks node (applies to both realtime and non-realtime)
 
 # Visualisation settings
-DO_VISUALISE_OUTPUT = False
+DO_VISUALISE_OUTPUT = True
 DISPLAY_RENDER_STATS = True
 DO_ONLY_VISUALISE_ONE_BUFFER = False
+DO_SCRAMBLE_VISUALISATION_ROWS = True  # Scramble row order for interesting glitch effect
 
 DISABLE_GARBAGE_COLLECTION = False

@@ -1,6 +1,7 @@
 import os
 import shutil
 import math
+import random
 import sounddevice as sd
 import numpy as np
 from scipy.io import wavfile
@@ -221,6 +222,21 @@ def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_l
             chars[mask_bottom_red] = "\033[31m█\033[0m"
 
         output_lines.append("".join(chars.tolist()))
+
+    # Scramble rows if enabled (interesting glitch effect)
+    if DO_SCRAMBLE_VISUALISATION_ROWS and len(output_lines) > 1:
+        # Keep the first line (clear_lines if replace_previous), scramble the rest
+        first_line = output_lines[0] if (replace_previous and has_printed_visualisation) else None
+        rows_to_scramble = output_lines[1:] if first_line else output_lines
+        
+        rng = random.Random()    
+        scrambled_rows = rows_to_scramble.copy()
+        rng.shuffle(scrambled_rows)
+        
+        if first_line:
+            output_lines = [first_line] + scrambled_rows
+        else:
+            output_lines = scrambled_rows
 
     print("".join(output_lines), flush=True)
 

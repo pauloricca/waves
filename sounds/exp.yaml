@@ -389,3 +389,28 @@ seq-glitch:
               - kick
               - chop
               -
+
+test_slow:
+  multiply:
+    number: 70
+    signal:
+      osc:
+        type: tri
+        amp: 1 / 10
+        attack: 5
+        phase:
+          hold:
+            signal: rand(0, 1)
+        freq:
+          expression:
+            exp: base * variation + wobble
+            base: 120
+            variation:
+              hold:
+                signal: rand(0.99, 1.01) * (0.66666 if rand(0, 1) > 0.5 else 1) * (2 if rand(0, 1) > 0.5 else 1) * (1.5 if rand(0, 1) > 0.5 else 1) * (0.25 if rand(0, 1) > 0.5 else 1)
+            wobble:
+              osc:
+                freq:
+                  hold:
+                    signal: rand(0.8, 1.7)
+                amp: 0.1

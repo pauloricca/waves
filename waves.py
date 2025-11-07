@@ -18,9 +18,12 @@ from nodes.node_utils.base_node import BaseNode
 from nodes.node_utils.instantiate_node import instantiate_node
 from nodes.node_utils.render_context import RenderContext
 from utils import look_for_duration, play, save, visualise_wave, is_stereo as check_is_stereo
-from display_stats import run_visualizer_and_stats
+from display_stats import run_visualizer_and_stats, print_average_cpu_usage
 
 rendered_sounds: dict[np.ndarray] = {}
+
+# Register exit handler for CPU usage stats
+atexit.register(print_average_cpu_usage)
 
 # Hot reload state management
 hot_reload_lock = threading.Lock()  # Protects access to current_sound_node and model during reload
