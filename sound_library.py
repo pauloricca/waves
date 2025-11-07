@@ -314,6 +314,7 @@ def load_all_sound_libraries(directory: str = ".") -> Dict[str, SoundLibraryMode
         raise ValueError(f"No .yaml files found in {directory}")
 
     files_by_name = {os.path.basename(path): path for path in yaml_paths}
+    load_order = sorted(files_by_name.keys())
 
     # Remove any state for files that disappeared
     removed_files = set(sound_libraries.keys()) - set(files_by_name.keys())
@@ -324,47 +325,101 @@ def load_all_sound_libraries(directory: str = ".") -> Dict[str, SoundLibraryMode
         if sound_index[sound_name][0] in removed_files:
             del sound_index[sound_name]
 
-    # Make raw data available for cross-file reference resolution
+    # First pass: gather raw data for all files so we know every sound name up-front.
     _raw_data_cache.clear()
-    for filename, state in _library_state.items():
-        _raw_data_cache[filename] = state.raw_data
+    raw_data_by_file: Dict[str, dict] = {}
+    user_vars_by_file: Dict[str, dict | None] = {}
+    mtimes: Dict[str, float] = {}
+    needs_parse: Dict[str, bool] = {}
 
-    for filename, file_path in files_by_name.items():
+    for filename in load_order:
+        file_path = files_by_name[filename]
         mtime = os.path.getmtime(file_path)
         state = _library_state.get(filename)
 
-        if state and state.mtime == mtime:
-            # Reuse cached parse; ensure user variables remain applied
-            _apply_user_variables(state.user_vars)
-            if filename not in sound_libraries:
-                sound_libraries[filename] = SoundLibraryModel.model_validate(state.raw_data)
-            continue
-
-        try:
+        if state and state.mtime == mtime and filename in sound_libraries:
+            raw_data = state.raw_data
+            user_vars = state.user_vars
+            # Ensure user variables stay applied between loads
+            _apply_user_variables(user_vars)
+            needs_parse[filename] = False
+        else:
             raw_data, user_vars = _load_raw_data_for_file(file_path)
-            _raw_data_cache[filename] = raw_data
+            needs_parse[filename] = True
 
-            library = SoundLibraryModel.model_validate(raw_data)
-            sound_libraries[filename] = library
+        raw_data = raw_data or {}
+        raw_data_by_file[filename] = raw_data
+        user_vars_by_file[filename] = user_vars
+        mtimes[filename] = mtime
+        _raw_data_cache[filename] = raw_data
 
-            # Remove existing sounds from this file before updating the index
+    # Remove any stale index entries for files that will be reparsed
+    previous_entries: Dict[str, Dict[str, tuple[str, BaseNodeModel]]] = {}
+    for sound_name in list(sound_index.keys()):
+        filename, model = sound_index[sound_name]
+        if needs_parse.get(filename):
+            previous_entries.setdefault(filename, {})[sound_name] = (filename, model)
+            del sound_index[sound_name]
+
+    # Pre-populate the index with placeholders so cross-file references resolve
+    for filename in load_order:
+        raw_data = raw_data_by_file[filename]
+        for sound_name in raw_data.keys():
+            sound_index.setdefault(sound_name, (filename, None))
+
+    # Second pass: validate and build models now that all names are known
+    for filename in load_order:
+        raw_data = raw_data_by_file[filename]
+        try:
+            if not needs_parse.get(filename, True):
+                library = sound_libraries.get(filename)
+                if library is None:
+                    library = SoundLibraryModel.model_validate(raw_data)
+                    sound_libraries[filename] = library
+                    _library_state[filename] = _LibraryFileState(
+                        mtime=mtimes[filename],
+                        raw_data=raw_data,
+                        user_vars=user_vars_by_file[filename],
+                    )
+            else:
+                library = SoundLibraryModel.model_validate(raw_data)
+                sound_libraries[filename] = library
+                _library_state[filename] = _LibraryFileState(
+                    mtime=mtimes[filename],
+                    raw_data=raw_data,
+                    user_vars=user_vars_by_file[filename],
+                )
+
+            # Remove sounds that no longer exist in the file
             for sound_name in list(sound_index.keys()):
-                if sound_index[sound_name][0] == filename:
+                if sound_index[sound_name][0] == filename and sound_name not in raw_data:
                     del sound_index[sound_name]
 
             for sound_name, sound_model in library.root.items():
-                if sound_name in sound_index and sound_index[sound_name][0] != filename:
-                    print(f"Warning: Sound '{sound_name}' defined in multiple files. Using definition from {filename}")
+                existing = sound_index.get(sound_name)
+                if existing and existing[0] != filename:
+                    print(
+                        f"Warning: Sound '{sound_name}' defined in multiple files. Using definition from {filename}"
+                    )
                 sound_index[sound_name] = (filename, sound_model)
-
-            _library_state[filename] = _LibraryFileState(mtime=mtime, raw_data=raw_data, user_vars=user_vars)
 
             print(f"Loaded {len(library.root)} sound(s) from {filename}")
         except ValidationError as e:
             print(format_validation_error(e, filename, raw_data))
+            # Restore previous index entries if validation fails
+            for sound_name, entry in previous_entries.get(filename, {}).items():
+                sound_index[sound_name] = entry
+            for sound_name in list(sound_index.keys()):
+                if sound_index[sound_name][0] == filename and sound_name not in previous_entries.get(filename, {}):
+                    del sound_index[sound_name]
             return False
         except Exception as e:
             print(f"Error loading {filename}: {e}")
+            for sound_name, entry in previous_entries.get(filename, {}).items():
+                sound_index[sound_name] = entry
+            for sound_name in list(sound_index.keys()):
+                if sound_index[sound_name][0] == filename and sound_name not in previous_entries.get(filename, {}):
+                    del sound_index[sound_name]
             return False
 
     _raw_data_cache.clear()
