@@ -52,6 +52,15 @@ class MidiCCNode(BaseNode):
             from_range=(0.0, 1.0)
         )
         
+                # Set monitor range if we have a static range
+        if self.model.range and isinstance(self.model.range, list):
+            self.set_monitor_range(float(self.model.range[0]), float(self.model.range[1]))
+            # Don't use abs() for midi_cc since values can be negative
+            self.set_monitor_use_abs(False)
+        
+        # Use "value" color scheme (blue) for MIDI CC as it's a control value, not a level
+        self.set_monitor_color_scheme('value')
+        
         # Persistent state for CC tracking (survives hot reload)
         if do_initialise_state:
             # Store normalized value (0-1) from the initial parameter

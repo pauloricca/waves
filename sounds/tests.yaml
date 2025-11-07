@@ -299,7 +299,7 @@ test_retrigger_stereo:
     main:
       retrigger:
         time: 0.15
-        repeats: 5
+        repeat: 5
         feedback: 0.7
         spread: 1.0
         movement: 0
@@ -316,7 +316,7 @@ test_retrigger_movement:
     main:
       retrigger:
         time: 0.2
-        repeats: 6
+        repeat: 6
         feedback: 0.6
         spread: 0.7
         movement: 0.2
@@ -335,7 +335,7 @@ test_retrigger_musical:
     clicks:
       retrigger:
         time: 0.12
-        repeats: 8
+        repeat: 8
         feedback: 0.5
         spread: 1.0
         movement: 0.3
@@ -348,7 +348,7 @@ test_retrigger_musical:
     bass:
       retrigger:
         time: 0.24
-        repeats: 4
+        repeat: 4
         feedback: 0.7
         spread: 0.6
         movement: 0.15
@@ -428,7 +428,7 @@ test_input:
 
 test_input_phase:
   retrigger:
-    repeats: 5
+    repeat: 5
     time: 0.3
     feedback: 0.5
     signal:
@@ -471,7 +471,7 @@ test_input_with_lfo:
         range: [500, 1]
         signal:
           retrigger:
-            repeats: 5
+            repeat: 5
             time: 0.3
             feedback: 0.5
             signal:
@@ -538,7 +538,7 @@ loop:
       retrigger:
         time: 0.3
         feedback: 0.5
-        repeats: 1
+        repeat: 1
         signal:
         #   mix:
         #     signals:
@@ -659,7 +659,7 @@ midi-env:
   retrigger:
     time: 0.1
     feedback: 0.5
-    repeats: 4
+    repeat: 4
     signal:
       midi_in:
         channel: 0
@@ -1264,7 +1264,7 @@ test-follow:
           - sequencer:
               interval: sixteenth
               repeat: 1000
-              sequence:
+              steps:
                 -
                 - 
                 - chop c10
@@ -1285,7 +1285,7 @@ test-follow:
               id: kick-drum
               interval: sixteenth
               repeat: 1000
-              sequence:
+              steps:
                 - kick
                 - kick
                 - kick
@@ -1353,7 +1353,7 @@ test-2:
               id: kick-drum
               interval: sixteenth
               repeat: 1000
-              sequence:
+              steps:
                 - kick
                 - 
                 - 
@@ -1536,3 +1536,56 @@ ring:
             steps: [200, 400, 800, 400]
     modulator:
       input: {}
+
+# Test monitor functionality
+test_monitor:
+  mix:
+    id: output
+    monitor: true  # Show mixer output
+    signals:
+      - osc:
+          id: lfo
+          monitor: true  # Show LFO
+          type: sin
+          freq: 2
+          range: [200, 800]
+      - osc:
+          id: osc1
+          monitor: true  # Show first oscillator
+          type: sin
+          freq: $lfo
+          amp: 0.3
+      - osc:
+          id: osc2
+          monitor: true  # Show second oscillator
+          type: saw
+          freq: $lfo * 1.5
+          amp: 0.2
+
+# Test monitor with sequencer
+test_monitor_seq:
+  mix:
+    id: output
+    monitor: true
+    duration: 10
+    signals:
+      - sequencer:
+          id: drums
+          monitor: true  # Show sequencer with timeline
+          interval: 0.125
+          repeat: 100
+          steps:
+            - osc: { type: sin, freq: 200, duration: 0.05, amp: 0.8 }
+            - null
+            - osc: { type: sin, freq: 400, duration: 0.05, amp: 0.5 }
+            - null
+            - osc: { type: sin, freq: 200, duration: 0.05, amp: 0.8 }
+            - null
+            - osc: { type: sin, freq: 400, duration: 0.05, amp: 0.5 }
+            - osc: { type: sin, freq: 600, duration: 0.05, amp: 0.3 }
+      - osc:
+          id: bass
+          monitor: true
+          type: sin
+          freq: 80
+          amp: 0.3

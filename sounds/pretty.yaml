@@ -20,21 +20,21 @@ pretty:
         # percussion:
         #   sequencer:
         #     interval: 0.1
-        #     sequence:
+        #     steps:
         #       - kick
         #       - 
         #       - 
         #       -
         shimmer:
           retrigger:
-            repeats: 3
+            repeat: 3
             time: 1
             feedback: .3
             spread: .7
             movement: 2
             signal:
               retrigger:
-                repeats: 3
+                repeat: 3
                 time: .6
                 feedback: .5
                 signal:
@@ -72,14 +72,14 @@ pretty:
                             range: [0, 1]
         main:
           retrigger:
-            repeats: 3
+            repeat: 3
             time: .7
             feedback: .3
             spread: .3
             movement: .2
             signal:
               retrigger:
-                repeats: 5
+                repeat: 5
                 time: .3
                 feedback: .5
                 signal:

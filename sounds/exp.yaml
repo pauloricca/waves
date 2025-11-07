@@ -12,7 +12,7 @@ exp:
             id: kick-drum
             interval: sixteenth
             repeat: 1000
-            sequence:
+            steps:
               - kick
               - 
               - hihat v.0
@@ -52,7 +52,7 @@ exp:
           sequencer:
             interval: sixteenth
             repeat: 1000
-            sequence:
+            steps:
               -
               - 
               - # hihat v.2
@@ -82,7 +82,7 @@ exp:
                     ref: kick-drum
             signal:
               retrigger:
-                repeats: 5
+                repeat: 5
                 time: 0.3
                 feedback: 0.5
                 signal:
@@ -141,7 +141,7 @@ synth2:
         exp: signal
         signal:
           retrigger:
-            repeats: 3
+            repeat: 3
             time: 0.3
             feedback: 0.2
             signal:
@@ -261,7 +261,7 @@ synth3:
 
 hum:
   # retrigger:
-  #   repeats: 3
+  #   repeat: 3
   #   time: 0.3
   #   feedback: 0.2
   #   signal:
@@ -316,7 +316,7 @@ seq-glitch:
         exp: 0.4 * perc + pads
         pads:
           retrigger:
-            repeats: 3
+            repeat: 3
             time: 0.3
             feedback: 0.2
             signal:
@@ -369,7 +369,7 @@ seq-glitch:
           sequencer:
             interval: sixteenth
             repeat: 1000
-            sequence:
+            steps:
               - kick
               - 
               - chop c10

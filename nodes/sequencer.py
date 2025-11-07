@@ -15,7 +15,7 @@ class SequencerModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     interval: WavableValue = 0
     repeat: int = math.inf
-    sequence: Optional[List[Union[BaseNodeModel, str, List[Union[str, BaseNodeModel]], None]]] = None
+    steps: Optional[List[Union[BaseNodeModel, str, List[Union[str, BaseNodeModel]], None]]] = None
     chain: Optional[List[Union[str, BaseNodeModel]]] = None
     swing: WavableValue = 0
     trigger: Optional[WavableValue] = None  # Optional trigger signal to advance steps
@@ -27,7 +27,7 @@ class SequencerNode(BaseNode):
         super().__init__(model, node_id, state, do_initialise_state)
         self.is_stereo = True  # Pass-through node: supports stereo children
         self.model = model
-        self.sequence = model.sequence
+        self.steps = model.steps
         self.chain = model.chain
         self.repeat = model.repeat
         self.interval_node = self.instantiate_child_node(model.interval, "interval")
@@ -65,7 +65,7 @@ class SequencerNode(BaseNode):
 
     def create_sound_nodes_for_step(self, step_index, **params):
         # Get the sounds for this step
-        sequence = self.sequence or self.chain
+        sequence = self.steps or self.chain
         if step_index >= len(sequence):
             return []
         
@@ -105,7 +105,7 @@ class SequencerNode(BaseNode):
     
     def _calculate_total_samples(self):
         """Calculate total number of samples for the entire sequence"""
-        sequence = self.sequence or self.chain
+        sequence = self.steps or self.chain
         if not sequence:
             return 0
         
@@ -190,7 +190,7 @@ class SequencerNode(BaseNode):
                 reset_wave = reset_wave[:num_samples_resolved]
             reset_indices, self.state.last_reset_value = detect_triggers(reset_wave, self.state.last_reset_value)
         
-        sequence = self.sequence or self.chain
+        sequence = self.steps or self.chain
         if not sequence:
             if num_channels == 2:
                 return np.zeros((num_samples, 2), dtype=np.float32)
@@ -298,7 +298,7 @@ class SequencerNode(BaseNode):
             # Determine if we're using trigger mode (has trigger input) or interval mode
             using_trigger_mode = self.trigger_node is not None
             
-            if self.sequence and not self.state.sequence_complete and not using_trigger_mode:
+            if self.steps and not self.state.sequence_complete and not using_trigger_mode:
                 # For sequence mode with interval: calculate based on interval with swing
                 # For sequence mode: calculate based on interval with swing
                 # Apply swing to odd steps (step % 2 == 1)
@@ -342,7 +342,7 @@ class SequencerNode(BaseNode):
             # Safeguard: if samples_to_render is 0 due to rounding, advance to next step
             # This can happen when time_in_current_step is very close to interval
             if samples_to_render <= 0:
-                if self.sequence and not self.state.sequence_complete and not using_trigger_mode:
+                if self.steps and not self.state.sequence_complete and not using_trigger_mode:
                     # Calculate current interval with swing (only for interval mode)
                     current_interval = interval
                     if self.state.current_step % 2 == 1:
@@ -443,7 +443,7 @@ class SequencerNode(BaseNode):
                 self.state.time_in_current_step += samples_to_time(samples_to_render)
             
             # Check if we should advance to next step for sequence mode (only in interval mode)
-            if self.sequence and not self.state.sequence_complete and not using_trigger_mode:
+            if self.steps and not self.state.sequence_complete and not using_trigger_mode:
                 # Calculate current interval with swing
                 current_interval = interval
                 if self.state.current_step % 2 == 1:

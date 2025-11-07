@@ -18,12 +18,14 @@ class BaseNodeModel(BaseModel):
     duration: Optional[float] = None
     id: Optional[str] = None  # Unique identifier for this node to enable referencing
     is_pass_through: bool = False  # Override to True for nodes that just pass through their signal child
+    monitor: bool = False  # Enable real-time output visualization for this node
     pass
 
 
 class BaseNode:
     def __init__(self, model: BaseNodeModel, node_id: str, state=None, do_initialise_state=True):
         self.node_id = node_id  # Set ID immediately so it's available for child instantiation
+        self.model = model  # Store model for access to monitor flag and other settings
         self.duration = model.duration
         self.time_since_start = 0
         self.number_of_chunks_rendered = 0
@@ -32,6 +34,16 @@ class BaseNode:
         
         # State is always provided by instantiate_node now (guaranteed non-None)
         self.state = state
+        
+                # Monitor settings (can be overridden by nodes)
+        self._monitor_range = (0.0, 1.0)  # Default range for monitor display
+        self._monitor_use_abs = True  # Whether to use abs() for peak detection
+        self._monitor_color_scheme = 'level'  # "level" (green-yellow-red) or "value" (blue)
+        
+        # Register with monitor registry if monitoring is enabled
+        if model.monitor and node_id:
+            from nodes.node_utils.monitor_registry import get_monitor_registry
+            get_monitor_registry().register(node_id, self)
 
 
     def instantiate_child_node(self, child: WavableValue, attribute_name: str, attribute_index: int | None = None) -> BaseNode:
@@ -137,6 +149,10 @@ class BaseNode:
         if self.is_stereo:
             # This is a stereo-capable node - call _do_render with requested num_channels
             result = self._do_render(num_samples, context, num_channels, **params)
+            # Update monitor with the stereo result
+            if hasattr(self, 'model') and self.model.monitor and self.node_id:
+                from nodes.node_utils.monitor_registry import get_monitor_registry
+                get_monitor_registry().update(self.node_id, result)
         else:
             # This is a mono-only node
             if num_channels == 2:
@@ -144,11 +160,19 @@ class BaseNode:
                 mono_result = self._do_render(num_samples, context, 1, **params)
                 if len(mono_result) == 0:
                     return empty_stereo()
+                # Update monitor with the MONO result before stereo conversion
+                if hasattr(self, 'model') and self.model.monitor and self.node_id:
+                    from nodes.node_utils.monitor_registry import get_monitor_registry
+                    get_monitor_registry().update(self.node_id, mono_result)
                 # Duplicate mono to stereo (center panned)
                 result = to_stereo(mono_result)
             else:
                 # Parent wants mono and we're mono - normal rendering
                 result = self._do_render(num_samples, context, num_channels, **params)
+                # Update monitor with the mono result
+                if hasattr(self, 'model') and self.model.monitor and self.node_id:
+                    from nodes.node_utils.monitor_registry import get_monitor_registry
+                    get_monitor_registry().update(self.node_id, result)
         
         return result
     
@@ -261,6 +285,37 @@ class BaseNode:
         if len(signal) > 0:
             self._last_chunk_samples = len(signal)
         return signal
+    
+    
+    def set_monitor_range(self, min_val: float, max_val: float):
+        """
+        Set the range for monitor display. Call this during render to update the range.
+        
+        Args:
+            min_val: Minimum value for the monitor range
+            max_val: Maximum value for the monitor range
+        """
+        self._monitor_range = (min_val, max_val)
+    
+    
+    def set_monitor_use_abs(self, use_abs: bool):
+        """
+        Set whether the monitor should use abs() for peak calculation.
+        
+        Args:
+            use_abs: If True, use abs() for peak (default). If False, show raw values.
+        """
+        self._monitor_use_abs = use_abs
+    
+    
+    def set_monitor_color_scheme(self, color_scheme: str):
+        """
+        Set color scheme for monitor: 'level' (green-yellow-red) or 'value' (blue).
+        
+        Args:
+            color_scheme: Either 'level' or 'value'
+        """
+        self._monitor_color_scheme = color_scheme
     
     
     def eval_scalar(self, value, context, **render_params):

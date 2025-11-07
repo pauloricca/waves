@@ -80,7 +80,7 @@ def format_stats_line(cpu_usage_percent: float, elapsed_seconds: float, is_recor
     
     # Add loudness meter if requested
     if show_loudness:
-        loudness_meter = create_loudness_meter(loudness, width=20)
+        loudness_meter = create_loudness_meter(loudness, width=24)
         parts.append(loudness_meter)
     
     # Format CPU usage
@@ -135,6 +135,9 @@ def run_visualizer_and_stats(
     except (AttributeError, OSError):
         pass  # Windows or permission issues
     
+    # Track how many lines we printed last time (for proper clearing)
+    last_printed_lines = 0
+    
     while not should_stop_flag[0]:
         if len(visualised_wave_buffer) > 0:
             try:
@@ -169,16 +172,45 @@ def run_visualizer_and_stats(
                         extra_lines=1
                     )
                     if DISPLAY_RENDER_STATS:
+                        # Show monitored nodes above stats line
+                        from nodes.node_utils.monitor_registry import get_monitor_registry
+                        monitor_lines = get_monitor_registry().get_display_lines()
+                        if monitor_lines:
+                            for line in monitor_lines:
+                                print(line, flush=True)
+                            print()  # Blank line separator
                         print(stats_text, flush=True)
                 elif DISPLAY_RENDER_STATS:
                     # Clear line and print stats only (no visualization)
-                    # Fill the rest of the terminal width with spaces to blank it out
+                    # Get monitored nodes
+                    from nodes.node_utils.monitor_registry import get_monitor_registry
+                    monitor_lines = get_monitor_registry().get_display_lines()
+                    
+                    # Build output with monitored nodes above main stats
+                    output_lines = []
+                    if monitor_lines:
+                        output_lines.extend(monitor_lines)
+                        # Add separator line
+                        output_lines.append("─" * 80)
+                    output_lines.append(stats_text)
+                    
+                    # Get terminal width for padding
                     try:
                         term_width = shutil.get_terminal_size((80, 20)).columns
                     except Exception:
                         term_width = 80
-                    padded_text = stats_text.ljust(term_width)
-                    print(f"\r{padded_text}", end='', flush=True)
+                    
+                    # Move cursor up to overwrite previous output if we printed before
+                    if last_printed_lines > 0:
+                        print(f"\033[{last_printed_lines}A", end='')
+                    
+                    # Print all lines with padding
+                    for line in output_lines:
+                        padded_line = line.ljust(term_width)
+                        print(padded_line, flush=True)
+                    
+                    # Update line count for next iteration
+                    last_printed_lines = len(output_lines)
             except Exception:
                 # Silently ignore visualization errors to avoid breaking audio
                 pass

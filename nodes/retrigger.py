@@ -32,7 +32,7 @@ retrigger:
 class RetriggerModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     time: float = 0.1
-    repeats: int = 3
+    repeat: int = 3
     feedback: float = 0.3
     spread: float = 0.0  # Stereo spread: 0 = all centered, 1 = full stereo spread
     movement: float = 0.0  # How quickly retriggers move in stereo field (cycles per second)
@@ -75,13 +75,13 @@ class RetriggerNode(BaseNode):
                 
                 # Calculate total retrigger time and set num_samples accordingly
                 n_delay_time_samples = int(SAMPLE_RATE * self.model.time)
-                total_length = len(child_signal) + n_delay_time_samples * self.model.repeats
+                total_length = len(child_signal) + n_delay_time_samples * self.model.repeat
                 self._last_chunk_samples = total_length
                 
                 # Process the full signal at once
                 if is_stereo:
                     delayed_wave = np.zeros((total_length, 2), dtype=np.float32)
-                    for i in range(self.model.repeats):
+                    for i in range(self.model.repeat):
                         delay_time = i * self.model.time
                         start_idx = i * n_delay_time_samples
                         end_idx = start_idx + len(child_signal)
@@ -92,10 +92,10 @@ class RetriggerNode(BaseNode):
                             sample_times = delay_time + np.arange(len(child_signal)) / SAMPLE_RATE
                             
                             # Vectorized pan calculation
-                            if self.model.repeats == 1:
+                            if self.model.repeat == 1:
                                 base_pan = 0.0
                             else:
-                                normalized_pos = (i / (self.model.repeats - 1)) * 2 - 1
+                                normalized_pos = (i / (self.model.repeat - 1)) * 2 - 1
                                 base_pan = normalized_pos * self.model.spread
                             
                             # Add movement rotation
@@ -118,7 +118,7 @@ class RetriggerNode(BaseNode):
                         delayed_wave[start_idx:end_idx] += stereo_signal
                 else:
                     delayed_wave = np.zeros(total_length)
-                    for i in range(self.model.repeats):
+                    for i in range(self.model.repeat):
                         delayed_wave[i * n_delay_time_samples : i * n_delay_time_samples + len(child_signal)] += child_signal * (self.model.feedback ** i)
                 return delayed_wave
         
@@ -133,11 +133,11 @@ class RetriggerNode(BaseNode):
         n_delay_time_samples = int(SAMPLE_RATE * self.model.time)
         
         if is_stereo:
-            delayed_wave = np.zeros((len(signal_wave) + n_delay_time_samples * self.model.repeats, 2), dtype=np.float32)
+            delayed_wave = np.zeros((len(signal_wave) + n_delay_time_samples * self.model.repeat, 2), dtype=np.float32)
             
             # Add delays with panning (only if we have signal)
             if len(signal_wave) > 0:
-                for i in range(self.model.repeats):
+                for i in range(self.model.repeat):
                     # Calculate pan position for each sample based on when it will be heard
                     # Each retrigger starts at time_since_start + (i * delay_time)
                     delay_time = i * self.model.time
@@ -148,10 +148,10 @@ class RetriggerNode(BaseNode):
                         sample_times = self.time_since_start + delay_time + np.arange(len(signal_wave)) / SAMPLE_RATE
                         
                         # Vectorized pan calculation
-                        if self.model.repeats == 1:
+                        if self.model.repeat == 1:
                             base_pan = 0.0
                         else:
-                            normalized_pos = (i / (self.model.repeats - 1)) * 2 - 1
+                            normalized_pos = (i / (self.model.repeat - 1)) * 2 - 1
                             base_pan = normalized_pos * self.model.spread
                         
                         # Add movement rotation
@@ -176,11 +176,11 @@ class RetriggerNode(BaseNode):
                     end_idx = start_idx + len(signal_wave)
                     delayed_wave[start_idx:end_idx] += stereo_signal
         else:
-            delayed_wave = np.zeros(len(signal_wave) + n_delay_time_samples * self.model.repeats)
+            delayed_wave = np.zeros(len(signal_wave) + n_delay_time_samples * self.model.repeat)
             
             # Add delays (only if we have signal)
             if len(signal_wave) > 0:
-                for i in range(self.model.repeats):
+                for i in range(self.model.repeat):
                     delayed_wave[i * n_delay_time_samples : i * n_delay_time_samples + len(signal_wave)] += signal_wave * (self.model.feedback ** i)
         
         # Add carry over from previous render
@@ -214,11 +214,11 @@ class RetriggerNode(BaseNode):
         
         # Base position: spread repeats evenly across stereo field
         # For even distribution: map repeat_index to range based on spread
-        if self.model.repeats == 1:
+        if self.model.repeat == 1:
             base_pan = 0.0
         else:
             # Map repeat index to [-1, 1] range, scaled by spread
-            normalized_pos = (repeat_index / (self.model.repeats - 1)) * 2 - 1  # -1 to 1
+            normalized_pos = (repeat_index / (self.model.repeat - 1)) * 2 - 1  # -1 to 1
             base_pan = normalized_pos * self.model.spread
         
         # Add movement: rotate position over time

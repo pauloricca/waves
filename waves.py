@@ -113,6 +113,10 @@ def perform_hot_reload_background(sound_name_to_play: str, changed_filename: str
         with hot_reload_lock:
             old_node = current_sound_node
         
+        # Clear monitor registry before reload
+        from nodes.node_utils.monitor_registry import get_monitor_registry
+        get_monitor_registry().clear()
+        
         # Reload only the changed file, or the file containing the sound if unknown
         reload_success = False
         if changed_filename:

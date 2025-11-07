@@ -6,6 +6,7 @@ shahi:
         exp: signal * amp
         amp:
           midi_cc:
+            monitor: true
             cc: 3
             range: [0.5, 3]
         signal:
@@ -22,13 +23,16 @@ shahi:
               filter:
                 peak:
                   midi_cc:
+                    monitor: true
                     cc: 18
                 cutoff:
                   midi_cc:
+                    monitor: true
                     cc: 17
                     range: [0, 20000]
                 signal:
                   expression:
+                    monitor: true
                     exp: pow(signal, exponent)
                     exponent:
                       midi_cc:
@@ -47,9 +51,10 @@ shahi:
                             duration: 1000
                             perc:
                               sequencer:
+                                monitor: true
                                 interval: beat / 4
                                 repeat: 1000
-                                sequence:
+                                steps:
                                   - kick-drum-dynamic
                                   - 
                                   - kick-drum-dynamic
@@ -63,6 +68,7 @@ shahi:
                                 amp: 0.005
                             note:
                               osc:
+                                monitor: true
                                 type: saw
                                 freq: E1
                                 amp: 0.005
@@ -178,7 +184,7 @@ kick-test:
       sequencer:
         interval: beat / 4
         repeat: 1000
-        sequence:
+        steps:
           - kick-drum-dynamic
           - 
           - 
@@ -194,7 +200,7 @@ kick-with-rumble:
           sequencer:
             id: kick
             interval: beat / 4
-            sequence:
+            steps:
               - kick-drum-dynamic
               - 
               - hihat v.1
@@ -211,12 +217,12 @@ kick-with-rumble:
               - 
               - oscar
               -
-            # sequence:
+            # steps:
             #   - kick-drum-dynamic, hihat v.2
             #   - 
             #   - hihat v.1
             #   - 
-            sequence:
+            steps:
               - kick-drum-dynamic
               - 
               -
@@ -311,7 +317,7 @@ compressed:
             perc:
               sequencer:
                 interval: beat
-                sequence:
+                steps:
                   - osc:
                       freq: 100
                       amp: 2
@@ -332,7 +338,7 @@ oscar:
   retrigger:
     duration: 10
     time: 0.3
-    repeats: 4
+    repeat: 4
     spread: 0.9
     movement: 4
     signal:

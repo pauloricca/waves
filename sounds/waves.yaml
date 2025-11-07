@@ -2,7 +2,7 @@ seq1:
   sequencer:
     interval: sixteenth
     repeat: 4000
-    sequence:
+    steps:
       - [kick]
       - [oscar, oscar, oscar, chop]
       - [oscar, oscar, oscar, chop, hihat v0.5]
@@ -16,7 +16,7 @@ seq2:
   sequencer:
     interval: sixteenth
     repeat: 4000
-    sequence:
+    steps:
       - [kick]
       - [oscar, chop]
       - [chop, hihat v0.5]
@@ -30,7 +30,7 @@ seq3:
   sequencer:
     interval: sixteenth
     repeat: 4000
-    sequence:
+    steps:
       - [kick2]
       - [oscar, chop]
       - [chop, hihat v0.5]
@@ -44,7 +44,7 @@ seq4:
   sequencer:
     interval: sixteenth
     repeat: 4000
-    sequence:
+    steps:
       - kick
       -
       - [chop, hihat v0.5]
@@ -59,7 +59,7 @@ seq5:
   sequencer:
     interval: sixteenth
     repeat: 4000
-    sequence:
+    steps:
       - [kick]
       - [chop]
       - [chop, hihat v0.5]

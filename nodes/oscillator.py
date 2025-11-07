@@ -81,6 +81,10 @@ class OscillatorNode(BaseNode):
         # Create range mapper if range is specified
         self.range_mapper = RangeMapper.from_model_range(self, model.range)
         
+        # Set monitor range if range is specified (for static ranges)
+        if model.range and isinstance(model.range[0], (int, float)) and isinstance(model.range[1], (int, float)):
+            self.set_monitor_range(float(model.range[0]), float(model.range[1]))
+        
         # Persistent state (survives hot reload)
         if do_initialise_state:
             self.state.phase_acc = 0  # Phase accumulator to maintain continuity between render calls

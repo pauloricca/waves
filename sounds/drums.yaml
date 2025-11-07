@@ -39,7 +39,7 @@ drums:
       sequencer:
         repeat: 1000
         interval: 0.15
-        sequence:
+        steps:
           - kick
           - 
           - hihat

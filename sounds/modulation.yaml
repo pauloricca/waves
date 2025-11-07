@@ -20,6 +20,7 @@ modulation:
         phase:
           osc:
             type: sin
+            monitor: true
             amp:
               expression:
                 exp: amp_amp * signal
@@ -49,11 +50,13 @@ modulation:
                       - 0
             freq:
               midi_cc:
+                monitor: true
                 cc: 17
                 range: [0, 500]
             phase:
               osc:
                 type: sin
+                monitor: true
                 amp:
                   expression:
                     exp: amp_amp * signal
@@ -73,6 +76,7 @@ modulation:
                           - 0
                 freq:
                   midi_cc:
+                    monitor: true
                     cc: 18
                     range: [0, 15000]
 
@@ -119,7 +123,7 @@ sequencer_trigger_test:
       sequencer:
         trigger: beat_tick  # Advance step on each beat
         repeat: 1
-        sequence:
+        steps:
           - osc:
               type: sin
               freq: 2200
@@ -194,7 +198,7 @@ sequencer_reset_test:
       sequencer:
         trigger: beat_tick  # Advance fast
         # reset: bar_tick  # Reset on bar
-        sequence:
+        steps:
           - osc:
               type: sin
               duration: 0.2
