@@ -52,9 +52,14 @@ class TracksNode(BaseNode):
     def __init__(self, model: TracksNodeModel, node_id: str, state=None, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
         self.is_stereo = True  # TracksNode always outputs stereo
-        
+
         # Cache for last rendered track outputs (used for stem export)
         self.last_track_outputs = None
+
+        # Scratch buffers reused during mixing to avoid repeated allocations
+        self._mix_buffer: np.ndarray | None = None
+        self._stereo_scratch: np.ndarray | None = None
+        self._pan_cache: dict[int, tuple[int, np.ndarray]] = {}
         
         # Parse tracks and their associated pan values from __pydantic_extra__
         self.tracks = []  # List of {name, node, pan_node_or_value}
@@ -111,6 +116,29 @@ class TracksNode(BaseNode):
         """Return list of track names for file export"""
         return [track['name'] for track in self.tracks]
     
+    def _ensure_mix_buffer(self, length: int) -> np.ndarray:
+        if self._mix_buffer is None or self._mix_buffer.shape[0] < length:
+            self._mix_buffer = np.zeros((length, 2), dtype=np.float32)
+        else:
+            self._mix_buffer[:length].fill(0)
+        return self._mix_buffer[:length]
+
+    def _ensure_stereo_scratch(self, length: int) -> np.ndarray:
+        if self._stereo_scratch is None or self._stereo_scratch.shape[0] < length:
+            self._stereo_scratch = np.zeros((length, 2), dtype=np.float32)
+        return self._stereo_scratch[:length]
+
+    def _get_pan_envelope(self, pan_entry, length: int, context, params, pan_cache):
+        cache_key = id(pan_entry)
+        cached = pan_cache.get(cache_key)
+        if cached and cached[0] >= length:
+            return cached[1][:length]
+
+        pan_value = pan_entry.render(length, context, **params)
+        pan_value = match_length(pan_value, length)
+        pan_cache[cache_key] = (len(pan_value), pan_value)
+        return pan_value
+
     def get_track_outputs(self, num_samples=None, context=None, **params):
         """
         Render all tracks individually and return dict of {track_name: stereo_array}.
@@ -121,7 +149,8 @@ class TracksNode(BaseNode):
         - Stereo (2D array): Use as-is (already stereo)
         """
         track_outputs = {}
-        
+        self._pan_cache.clear()
+
         for track in self.tracks:
             # Request stereo output (num_channels=2)
             signal = track['node'].render(num_samples, context, num_channels=2, **params)
@@ -144,11 +173,10 @@ class TracksNode(BaseNode):
                     
                     # Get pan value (static or dynamic)
                     if track['is_pan_dynamic']:
-                        pan_value = track['pan'].render(len(mono_signal), context, **params)
-                        pan_value = match_length(pan_value, len(mono_signal))
+                        pan_value = self._get_pan_envelope(track['pan'], len(mono_signal), context, params, self._pan_cache)
                     else:
                         pan_value = track['pan']
-                    
+
                     # Apply panning to create new stereo signal
                     stereo_signal = apply_panning(mono_signal, pan_value)
                 else:
@@ -158,12 +186,10 @@ class TracksNode(BaseNode):
                 # Mono - apply panning to create stereo
                 # Get pan value (static or dynamic)
                 if track['is_pan_dynamic']:
-                    pan_value = track['pan'].render(len(signal), context, **params)
-                    # Ensure pan_value matches signal length
-                    pan_value = match_length(pan_value, len(signal))
+                    pan_value = self._get_pan_envelope(track['pan'], len(signal), context, params, self._pan_cache)
                 else:
                     pan_value = track['pan']
-                
+
                 # Apply panning to create stereo
                 stereo_signal = apply_panning(signal, pan_value)
             
@@ -200,37 +226,34 @@ class TracksNode(BaseNode):
         
         # Mix all tracks together with volume applied
         # Start with zeros
-        mixed = np.zeros((max_length, 2), dtype=np.float32)
-        
+        mixed = self._ensure_mix_buffer(max_length)
+
         for track in self.tracks:
             track_name = track['name']
             stereo_signal = track_outputs.get(track_name)
-            
+
             if stereo_signal is None or len(stereo_signal) == 0:
                 continue
-            
-            # Pad or truncate to max_length
-            if len(stereo_signal) < max_length:
-                # Pad with zeros if this track is shorter
-                padding = np.zeros((max_length - len(stereo_signal), 2), dtype=np.float32)
-                stereo_signal = np.vstack([stereo_signal, padding])
-            elif len(stereo_signal) > max_length:
-                # Truncate if somehow longer (shouldn't happen but defensive)
-                stereo_signal = stereo_signal[:max_length]
-            
+
+            frames = min(len(stereo_signal), max_length)
+            contribution = stereo_signal[:frames]
+
             # Get volume value (static or dynamic)
             if track['is_vol_dynamic']:
-                vol_value = track['vol'].render(len(stereo_signal), context, **params)
-                # Ensure vol_value matches stereo_signal length
-                vol_value = match_length(vol_value, len(stereo_signal))
-                # Apply volume to both channels
-                stereo_signal = stereo_signal * vol_value[:, np.newaxis]
+                vol_value = track['vol'].render(frames, context, **params)
+                vol_value = match_length(vol_value, frames)
+                scratch = self._ensure_stereo_scratch(frames)
+                np.multiply(contribution, vol_value[:, np.newaxis], out=scratch)
+                contribution = scratch
             else:
-                # Static volume
-                stereo_signal = stereo_signal * track['vol']
-            
-            mixed += stereo_signal
-        
+                vol = track['vol']
+                if vol != 1.0:
+                    scratch = self._ensure_stereo_scratch(frames)
+                    np.multiply(contribution, vol, out=scratch)
+                    contribution = scratch
+
+            mixed[:frames] += contribution
+
         return mixed
 
 
