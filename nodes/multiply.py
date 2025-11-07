@@ -70,7 +70,15 @@ class MultiplyNode(BaseNode):
         if model.number is not None:
             self.number_node = self.instantiate_child_node(model.number, "number")
         
+        # Persistent state: track how many instances we've created
+        if do_initialise_state:
+            self.state.instance_count = 0
+        
+        # Ephemeral: Recreate signal instances from state (for hot reload)
         self.signal_instances: list[BaseNode] = []
+        for i in range(self.state.instance_count):
+            signal_copy = self.instantiate_child_node(self.model.signal, "signal", i)
+            self.signal_instances.append(signal_copy)
     
     def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
         num_samples = self.resolve_num_samples(num_samples)
@@ -96,9 +104,13 @@ class MultiplyNode(BaseNode):
                 signal_copy = self.instantiate_child_node(self.model.signal, "signal", i)
                 new_instances.append(signal_copy)
             self.signal_instances.extend(new_instances)
+            # Update state to track instance count
+            self.state.instance_count = len(self.signal_instances)
         
         elif len(self.signal_instances) > count:
             self.signal_instances = self.signal_instances[:count]
+            # Update state to track instance count
+            self.state.instance_count = len(self.signal_instances)
 
         if count <= 0:
             return np.zeros(num_samples, dtype=np.float32)

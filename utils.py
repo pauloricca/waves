@@ -1,12 +1,34 @@
 import os
 import shutil
 import math
+import random
 import sounddevice as sd
 import numpy as np
 from scipy.io import wavfile
 
 
 from config import *
+
+
+_terminal_size_cache: os.terminal_size | None = None
+_terminal_env_snapshot: tuple[str | None, str | None] | None = None
+
+
+def _get_cached_terminal_size() -> os.terminal_size:
+    """Return the cached terminal size, refreshing if environment hints change."""
+    global _terminal_size_cache, _terminal_env_snapshot
+
+    current_env = (os.environ.get("COLUMNS"), os.environ.get("LINES"))
+    if _terminal_size_cache is not None and current_env == _terminal_env_snapshot:
+        return _terminal_size_cache
+
+    try:
+        _terminal_size_cache = shutil.get_terminal_size()
+    except OSError:
+        _terminal_size_cache = os.terminal_size((80, 24))
+
+    _terminal_env_snapshot = current_env
+    return _terminal_size_cache
 
 
 def detect_triggers(trigger_wave: np.ndarray, last_value: float, threshold: float = 0.5) -> tuple[list[int], float]:
@@ -25,24 +47,17 @@ def detect_triggers(trigger_wave: np.ndarray, last_value: float, threshold: floa
     
     A trigger is detected when the value crosses the threshold from below to above.
     """
-    triggers = []
-    
     if len(trigger_wave) == 0:
-        return triggers, last_value
-    
-    # Check first sample against last value from previous chunk
-    if last_value < threshold and trigger_wave[0] >= threshold:
-        triggers.append(0)
-    
-    # Check for crossings within the chunk
-    for i in range(1, len(trigger_wave)):
-        if trigger_wave[i-1] < threshold and trigger_wave[i] >= threshold:
-            triggers.append(i)
-    
-    # Return the last value for next chunk
-    new_last_value = trigger_wave[-1]
-    
-    return triggers, new_last_value
+        return [], last_value
+
+    wave = np.asarray(trigger_wave, dtype=np.float32)
+
+    # Compute threshold crossings in a vectorised fashion.
+    previous = np.concatenate(([last_value], wave[:-1]))
+    rising_edges = (previous < threshold) & (wave >= threshold)
+    trigger_indices = np.nonzero(rising_edges)[0].tolist()
+
+    return trigger_indices, float(wave[-1])
 
 
 def play(wave):
@@ -100,82 +115,130 @@ def load_wav_file(filename):
 
 
 has_printed_visualisation = False
-def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_lines = 0):
+
+
+def _group_wave_for_visualisation(wave: np.ndarray, visualisation_width: int) -> tuple[np.ndarray, np.ndarray]:
+    """Return per-column min/max samples for the visualiser."""
+    if wave.size == 0:
+        return (
+            np.zeros(visualisation_width, dtype=int),
+            np.zeros(visualisation_width, dtype=int),
+        )
+
+    flattened = wave.reshape(-1)
+    num_columns = max(1, min(visualisation_width, flattened.size))
+    group_size = int(np.ceil(flattened.size / num_columns))
+    padded_length = group_size * num_columns
+    if padded_length != flattened.size:
+        flattened = np.pad(flattened, (0, padded_length - flattened.size), mode="edge")
+
+    grouped = flattened.reshape(num_columns, group_size)
+    column_min = grouped.min(axis=1)
+    column_max = grouped.max(axis=1)
+
+    return column_min, column_max
+
+
+def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_lines = 0, force_terminal_refresh: bool = False):
     global has_printed_visualisation
 
     if DO_ONLY_VISUALISE_ONE_BUFFER:
         wave = wave[0:BUFFER_SIZE]
 
-    # Get terminal width
-    visualisation_width = shutil.get_terminal_size().columns
+    if force_terminal_refresh or not has_printed_visualisation or not replace_previous:
+        terminal_size = _get_cached_terminal_size()
+    else:
+        terminal_size = _terminal_size_cache or _get_cached_terminal_size()
+
+    visualisation_width = terminal_size.columns
     visualisation_height_resolution_halved = (VISUALISATION_ROW_HEIGHT * 4) // 2
 
-    # Normalize the waveform to fit within the terminal height (otherwise it will clip, which can be useful too)
+    wave_array = np.asarray(wave, dtype=np.float32)
+    if wave_array.size == 0:
+        return
+
     if do_normalise:
-        wave = wave / np.max(np.abs(wave))
+        max_abs = np.max(np.abs(wave_array))
+        if max_abs > 0:
+            wave_array = wave_array / max_abs
 
-    scaled_wave = (wave * visualisation_height_resolution_halved).astype(int)
+    scaled_wave = (wave_array * visualisation_height_resolution_halved).astype(int, copy=False)
+    column_min, column_max = _group_wave_for_visualisation(scaled_wave, visualisation_width)
 
-    # Group values in scaled_wave into visualisation_width groups
-    group_size = max(1, len(scaled_wave) // visualisation_width)
-    grouped_wave = [
-        (
-            min(scaled_wave[i * group_size : (i + 1) * group_size]),
-            max(scaled_wave[i * group_size : (i + 1) * group_size]),
-        )
-        for i in range(visualisation_width)
-    ]
-
+    num_columns = column_min.size
     full_visualisation_height = 2 * (VISUALISATION_ROW_HEIGHT // 2)
 
-    # Build entire visualization as a single string buffer to minimize print calls
-    output_buffer = ""
+    output_lines = []
 
     if replace_previous and has_printed_visualisation:
-        # Move cursor up and clear lines - these need to be done without newlines
-        for _ in range(full_visualisation_height + extra_lines):
-            output_buffer += "\033[1A\x1b[2K"
+        clear_lines = "".join("\033[1A\x1b[2K" for _ in range(full_visualisation_height + extra_lines))
+        output_lines.append(clear_lines)
 
-    # Create a histogram-like visualization (floor the height to make sure we have an even number of rows)
-    visualization_lines = []
-    for i in range(full_visualisation_height):
-        line = ""
-        for (minVal, maxVal) in grouped_wave:
-            if i < visualisation_height_resolution_halved / 4:
-                row_value = visualisation_height_resolution_halved - i * 4
-                if maxVal > row_value and i == 0:
-                    line += "\033[31m█\033[0m" # Red
-                elif maxVal >= row_value:
-                    line += "█"
-                elif maxVal >= row_value - 1:
-                    line += "▆" 
-                elif maxVal >= row_value - 2:
-                    line += "▄"
-                elif maxVal >= row_value - 3:
-                    line += "▂"
-                else:
-                    line += "▁" if i == (visualisation_height_resolution_halved / 4) - 1 else  " " 
+    upper_rows = visualisation_height_resolution_halved // 4
+    for row_index in range(full_visualisation_height):
+        if row_index < upper_rows:
+            row_value = visualisation_height_resolution_halved - row_index * 4
+            chars = np.full(num_columns, " ", dtype=object)
+
+            if row_index == 0:
+                mask_red = column_max > row_value
+                chars[mask_red] = "\033[31m█\033[0m"
+                mask_solid = (~mask_red) & (column_max >= row_value)
             else:
-                row_value = (1 + i - VISUALISATION_ROW_HEIGHT // 2) * -4
-                if minVal >= row_value + 4:
-                    line += " "
-                elif minVal >= row_value + 3:
-                    line += "\033[7m▆\033[0m"  # lower third, inverted (looks like upper third)
-                elif minVal >= row_value + 2:
-                    line += "\033[7m▄\033[0m"  # lower half, inverted (looks like upper half)
-                elif minVal >= row_value + 1:
-                    line += "\033[7m▃\033[0m"  # lower two thirds, inverted (looks like upper two thirds)
-                elif minVal < row_value and i == full_visualisation_height - 1:
-                    line += "\033[31m█\033[0m" # Red
-                else:
-                    line += "█"
-        visualization_lines.append(line)
-    
-    # Append the visualization lines with newlines
-    output_buffer += '\n'.join(visualization_lines)
+                mask_solid = column_max >= row_value
+                chars[mask_solid] = "█"
 
-    # Single print call with all content - efficient and preserves cursor positioning
-    print(output_buffer, flush=True)
+            if row_index == 0:
+                chars[mask_solid] = "█"
+
+            remaining = chars == " "
+            mask_upper1 = column_max >= row_value - 1
+            mask_upper2 = column_max >= row_value - 2
+            mask_upper3 = column_max >= row_value - 3
+
+            chars[remaining & mask_upper1] = "▆"
+            remaining = chars == " "
+            chars[remaining & mask_upper2] = "▄"
+            remaining = chars == " "
+            chars[remaining & mask_upper3] = "▂"
+
+            if row_index == upper_rows - 1:
+                remaining = chars == " "
+                chars[remaining] = "▁"
+        else:
+            row_value = (1 + row_index - VISUALISATION_ROW_HEIGHT // 2) * -4
+            chars = np.full(num_columns, "█", dtype=object)
+
+            mask_blank = column_min >= row_value + 4
+            mask_third = column_min >= row_value + 3
+            mask_half = column_min >= row_value + 2
+            mask_two_thirds = column_min >= row_value + 1
+            mask_bottom_red = (column_min < row_value) & (row_index == full_visualisation_height - 1)
+
+            chars[mask_blank] = " "
+            chars[~mask_blank & mask_third] = "\033[7m▆\033[0m"
+            chars[~mask_blank & ~mask_third & mask_half] = "\033[7m▄\033[0m"
+            chars[~mask_blank & ~mask_half & mask_two_thirds] = "\033[7m▃\033[0m"
+            chars[mask_bottom_red] = "\033[31m█\033[0m"
+
+        output_lines.append("".join(chars.tolist()))
+
+    # Scramble rows if enabled (interesting glitch effect)
+    if DO_SCRAMBLE_VISUALISATION_ROWS and len(output_lines) > 1:
+        # Keep the first line (clear_lines if replace_previous), scramble the rest
+        first_line = output_lines[0] if (replace_previous and has_printed_visualisation) else None
+        rows_to_scramble = output_lines[1:] if first_line else output_lines
+        
+        rng = random.Random()    
+        scrambled_rows = rows_to_scramble.copy()
+        rng.shuffle(scrambled_rows)
+        
+        if first_line:
+            output_lines = [first_line] + scrambled_rows
+        else:
+            output_lines = scrambled_rows
+
+    print("".join(output_lines), flush=True)
 
     has_printed_visualisation = True
 
