@@ -15,6 +15,29 @@ Waves is a flexible audio synthesis framework where sounds are created by connec
 - **MIDI support**: Use MIDI controllers for live performance and parameter control
 - **Stereo mixing with tracks**: Multi-track mixing with panning and individual stem export
 
+## Requirements
+
+- **Python 3.10 or higher** (required by dependencies, especially SciPy 1.15+)
+- macOS, Linux, or Windows (with bash for install script)
+
+### Python Version Management
+
+This project requires Python 3.10+. If you have an older Python version, we recommend using [pyenv](https://github.com/pyenv/pyenv) to manage multiple Python versions:
+
+```bash
+# Install pyenv (macOS with Homebrew)
+brew install pyenv
+
+# Install Python 3.10
+pyenv install 3.10.13
+
+# The project includes a .python-version file that automatically
+# activates Python 3.10 when you cd into the directory
+cd waves  # pyenv automatically switches to Python 3.10
+```
+
+The `.python-version` file in this repo tells pyenv to use Python 3.10 automatically. If you don't use pyenv, just ensure your system Python is 3.10 or higher before running the install script.
+
 ## Installation
 
 ### Quick Install (Recommended)
@@ -24,6 +47,7 @@ git clone https://github.com/pauloricca/waves.git && cd waves && ./install
 ```
 
 The install script will:
+- Check that Python 3.10+ is available
 - Create a virtual environment
 - Upgrade pip
 - Install all dependencies from requirements.txt

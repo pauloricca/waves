@@ -6,6 +6,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "Setting up Waves audio synthesis environment..."
 echo
 
+# Check Python version
+PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+REQUIRED_VERSION="3.10"
+
+echo "Detected Python version: $PYTHON_VERSION"
+
+# Compare versions (converts to integers for comparison)
+CURRENT_VER=$(echo $PYTHON_VERSION | awk -F. '{print ($1 * 100) + $2}')
+REQUIRED_VER=$(echo $REQUIRED_VERSION | awk -F. '{print ($1 * 100) + $2}')
+
+if [[ $CURRENT_VER -lt $REQUIRED_VER ]]; then
+    echo "✗ Error: Python $REQUIRED_VERSION or higher is required"
+    echo "  Current version: $PYTHON_VERSION"
+    echo "  Please upgrade Python and try again"
+    exit 1
+fi
+
+echo "✓ Python version is compatible"
+echo
+
 # Check if virtual environment exists
 if [[ ! -d "$SCRIPT_DIR/venv" ]]; then
     echo "Creating virtual environment..."
