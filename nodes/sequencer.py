@@ -407,11 +407,11 @@ class SequencerNode(BaseNode):
                 
                 # Mix into step wave (pad if needed)
                 if len(sound_chunk) < len(step_wave):
-                    if num_channels == 2 and is_stereo(sound_chunk):
-                        # Stereo padding
+                    if num_channels == 2:
+                        # Stereo padding - sound_chunk is guaranteed to be stereo after conversion above
                         sound_chunk = np.pad(sound_chunk, ((0, len(step_wave) - len(sound_chunk)), (0, 0)))
                     else:
-                        # Mono padding
+                        # Mono padding - sound_chunk is guaranteed to be mono after conversion above
                         sound_chunk = np.pad(sound_chunk, (0, len(step_wave) - len(sound_chunk)))
                 
                 step_wave[:len(sound_chunk)] += sound_chunk

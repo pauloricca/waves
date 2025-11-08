@@ -296,20 +296,50 @@ def look_for_duration(model):
 def add_waves(a: np.ndarray, b: np.ndarray, b_offset: int = 0) -> np.ndarray:
     """
     Adds two waves together, offsetting the second wave by b_offset, increasing the length of the first wave if necessary.
+    Handles both mono (1D) and stereo (2D) signals. If one is stereo and one is mono, converts mono to stereo.
     """
+    # Normalize to same channel format (mono or stereo)
+    a_is_stereo = is_stereo(a)
+    b_is_stereo = is_stereo(b)
+    
+    if a_is_stereo and not b_is_stereo:
+        b = to_stereo(b)
+        b_is_stereo = True
+    elif b_is_stereo and not a_is_stereo:
+        a = to_stereo(a)
+        a_is_stereo = True
+    
+    # Handle offsets - need to pad only the time axis (first dimension)
     if b_offset < 0:
         # For negative offsets, we need to pad the beginning of 'a' and adjust the offset for 'b'
-        a = np.pad(a, (-b_offset, 0), mode='constant')
+        if a_is_stereo:
+            a = np.pad(a, [(-b_offset, 0), (0, 0)], mode='constant')
+        else:
+            a = np.pad(a, (-b_offset, 0), mode='constant')
     elif b_offset > 0:
         # For positive offsets, we pad the beginning of 'b' with zeros
-        b = np.pad(b, (b_offset, 0), mode='constant')
+        if b_is_stereo:
+            b = np.pad(b, [(b_offset, 0), (0, 0)], mode='constant')
+        else:
+            b = np.pad(b, (b_offset, 0), mode='constant')
     
+    # Equalize lengths - pad only time axis
     if len(a) < len(b):
         # If 'a' is shorter than 'b', we need to pad 'a' at the end
-        a = np.pad(a, (0, len(b) - len(a)), mode='constant')
+        if a_is_stereo:
+            a = np.pad(a, [(0, len(b) - len(a)), (0, 0)], mode='constant')
+        else:
+            a = np.pad(a, (0, len(b) - len(a)), mode='constant')
     elif len(a) > len(b):
         # If 'a' is longer than 'b', we need to pad 'b' at the end
-        b = np.pad(b, (0, len(a) - len(b)), mode='constant')
+        if b_is_stereo:
+            b = np.pad(b, [(0, len(a) - len(b)), (0, 0)], mode='constant')
+        else:
+            b = np.pad(b, (0, len(a) - len(b)), mode='constant')
+    
+    # Verify shapes match before adding
+    if a.shape != b.shape:
+        raise ValueError(f"Cannot add waves with mismatched shapes after normalization: {a.shape} vs {b.shape}")
     
     # Now we can safely add the two arrays
     return np.add(a, b, out=a, casting='unsafe')

@@ -61,7 +61,8 @@ class ContextNode(BaseNode):
         extended_params = params.copy()
         
         for name, node in self.context_args.items():
-            wave = node.render(num_samples, context, **self.get_params_for_children(params))
+            # Pass num_channels to context args so they match the expected output format
+            wave = node.render(num_samples, context, num_channels, **self.get_params_for_children(params))
             # If child returned empty, we're done
             if len(wave) == 0:
                 return empty_mono()

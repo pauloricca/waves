@@ -267,7 +267,7 @@ class BaseNode:
         return num_samples
     
     
-    def render_full_child_signal(self, child_node, context=None, **params) -> np.ndarray:
+    def render_full_child_signal(self, child_node, context=None, num_channels=1, **params) -> np.ndarray:
         """
         Helper method to render the full signal from a child node.
         This is useful when the node needs the complete child signal to process
@@ -276,12 +276,13 @@ class BaseNode:
         Args:
             child_node: The child node to render
             context: RenderContext to pass to child
+            num_channels: Number of channels to request (1=mono, 2=stereo)
             **params: Parameters to pass to the child
             
         Returns:
             The full signal from the child node
         """
-        signal = child_node.render(context=context, **params)
+        signal = child_node.render(context=context, num_channels=num_channels, **params)
         if len(signal) > 0:
             self._last_chunk_samples = len(signal)
         return signal

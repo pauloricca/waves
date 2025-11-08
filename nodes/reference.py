@@ -30,7 +30,7 @@ class ReferenceNode(BaseNode):
         
         # Call render on the referenced node - this will handle recursion tracking
         # and return zeros if max recursion depth is reached
-        wave = referenced_node.render(num_samples, context, **params)
+        wave = referenced_node.render(num_samples, context, num_channels, **params)
         
         return wave.copy()  # Return a copy to avoid mutations
 

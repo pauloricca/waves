@@ -9,9 +9,9 @@ exp:
             cc: 0
         kick:
           sequencer:
+            monitor: true
             id: kick-drum
             interval: sixteenth
-            repeat: 1000
             steps:
               - kick
               - 
@@ -50,12 +50,12 @@ exp:
             cc: 1
         hat:
           sequencer:
+            monitor: true
             interval: sixteenth
-            repeat: 1000
             steps:
               -
               - 
-              - # hihat v.2
+              -
               - 
               - 
               - chop c2
@@ -72,9 +72,11 @@ exp:
             cc: 2
         synth:
           expression:
+            monitor: true
             exp: signal * duck
             duck:
               follow:
+                range: [1, 0]
                 attack: 0.002
                 release: 0.02
                 signal:
@@ -94,7 +96,6 @@ exp:
                         multiplier:
                           automation:
                             interval: sixteenth
-                            repeat: 1000
                             steps: [1, 1, 1, 1, 4, 2, 1, 1, 8, 1, 1.2, 1, 1.2, 1, 1, 1]
                         base:
                           snap:
@@ -107,6 +108,7 @@ exp:
                                 range: [30, 260]
                     phase:
                       osc:
+                        monitor: true
                         type: tri
                         amp:
                           expression:
@@ -119,7 +121,6 @@ exp:
                             auto:
                               automation:
                                 interval: triplet * 3
-                                repeat: 1000
                                 steps: [0, 0.1, 0, 0.4, 0.1, 0.6, 1, 0, 0, 0.1]
                         freq: 
                           snap:
@@ -389,6 +390,18 @@ seq-glitch:
               - kick
               - chop
               -
+
+
+cute:
+  osc:
+    type:
+    freq: 32.3
+    amp:
+      osc:
+        type: sin
+        freq: 11.3
+        amp: 1
+
 
 test_slow:
   multiply:

@@ -15,6 +15,7 @@ class SmoothModel(BaseNodeModel):
 class SmoothNode(BaseNode):
     def __init__(self, model: SmoothModel, node_id: str, state=None, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
+        self.is_stereo = True  # Smooth is a pass-through node, supports stereo
         self.model = model
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
 
@@ -24,18 +25,19 @@ class SmoothNode(BaseNode):
             num_samples = self.resolve_num_samples(num_samples)
             if num_samples is None:
                 # Need to get full signal from child
-                signal_wave = self.render_full_child_signal(self.signal_node, context, **self.get_params_for_children(params))
+                signal_wave = self.render_full_child_signal(self.signal_node, context, num_channels, **self.get_params_for_children(params))
                 if len(signal_wave) == 0:
                     return np.array([])
                 
                 # Apply smoothing to the full signal
                 return self._apply_smoothing(signal_wave)
         
-        signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))
+        signal_wave = self.signal_node.render(num_samples, context, num_channels, **self.get_params_for_children(params))
         
         # If signal is done, we're done
         if len(signal_wave) == 0:
-            return empty_mono()
+            from utils import empty_stereo
+            return empty_stereo() if num_channels == 2 else empty_mono()
         
         return self._apply_smoothing(signal_wave)
     

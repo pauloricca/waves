@@ -67,7 +67,7 @@ class RetriggerNode(BaseNode):
             num_samples = self.resolve_num_samples(num_samples)
             if num_samples is None:
                 # For retrigger nodes, we need to get the full child signal first
-                child_signal = self.render_full_child_signal(self.signal_node, context, **self.get_params_for_children(params))
+                child_signal = self.render_full_child_signal(self.signal_node, context, num_channels, **self.get_params_for_children(params))
                 if len(child_signal) == 0:
                     if is_stereo:
                         return empty_stereo()

@@ -47,6 +47,7 @@ class MixModel(BaseNodeModel):
 class MixNode(BaseNode):
     def __init__(self, model: MixModel, node_id: str, state=None, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
+        self.is_stereo = True  # Mix node supports stereo - can mix stereo and mono signals
         self.model = model
         self.signal_nodes = [self.instantiate_child_node(signal, "signals", i) for i, signal in enumerate(model.signals)]
         
@@ -80,7 +81,7 @@ class MixNode(BaseNode):
                 mixed_wave = np.array([], dtype=np.float32)
                 
                 for signal_node in self.signal_nodes:
-                    child_signal = self.render_full_child_signal(signal_node, context, **self.get_params_for_children(params))
+                    child_signal = self.render_full_child_signal(signal_node, context, num_channels, **self.get_params_for_children(params))
                     if len(child_signal) > 0:
                         mixed_wave = add_waves(mixed_wave, child_signal)
                 
@@ -93,7 +94,7 @@ class MixNode(BaseNode):
         any_signal_active = False
         
         for signal_node in self.signal_nodes:
-            signal_wave = signal_node.render(num_samples, context, **self.get_params_for_children(params))
+            signal_wave = signal_node.render(num_samples, context, num_channels, **self.get_params_for_children(params))
             if len(signal_wave) > 0:
                 any_signal_active = True
                 # Add this signal to the mix
@@ -104,7 +105,8 @@ class MixNode(BaseNode):
         
         # If no signals are active, return empty array to signal completion
         if not any_signal_active:
-            return empty_mono()
+            from utils import empty_stereo
+            return empty_stereo() if num_channels == 2 else empty_mono()
         
         # Track how many samples we've rendered (mixed_wave should not be None here)
         if mixed_wave is not None:

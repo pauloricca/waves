@@ -22,7 +22,6 @@ MIDI_OUTPUT_DEVICE = None  # MIDI output device name, or None to use first avail
 MIDI_CLOCK_ENABLED = True  # Enable MIDI clock output when tempo node has source='internal'
 
 
-VISUALISATION_ROW_HEIGHT = 10
 RENDERED_MASTER_GAIN = 0.6
 DO_NORMALISE_EACH_SOUND = False
 DEFAULT_PLAYBACK_TIME = 4  # seconds, for nodes without explicit duration
@@ -45,6 +44,7 @@ DO_VISUALISE_OUTPUT = True
 DISPLAY_RENDER_STATS = True
 DO_ONLY_VISUALISE_ONE_BUFFER = False
 DO_SCRAMBLE_VISUALISATION_ROWS = False  # Scramble row order for interesting glitch effect
+VISUALISATION_ROW_HEIGHT = 10
 VISUALISATION_FPS = 50
 
 DISABLE_GARBAGE_COLLECTION = False

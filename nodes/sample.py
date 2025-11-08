@@ -102,12 +102,18 @@ class SampleNode(BaseNode):
         # Ensure directory listing is ready
         self._ensure_chop_listing()
 
-        # Evaluate chop as a scalar (one sample)
+        # Evaluate chop as a scalar (one sample, mono)
         try:
-            raw = self.chop_node.render(1, context, **self.get_params_for_children(params))
+            raw = self.chop_node.render(1, context, 1, **self.get_params_for_children(params))
         except Exception as e:
             raise ValueError(f"Sample node: error evaluating 'chop': {e}")
-        idx_val = raw[0] if isinstance(raw, np.ndarray) and raw.size > 0 else raw
+        
+        # Extract scalar value - flatten in case of stereo/multi-dim and take first
+        if isinstance(raw, np.ndarray):
+            idx_val = raw.flat[0] if raw.size > 0 else 0
+        else:
+            idx_val = raw
+        
         try:
             idx_int = int(idx_val)
         except Exception:

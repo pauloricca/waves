@@ -55,6 +55,21 @@ def map_to_range(
         # Map with dynamic from and to ranges
         mapped = map_to_range(signal, to_min_wave, to_max_wave, from_min_wave, from_max_wave)
     """
+    # Handle stereo signal with mono parameters - reshape for broadcasting
+    # If signal is 2D (stereo) and parameters are 1D (mono), reshape params to (N, 1)
+    signal_is_stereo = signal.ndim == 2
+    
+    if signal_is_stereo:
+        # Reshape 1D parameters to (N, 1) for proper broadcasting with (N, 2) stereo signal
+        if isinstance(from_min, np.ndarray) and from_min.ndim == 1:
+            from_min = from_min.reshape(-1, 1)
+        if isinstance(from_max, np.ndarray) and from_max.ndim == 1:
+            from_max = from_max.reshape(-1, 1)
+        if isinstance(to_min, np.ndarray) and to_min.ndim == 1:
+            to_min = to_min.reshape(-1, 1)
+        if isinstance(to_max, np.ndarray) and to_max.ndim == 1:
+            to_max = to_max.reshape(-1, 1)
+    
     # Calculate ranges - NumPy broadcasting handles scalar/array mixing automatically
     from_range = from_max - from_min
     

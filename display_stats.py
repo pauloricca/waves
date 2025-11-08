@@ -191,21 +191,9 @@ def run_visualizer_and_stats(
                     midi_message=midi_message
                 )
                 
-                # Track current lines for next iteration
+                # Get monitored nodes and build output lines first (needed for both modes)
                 current_lines = 0
-                
-                if DO_VISUALISE_OUTPUT:
-                    # Visualisation prints VISUALISATION_ROW_HEIGHT lines
-                    visualise_wave(
-                        np.array(visualised_wave_buffer),
-                        do_normalise=False,
-                        replace_previous=True,
-                        extra_lines=1
-                    )
-                    # Note: visualise_wave handles its own clearing
-        
                 if DISPLAY_RENDER_STATS:
-                    # Get monitored nodes
                     from nodes.node_utils.monitor_registry import get_monitor_registry
                     monitor_lines = get_monitor_registry().get_display_lines()
                     
@@ -216,25 +204,36 @@ def run_visualizer_and_stats(
                         # Add separator line
                         output_lines.append("─" * 80)
                     output_lines.append(stats_text)
-                    
-                    # Get terminal width for padding
+                    current_lines = len(output_lines)
+                
+                if DO_VISUALISE_OUTPUT:
+                    # Visualisation prints VISUALISATION_ROW_HEIGHT lines
+                    # Pass extra_lines to account for the stats/monitor lines below the visualization
+                    visualise_wave(
+                        np.array(visualised_wave_buffer),
+                        do_normalise=False,
+                        replace_previous=True,
+                        extra_lines=current_lines  # Include monitor + stats lines
+                    )
+                    # Now print the stats/monitor lines below the visualization
+                    if DISPLAY_RENDER_STATS:
+                        term_width = get_cached_terminal_size().columns
+                        for line in output_lines:
+                            padded_line = line.ljust(term_width)
+                            print(padded_line, flush=True)
+        
+                elif DISPLAY_RENDER_STATS:
+                    # Not visualizing - print stats directly with cursor movement
                     term_width = get_cached_terminal_size().columns
                     
-                    # Only move cursor up if:
-                    # 1. We're NOT visualizing (visualise_wave handles its own clearing)
-                    # 2. We printed lines last time
-                    # 3. The line count matches (prevents clearing boot messages)
-                    if not DO_VISUALISE_OUTPUT and last_printed_lines > 0 and last_printed_lines == len(output_lines):
+                    # Move cursor up if we printed lines last time
+                    if last_printed_lines > 0:
                         print(f"\033[{last_printed_lines}A", end='')
                     
                     # Print all lines with padding
                     for line in output_lines:
                         padded_line = line.ljust(term_width)
                         print(padded_line, flush=True)
-                    
-                    # Track how many lines we printed (only when not visualizing)
-                    if not DO_VISUALISE_OUTPUT:
-                        current_lines = len(output_lines)
                 
                 # Update last_printed_lines for next iteration
                 last_printed_lines = current_lines

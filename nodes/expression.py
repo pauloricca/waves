@@ -116,6 +116,10 @@ class ExpressionNode(BaseNode):
                         pad_width = [(0, num_samples - len(wave))] + [(0, 0)] * (wave.ndim - 1)
                         wave = np.pad(wave, pad_width, mode='constant', constant_values=0)
                 
+                # Normalize channel count: if we're in stereo mode and got mono, convert to stereo
+                if num_channels == 2 and not is_stereo(wave):
+                    wave = to_stereo(wave)
+                
                 eval_context[name] = wave
             # Note: scalar values are handled below in compiled_args
         
