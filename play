@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Check if virtual environment is already activated
+if [[ -z "$VIRTUAL_ENV" ]]; then
+    # Not in a venv, so activate it
+    if [[ -f "$SCRIPT_DIR/venv/bin/activate" ]]; then
+        source "$SCRIPT_DIR/venv/bin/activate"
+    else
+        echo "Error: Virtual environment not found at $SCRIPT_DIR/venv"
+        echo "Please run: python3 -m venv venv"
+        exit 1
+    fi
+fi
+
+# Run waves.py with all passed arguments
+exec "$SCRIPT_DIR/waves.py" "$@"

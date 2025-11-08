@@ -2,6 +2,11 @@
 
 output/
 
+# Python virtual environment
+venv/
+env/
+ENV/
+
 __pycache__/
 *.py[cod]
 *$py.class

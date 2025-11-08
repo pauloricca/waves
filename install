@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "Setting up Waves audio synthesis environment..."
+echo
+
+# Check if virtual environment exists
+if [[ ! -d "$SCRIPT_DIR/venv" ]]; then
+    echo "Creating virtual environment..."
+    python3 -m venv "$SCRIPT_DIR/venv"
+    if [[ $? -ne 0 ]]; then
+        echo "Error: Failed to create virtual environment"
+        exit 1
+    fi
+    echo "✓ Virtual environment created"
+else
+    echo "✓ Virtual environment already exists"
+fi
+
+echo
+
+# Activate virtual environment
+source "$SCRIPT_DIR/venv/bin/activate"
+
+# Upgrade pip
+echo "Upgrading pip..."
+pip install --upgrade pip > /dev/null 2>&1
+echo "✓ pip upgraded"
+
+echo
+
+# Install dependencies
+echo "Installing dependencies from requirements.txt..."
+pip install -r "$SCRIPT_DIR/requirements.txt"
+
+if [[ $? -eq 0 ]]; then
+    echo
+    echo "✓ Installation complete!"
+    echo
+    echo "To get started, run:"
+    echo "  ./play sound_name"
+else
+    echo
+    echo "✗ Installation failed. Please check the error messages above."
+    exit 1
+fi

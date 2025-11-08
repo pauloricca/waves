@@ -2,10 +2,8 @@
 Display statistics during playback.
 Handles CPU usage, elapsed time, and recording status display.
 """
-import sys
 import os
 import time
-import shutil
 import numpy as np
 from collections import deque
 
