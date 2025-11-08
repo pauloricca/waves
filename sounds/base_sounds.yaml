@@ -1,3 +1,20 @@
+success:
+  retrigger:
+    duration: 2.2
+    repeat: 5
+    time: 0.2
+    signal:
+      osc:
+        type: tri
+        duration: 1.8
+        attack: 0.05
+        release: 1
+        freq:
+          automation:
+            interval: 0.2
+            repeat: 1
+            steps: [B3, D3, E3, G3]
+
 shahi:
   tempo:
     bpm: 130
