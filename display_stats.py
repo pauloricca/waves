@@ -34,9 +34,7 @@ def print_average_cpu_usage():
     """Print the average CPU usage. Called on exit."""
     avg_cpu = get_average_cpu_usage()
     if len(cpu_usage_samples) > 0:
-        print(f"\n{'='*60}")
-        print(f"Average CPU usage: {avg_cpu:.2f}% (based on {len(cpu_usage_samples)} samples)")
-        print('='*60)
+        print(f"Average CPU usage: {avg_cpu:.2f}%")
 
 
 def create_loudness_meter(loudness: float, width: int = 20) -> str:
@@ -191,49 +189,79 @@ def run_visualizer_and_stats(
                     midi_message=midi_message
                 )
                 
-                # Get monitored nodes and build output lines first (needed for both modes)
+                # Build all output into a buffer first
+                output_buffer = []
                 current_lines = 0
-                if DISPLAY_RENDER_STATS:
+                
+                # Get terminal width for padding
+                term_width = get_cached_terminal_size().columns
+                
+                # Add visualization if enabled
+                if DO_VISUALISE_OUTPUT:
+                    # Render visualization to buffer (returns a string with newlines)
+                    viz_output = visualise_wave(
+                        np.array(visualised_wave_buffer),
+                        do_normalise=False
+                    )
+                    
+                    # Count visualization lines
+                    viz_lines = viz_output.count('\n') + 1 if viz_output else 0
+                    
+                    # Get stats/monitor lines
+                    stats_monitor_lines = []
+                    if DISPLAY_RENDER_STATS:
+                        from nodes.node_utils.monitor_registry import get_monitor_registry
+                        monitor_lines = get_monitor_registry().get_display_lines()
+                        
+                        if monitor_lines:
+                            stats_monitor_lines.extend(monitor_lines)
+                            stats_monitor_lines.append("─" * 80)
+                        stats_monitor_lines.append(stats_text)
+                    
+                    # Calculate total lines that will be printed
+                    total_lines = viz_lines + len(stats_monitor_lines)
+                    
+                    # Clear previous output if needed
+                    if last_printed_lines > 0:
+                        clear_codes = "".join("\033[1A\x1b[2K" for _ in range(last_printed_lines))
+                        output_buffer.append(clear_codes)
+                    
+                    # Add visualization
+                    output_buffer.append(viz_output)
+                    
+                    # Add stats/monitor lines
+                    if DISPLAY_RENDER_STATS and stats_monitor_lines:
+                        output_buffer.append("\n")  # One newline to separate from viz
+                        output_buffer.append("\n".join(line.ljust(term_width) for line in stats_monitor_lines))
+                    
+                    current_lines = total_lines
+                
+                elif DISPLAY_RENDER_STATS:
+                    # Build stats-only output
                     from nodes.node_utils.monitor_registry import get_monitor_registry
                     monitor_lines = get_monitor_registry().get_display_lines()
                     
-                    # Build output with monitored nodes above main stats
-                    output_lines = []
+                    stats_monitor_lines = []
                     if monitor_lines:
-                        output_lines.extend(monitor_lines)
-                        # Add separator line
-                        output_lines.append("─" * 80)
-                    output_lines.append(stats_text)
-                    current_lines = len(output_lines)
-                
-                if DO_VISUALISE_OUTPUT:
-                    # Visualisation prints VISUALISATION_ROW_HEIGHT lines
-                    # Pass extra_lines to account for the stats/monitor lines below the visualization
-                    visualise_wave(
-                        np.array(visualised_wave_buffer),
-                        do_normalise=False,
-                        replace_previous=True,
-                        extra_lines=current_lines  # Include monitor + stats lines
-                    )
-                    # Now print the stats/monitor lines below the visualization
-                    if DISPLAY_RENDER_STATS:
-                        term_width = get_cached_terminal_size().columns
-                        for line in output_lines:
-                            padded_line = line.ljust(term_width)
-                            print(padded_line, flush=True)
-        
-                elif DISPLAY_RENDER_STATS:
-                    # Not visualizing - print stats directly with cursor movement
-                    term_width = get_cached_terminal_size().columns
+                        stats_monitor_lines.extend(monitor_lines)
+                        stats_monitor_lines.append("─" * 80)
+                    stats_monitor_lines.append(stats_text)
                     
-                    # Move cursor up if we printed lines last time
+                    total_lines = len(stats_monitor_lines)
+                    
+                    # Clear previous output if needed
                     if last_printed_lines > 0:
-                        print(f"\033[{last_printed_lines}A", end='')
+                        clear_codes = "".join("\033[1A\x1b[2K" for _ in range(last_printed_lines))
+                        output_buffer.append(clear_codes)
                     
-                    # Print all lines with padding
-                    for line in output_lines:
-                        padded_line = line.ljust(term_width)
-                        print(padded_line, flush=True)
+                    # Add stats/monitor lines
+                    output_buffer.append("\n".join(line.ljust(term_width) for line in stats_monitor_lines))
+                    
+                    current_lines = total_lines
+                
+                # Print all buffered output at once
+                if output_buffer:
+                    print("".join(output_buffer), flush=True)
                 
                 # Update last_printed_lines for next iteration
                 last_printed_lines = current_lines

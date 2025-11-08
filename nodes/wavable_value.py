@@ -137,7 +137,7 @@ class WavableValueNode(BaseNode):
                 value = evaluate_compiled(item, eval_context, num_samples=None)
                 # Ensure it's a simple float
                 if isinstance(value, np.ndarray):
-                    value = float(value[0]) if len(value) > 0 else 0.0
+                    value = float(value.flat[0]) if value.size > 0 else 0.0
                 elif isinstance(value, (int, float)):
                     value = float(value)
                 evaluated.append(value)
@@ -148,7 +148,7 @@ class WavableValueNode(BaseNode):
                     value = evaluate_compiled(item[0], eval_context, num_samples=None)
                     # Ensure it's a simple float
                     if isinstance(value, np.ndarray):
-                        value = float(value[0]) if len(value) > 0 else 0.0
+                        value = float(value.flat[0]) if value.size > 0 else 0.0
                     elif isinstance(value, (int, float)):
                         value = float(value)
                     evaluated.append([value, item[1]])

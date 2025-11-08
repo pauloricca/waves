@@ -139,13 +139,18 @@ def _group_wave_for_visualisation(wave: np.ndarray, visualisation_width: int) ->
     return column_min, column_max
 
 
-def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_lines = 0, force_terminal_refresh: bool = False):
-    global has_printed_visualisation
-
+def visualise_wave(wave, do_normalise = False, force_terminal_refresh: bool = False):
+    """
+    Generate visualization of audio wave as a string.
+    Does not print or handle clearing - caller is responsible for that.
+    
+    Returns:
+        String containing the visualization
+    """
     if DO_ONLY_VISUALISE_ONE_BUFFER:
         wave = wave[0:BUFFER_SIZE]
 
-    if force_terminal_refresh or not has_printed_visualisation or not replace_previous:
+    if force_terminal_refresh:
         terminal_size = get_cached_terminal_size()
     else:
         terminal_size = _terminal_size_cache or get_cached_terminal_size()
@@ -155,7 +160,7 @@ def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_l
 
     wave_array = np.asarray(wave, dtype=np.float32)
     if wave_array.size == 0:
-        return
+        return ""
 
     if do_normalise:
         max_abs = np.max(np.abs(wave_array))
@@ -169,10 +174,6 @@ def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_l
     full_visualisation_height = 2 * (VISUALISATION_ROW_HEIGHT // 2)
 
     output_lines = []
-
-    if replace_previous and has_printed_visualisation:
-        clear_lines = "".join("\033[1A\x1b[2K" for _ in range(full_visualisation_height + extra_lines))
-        output_lines.append(clear_lines)
 
     upper_rows = visualisation_height_resolution_halved // 4
     for row_index in range(full_visualisation_height):
@@ -225,22 +226,13 @@ def visualise_wave(wave, do_normalise = False, replace_previous = False, extra_l
 
     # Scramble rows if enabled (interesting glitch effect)
     if DO_SCRAMBLE_VISUALISATION_ROWS and len(output_lines) > 1:
-        # Keep the first line (clear_lines if replace_previous), scramble the rest
-        first_line = output_lines[0] if (replace_previous and has_printed_visualisation) else None
-        rows_to_scramble = output_lines[1:] if first_line else output_lines
-        
         rng = random.Random()    
-        scrambled_rows = rows_to_scramble.copy()
+        scrambled_rows = output_lines.copy()
         rng.shuffle(scrambled_rows)
-        
-        if first_line:
-            output_lines = [first_line] + scrambled_rows
-        else:
-            output_lines = scrambled_rows
-
-    print("".join(output_lines), flush=True)
-
-    has_printed_visualisation = True
+        output_lines = scrambled_rows
+    
+    # Return the visualization as a string
+    return "\n".join(output_lines)
 
 
 def look_for_duration(model):
