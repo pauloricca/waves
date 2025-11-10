@@ -292,14 +292,10 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
     active_sound_node = sound_node  # Local reference to current node
     stored_sound_name = sound_name  # Store the sound name for hot reload
 
-    def determine_output_channels(node: BaseNode) -> int:
-        """Infer the number of output channels for a node."""
-        from nodes.tracks import TracksNode
-
-        innermost = get_innermost_node(node)
-        return 2 if isinstance(innermost, TracksNode) else 1
-
-    output_channels_ref = [determine_output_channels(sound_node)]
+    # Determine output channels by checking if the innermost node is a TracksNode
+    from nodes.tracks import TracksNode
+    innermost = get_innermost_node(sound_node)
+    output_channels_ref = [2 if isinstance(innermost, TracksNode) else 1]
     
     # References for display thread (using lists so they can be modified in nested scope)
     should_stop_ref = [False]
@@ -325,9 +321,7 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
                     current_sound_node = new_node
                     hot_reload_pending_node = None
 
-                    # Update expected output channel count for the new node
-                    output_channels_ref[0] = determine_output_channels(new_node)
-
+                    # Output channels will be determined from actual render output
                     # Clear stale node instance references in the render context
                     # This prevents segfaults from keeping pointers to deleted nodes
                     render_context.clear_node_instances()

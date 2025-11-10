@@ -109,7 +109,7 @@ class MidiCCNode(BaseNode):
                 if MIDI_DEBUG:
                     print(f"CC {cc_number} on channel {self.channel}: {cc_value} -> {self.state.current_normalized_value:.3f}")
     
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         # MIDI CC node never finishes, so if num_samples is None, use a default buffer size
         if num_samples is None:
             from config import BUFFER_SIZE

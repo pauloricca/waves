@@ -25,7 +25,6 @@ class SequencerModel(BaseNodeModel):
 class SequencerNode(BaseNode):
     def __init__(self, model: SequencerModel, node_id: str, state, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
-        self.is_stereo = True  # Pass-through node: supports stereo children
         self.model = model
         self.steps = model.steps
         self.chain = model.chain
@@ -139,7 +138,7 @@ class SequencerNode(BaseNode):
         total_duration = total_sequence_duration * self.repeat
         return time_to_samples(total_duration )
 
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, render the entire sequence
         if num_samples is None:
             num_samples = self.resolve_num_samples(num_samples)
@@ -155,19 +154,18 @@ class SequencerNode(BaseNode):
         if num_samples_resolved is None:
             num_samples_resolved = num_samples
         
-        interval_wave = self.interval_node.render(num_samples_resolved, context, num_channels, **self.get_params_for_children(params))
-        swing_wave = self.swing_node.render(num_samples_resolved, context, num_channels, **self.get_params_for_children(params))
-        # Use first value if interval/swing is a wave (assume constant for now)
-        # Handle both mono and stereo arrays
-        if isinstance(interval_wave, np.ndarray) and interval_wave.ndim > 1:
-            interval = float(interval_wave[0, 0]) if interval_wave.size > 0 else 0.0
-        else:
-            interval = float(interval_wave[0]) if len(interval_wave) > 0 else 0.0
+        interval_wave = self.interval_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+        swing_wave = self.swing_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
         
-        if isinstance(swing_wave, np.ndarray) and swing_wave.ndim > 1:
-            swing = float(swing_wave[0, 0]) if swing_wave.size > 0 else 0.0
-        else:
-            swing = float(swing_wave[0]) if len(swing_wave) > 0 else 0.0
+        # Convert control signals to mono if needed
+        if is_stereo(interval_wave):
+            interval_wave = to_mono(interval_wave)
+        if is_stereo(swing_wave):
+            swing_wave = to_mono(swing_wave)
+        
+        # Use first value if interval/swing is a wave (assume constant for now)
+        interval = float(interval_wave[0]) if len(interval_wave) > 0 else 0.0
+        swing = float(swing_wave[0]) if len(swing_wave) > 0 else 0.0
         swing = np.clip(swing, -1.0, 1.0)  # Ensure swing is in valid range
         
         # Render trigger and reset signals if provided
@@ -192,16 +190,11 @@ class SequencerNode(BaseNode):
         
         sequence = self.steps or self.chain
         if not sequence:
-            if num_channels == 2:
-                return np.zeros((num_samples, 2), dtype=np.float32)
-            else:
-                return np.zeros(num_samples, dtype=np.float32)
+            return np.zeros(num_samples, dtype=np.float32)
         
-        # Initialize output wave based on num_channels
-        if num_channels == 2:
-            output_wave = np.zeros((num_samples, 2), dtype=np.float32)
-        else:
-            output_wave = np.zeros(num_samples, dtype=np.float32)
+        # Initialize output wave as mono, will convert to stereo if needed
+        output_wave = np.zeros(num_samples, dtype=np.float32)
+        output_is_stereo = False  # Track if any child returned stereo
         samples_written = 0
         
         # Track which triggers we've processed this chunk
@@ -360,10 +353,8 @@ class SequencerNode(BaseNode):
                 break
             
             # Render all active sounds and mix them
-            if num_channels == 2:
-                step_wave = np.zeros((samples_to_render, 2), dtype=np.float32)
-            else:
-                step_wave = np.zeros(samples_to_render, dtype=np.float32)
+            step_wave = np.zeros(samples_to_render, dtype=np.float32)
+            step_is_stereo = False
             
             sounds_to_remove = []
             for i, (sound_node, render_args, sound_duration, samples_rendered_so_far, step_idx) in enumerate(self.state.all_active_sounds):
@@ -385,16 +376,27 @@ class SequencerNode(BaseNode):
                 merged_params = params.copy()
                 merged_params.update(render_args)
                 
-                # Render from current position
-                sound_chunk = sound_node.render(samples_to_render_from_sound, context, num_channels, **merged_params)
+                # Render from current position (may return mono or stereo)
+                sound_chunk = sound_node.render(samples_to_render_from_sound, context, **merged_params)
                 
                 # If the sound returns empty array, it's done - mark for removal
                 if len(sound_chunk) == 0:
                     sounds_to_remove.append(i)
                     continue
                 
-                # Ensure sound_chunk matches requested num_channels
-                sound_chunk = to_stereo(sound_chunk) if num_channels == 2 else to_mono(sound_chunk)
+                # Check if this sound returned stereo
+                chunk_is_stereo = is_stereo(sound_chunk)
+                if chunk_is_stereo and not step_is_stereo:
+                    # First stereo sound - convert step_wave to stereo
+                    step_wave = to_stereo(step_wave)
+                    step_is_stereo = True
+                    # Also convert output_wave to stereo immediately if needed
+                    if not output_is_stereo:
+                        output_wave = to_stereo(output_wave)
+                        output_is_stereo = True
+                elif not chunk_is_stereo and step_is_stereo:
+                    # This sound is mono but step_wave is stereo - convert sound to stereo
+                    sound_chunk = to_stereo(sound_chunk)
                 
                 # If the sound returns fewer samples than we asked for, it's finishing
                 # Update counter and mark for removal if we've caught up
@@ -407,11 +409,11 @@ class SequencerNode(BaseNode):
                 
                 # Mix into step wave (pad if needed)
                 if len(sound_chunk) < len(step_wave):
-                    if num_channels == 2:
-                        # Stereo padding - sound_chunk is guaranteed to be stereo after conversion above
+                    if step_is_stereo:
+                        # Stereo padding
                         sound_chunk = np.pad(sound_chunk, ((0, len(step_wave) - len(sound_chunk)), (0, 0)))
                     else:
-                        # Mono padding - sound_chunk is guaranteed to be mono after conversion above
+                        # Mono padding
                         sound_chunk = np.pad(sound_chunk, (0, len(step_wave) - len(sound_chunk)))
                 
                 step_wave[:len(sound_chunk)] += sound_chunk
@@ -431,8 +433,18 @@ class SequencerNode(BaseNode):
                     # Don't continue the loop - we want to trigger the next step in the same chunk
                     # if there are still samples to render
             
-            # Add to output
-            if num_channels == 2:
+            # Add to output - handle stereo/mono conversion
+            if step_is_stereo and not output_is_stereo:
+                # First stereo step - convert entire output_wave to stereo (including already written samples)
+                output_wave = to_stereo(output_wave)
+                output_is_stereo = True
+            elif not step_is_stereo and output_is_stereo:
+                # This step is mono but output is stereo - convert step to stereo
+                step_wave = to_stereo(step_wave)
+                step_is_stereo = True
+            
+            # Now both output_wave and step_wave should have matching dimensionality
+            if output_is_stereo:
                 output_wave[samples_written:samples_written + samples_to_render, :] = step_wave
             else:
                 output_wave[samples_written:samples_written + samples_to_render] = step_wave

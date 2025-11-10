@@ -89,7 +89,7 @@ class SelectNode(BaseNode):
         
         return None
     
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         num_samples = self.resolve_num_samples(num_samples)
         if num_samples is None:
             raise ValueError("Select node requires explicit duration")

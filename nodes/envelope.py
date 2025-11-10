@@ -22,7 +22,6 @@ class EnvelopeModel(BaseNodeModel):
 class EnvelopeNode(BaseNode):
     def __init__(self, model: EnvelopeModel, node_id: str, state, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
-        self.is_stereo = True  # Pass-through stereo node - handles both mono and stereo signals
         self.model = model
         self.signal_node = self.instantiate_child_node(model.signal, "signal") if model.signal is not None else None
         self.gate_node = self.instantiate_child_node(model.gate, "gate") if model.gate is not None else None
@@ -48,7 +47,7 @@ class EnvelopeNode(BaseNode):
             self.state.sustain_duration_samples = None  # For duration-based envelopes (drums)
             self.state.last_trigger_value = 0.0  # For trigger edge detection
 
-    def _do_render(self, num_samples, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples, context=None, **params):
         # Evaluate expression parameters
         attack = self.eval_scalar(self.model.attack, context, **params)
         decay = self.eval_scalar(self.model.decay, context, **params)
@@ -124,15 +123,15 @@ class EnvelopeNode(BaseNode):
             self.state.is_in_release_phase = True
             self.state.release_started = True
         
-        # Get the signal from the child node. if no signal is defined, render ones
-        signal_wave = self.signal_node.render(num_samples, context, num_channels, **self.get_params_for_children(
-            params)) if self.signal_node is not None else (np.ones(num_samples, dtype=np.float32) if num_channels == 1 else np.ones((num_samples, 2), dtype=np.float32))
+        # Get the signal from the child node (may be mono or stereo). If no signal is defined, render ones (mono)
+        signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(
+            params)) if self.signal_node is not None else np.ones(num_samples, dtype=np.float32)
         
-        # If signal is exhausted, create silent output instead of returning empty
+        # If signal is exhausted, create silent mono output instead of returning empty
         if len(signal_wave) == 0:
-            signal_wave = np.zeros(num_samples, dtype=np.float32) if num_channels == 1 else np.zeros((num_samples, 2), dtype=np.float32)
+            signal_wave = np.zeros(num_samples, dtype=np.float32)
         
-        # Determine if signal is stereo (2D array)
+        # Determine if signal is stereo (2D array) - envelope will pass through whatever format the child returns
         is_stereo_signal = is_stereo(signal_wave)
         
         # Track which samples have been processed to avoid double-processing

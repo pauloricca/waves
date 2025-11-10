@@ -48,7 +48,6 @@ class MidiOutNodeModel(BaseNodeModel):
 class MidiOutNode(BaseNode):
     def __init__(self, model: MidiOutNodeModel, node_id: str, state=None, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
-        self.is_stereo = True  # Pass-through node
         
         self.device_name = model.device
         self.channel = model.channel
@@ -115,7 +114,7 @@ class MidiOutNode(BaseNode):
             self.state.note_start_time = None  # When did the note start (for duration-based notes)
             self.state.last_cc_value = None  # Last CC value sent (to avoid redundant messages)
     
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         # Resolve chunk length
         num_samples_resolved = self.resolve_num_samples(num_samples)
         if num_samples_resolved is None:
@@ -129,15 +128,12 @@ class MidiOutNode(BaseNode):
         elif self.msg_type == "cc":
             self._handle_cc_output(num_samples_resolved, context, **params)
         
-        # Pass through signal or return silence
+        # Pass through signal or return silence (mono)
         if self.signal_node is not None:
-            return self.signal_node.render(num_samples, context, num_channels, **params)
+            return self.signal_node.render(num_samples, context, **params)
         else:
-            # Return silence
-            if num_channels == 2:
-                return np.zeros((num_samples_resolved, 2), dtype=np.float32)
-            else:
-                return np.zeros(num_samples_resolved, dtype=np.float32)
+            # Return silence (mono)
+            return np.zeros(num_samples_resolved, dtype=np.float32)
     
     def _handle_note_output(self, num_samples: int, context, current_time: float, **params):
         """Handle MIDI note on/off messages"""

@@ -86,7 +86,7 @@ class SpawnNode(BaseNode):
             'trigger_offset': trigger_sample_offset,  # Track where in the chunk this started
         }
     
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         # Spawn node continues indefinitely if num_samples is None
         if num_samples is None:
             from config import BUFFER_SIZE

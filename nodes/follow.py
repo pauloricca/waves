@@ -62,7 +62,6 @@ class FollowModel(BaseNodeModel):
 class FollowNode(BaseNode):
     def __init__(self, model: FollowModel, node_id: str, state=None, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
-        self.is_stereo = False  # Follow outputs mono control signal (envelope)
         self.model = model
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
         
@@ -76,13 +75,13 @@ class FollowNode(BaseNode):
         if do_initialise_state:
             self.state.envelope_value = 0.0  # Current envelope follower value
 
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         # Evaluate expression parameters
         attack = self.eval_scalar(self.model.attack, context, **params)
         release = self.eval_scalar(self.model.release, context, **params)
         
         # Get the input signal (always request mono for envelope following)
-        signal_wave = self.signal_node.render(num_samples, context, num_channels=1, **self.get_params_for_children(params))
+        signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))
         
         # If signal is done, we're done
         if len(signal_wave) == 0:

@@ -140,7 +140,7 @@ class MidiInNode(BaseNode):
                     if MIDI_DEBUG:
                         print(f"Note OFF: {note_number} (id: {note_id}, starting release)")
     
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         # MIDI node never finishes, so if num_samples is None, use a default buffer size
         if num_samples is None:
             from config import BUFFER_SIZE

@@ -8,7 +8,7 @@ from typing import Optional, TYPE_CHECKING
 from pydantic import BaseModel
 
 from constants import RenderArgs
-from utils import empty_mono, empty_stereo, time_to_samples, samples_to_time, to_stereo
+from utils import empty_mono, empty_stereo, time_to_samples, samples_to_time, to_stereo, to_mono, is_stereo
 
 if TYPE_CHECKING:
     from nodes.wavable_value import WavableValue
@@ -30,7 +30,6 @@ class BaseNode:
         self.time_since_start = 0
         self.number_of_chunks_rendered = 0
         self._last_chunk_samples = 0
-        self.is_stereo = False  # Override to True in stereo-capable nodes
         
         # State is always provided by instantiate_node now (guaranteed non-None)
         self.state = state
@@ -59,7 +58,7 @@ class BaseNode:
         
 
 
-    def render(self, num_samples: int = None, context = None, num_channels: int = 1, **params) -> np.ndarray:
+    def render(self, num_samples: int = None, context = None, **params) -> np.ndarray:
         """
         Main render method that handles caching, recursion tracking, and timing.
         Delegates actual rendering to _do_render() which subclasses implement.
@@ -68,13 +67,10 @@ class BaseNode:
             num_samples: Number of samples to render. If None, render the entire duration
                         of the node (based on self.duration or until the node is exhausted).
             context: RenderContext for managing shared state, caching, and recursion tracking.
-            num_channels: Number of output channels (1 for mono, 2 for stereo). Nodes that don't
-                         support multi-channel output will ignore this and return mono.
             **params: Parameters to forward to child nodes.
         
         Returns:
-            For mono (num_channels=1): 1D array of shape (num_samples,)
-            For stereo (num_channels=2): 2D array of shape (num_samples, 2)
+            numpy array - can be mono (1D) or stereo (2D with shape (n, 2))
         
         This method:
         1. Creates a default context if none provided (backwards compatibility)
@@ -101,10 +97,7 @@ class BaseNode:
                 # Return zeros to break feedback loop
                 if num_samples is None:
                     return empty_mono()
-                if num_channels == 1:
-                    return np.zeros(num_samples, dtype=np.float32)
-                else:
-                    return np.zeros((num_samples, num_channels), dtype=np.float32)
+                return np.zeros(num_samples, dtype=np.float32)
             
             # Check if this node has already been rendered in this chunk (for nodes with explicit IDs)
             # This prevents stateful nodes from being rendered multiple times when referenced
@@ -118,7 +111,7 @@ class BaseNode:
             # Increment recursion, render, decrement, cache (if top level)
             context.increment_recursion(instance_id)
             try:
-                wave = self._render_with_timing(num_samples, context, num_channels, **params)
+                wave = self._render_with_timing(num_samples, context, **params)
                 if recursion_depth == 0:  # Only cache at top level
                     # Only write cache for nodes with explicit IDs (not auto-generated)
                     # Cache is only meant to be read by reference nodes
@@ -129,14 +122,13 @@ class BaseNode:
                 context.decrement_recursion(instance_id)
         
         # No id, just render normally with timing
-        return self._render_with_timing(num_samples, context, num_channels, **params)
+        return self._render_with_timing(num_samples, context, **params)
     
     
-    def _render_with_timing(self, num_samples: int, context, num_channels: int, **params) -> np.ndarray:
+    def _render_with_timing(self, num_samples: int, context, **params) -> np.ndarray:
         """
         Updates timing info and calls _do_render().
         This keeps timing logic separate from rendering logic.
-        Also handles automatic stereo/mono conversion based on node capability.
         """
         if self._last_chunk_samples is not None:
             self.number_of_chunks_rendered += self._last_chunk_samples
@@ -145,54 +137,33 @@ class BaseNode:
             self._last_chunk_samples = num_samples
         # If num_samples is None, _last_chunk_samples will be updated by the implementing node
         
-        # Handle stereo/mono conversion automatically
-        if self.is_stereo:
-            # This is a stereo-capable node - call _do_render with requested num_channels
-            result = self._do_render(num_samples, context, num_channels, **params)
-            # Update monitor with the stereo result
-            if hasattr(self, 'model') and self.model.monitor and self.node_id:
-                from nodes.node_utils.monitor_registry import get_monitor_registry
-                get_monitor_registry().update(self.node_id, result)
-        else:
-            # This is a mono-only node
-            if num_channels == 2:
-                # Parent wants stereo but we're mono - render mono and duplicate channels
-                mono_result = self._do_render(num_samples, context, 1, **params)
-                if len(mono_result) == 0:
-                    return empty_stereo()
-                # Update monitor with the MONO result before stereo conversion
-                if hasattr(self, 'model') and self.model.monitor and self.node_id:
-                    from nodes.node_utils.monitor_registry import get_monitor_registry
-                    get_monitor_registry().update(self.node_id, mono_result)
-                # Duplicate mono to stereo (center panned)
-                result = to_stereo(mono_result)
-            else:
-                # Parent wants mono and we're mono - normal rendering
-                result = self._do_render(num_samples, context, num_channels, **params)
-                # Update monitor with the mono result
-                if hasattr(self, 'model') and self.model.monitor and self.node_id:
-                    from nodes.node_utils.monitor_registry import get_monitor_registry
-                    get_monitor_registry().update(self.node_id, result)
+        # Call the rendering implementation
+        result = self._do_render(num_samples, context, **params)
+        
+        # Update monitor with the result
+        if hasattr(self, 'model') and self.model.monitor and self.node_id:
+            from nodes.node_utils.monitor_registry import get_monitor_registry
+            get_monitor_registry().update(self.node_id, result)
         
         return result
     
     
-    def _do_render(self, num_samples: int, context, num_channels: int = 1, **params) -> np.ndarray:
+    def _do_render(self, num_samples: int, context, **params) -> np.ndarray:
         """
         Subclasses override this to implement their rendering logic.
         This method focuses purely on rendering without worrying about caching,
         recursion, or timing - those are handled by render().
         
+        All nodes must handle both mono and stereo inputs from children.
+        Use is_stereo(), to_mono(), to_stereo() utilities as needed.
+        
         Args:
             num_samples: Number of samples to render
             context: RenderContext for shared state
-            num_channels: Number of output channels (1=mono, 2=stereo)
             **params: Additional parameters from parent nodes
             
         Returns:
-            For mono: 1D array of shape (num_samples,)
-            For stereo: 2D array of shape (num_samples, 2)
-            Most nodes will ignore num_channels and return mono.
+            numpy array - can be mono (1D) or stereo (2D with shape (n, 2))
         """
         raise NotImplementedError(f"{self.__class__.__name__} must implement _do_render()")
 
@@ -267,7 +238,7 @@ class BaseNode:
         return num_samples
     
     
-    def render_full_child_signal(self, child_node, context=None, num_channels=1, **params) -> np.ndarray:
+    def render_full_child_signal(self, child_node, context=None, **params) -> np.ndarray:
         """
         Helper method to render the full signal from a child node.
         This is useful when the node needs the complete child signal to process
@@ -276,13 +247,12 @@ class BaseNode:
         Args:
             child_node: The child node to render
             context: RenderContext to pass to child
-            num_channels: Number of channels to request (1=mono, 2=stereo)
             **params: Parameters to pass to the child
             
         Returns:
-            The full signal from the child node
+            The full signal from the child node (mono or stereo)
         """
-        signal = child_node.render(context=context, num_channels=num_channels, **params)
+        signal = child_node.render(context=context, **params)
         if len(signal) > 0:
             self._last_chunk_samples = len(signal)
         return signal

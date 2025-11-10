@@ -51,7 +51,6 @@ class TempoNode(BaseNode):
         
         super().__init__(model, node_id, state, do_initialise_state)
         self.model = model  # Store model for is_pass_through check
-        self.is_stereo = True  # Tempo is a pass-through node, supports stereo
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
         self.source = model.source.lower()
         self.device_key = model.device
@@ -82,7 +81,7 @@ class TempoNode(BaseNode):
             self.state.beats_since_start = 0.0  # Track accumulated beats for dynamic BPM
             self.state.last_bpm = None  # Track last BPM for MIDI clock updates
     
-    def _render_with_timing(self, num_samples: int, context, num_channels: int, **params):
+    def _render_with_timing(self, num_samples: int, context, **params):
         """Override to use state-based timing instead of instance attributes."""
         from utils import samples_to_time
         
@@ -92,11 +91,11 @@ class TempoNode(BaseNode):
         if num_samples is not None:
             self._last_chunk_samples = num_samples
         
-        # Call parent's rendering logic (stereo/mono handling)
-        return self._do_render(num_samples, context, num_channels, **params)
+        # Call parent's rendering logic
+        return self._do_render(num_samples, context, **params)
 
     
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         # Resolve chunk length in samples
         num_samples_resolved = self.resolve_num_samples(num_samples)
         if num_samples_resolved is None:
@@ -226,8 +225,8 @@ class TempoNode(BaseNode):
         extended_params['eight_bar_tick'] = make_ticks(32.0)  # 32 beats per 8 bars
         extended_params['sixteen_bar_tick'] = make_ticks(64.0)  # 64 beats per 16 bars
         
-        # Render signal with extended params
-        return self.signal_node.render(num_samples, context, num_channels, **extended_params)
+        # Render signal with extended params (pass through whatever it returns - mono or stereo)
+        return self.signal_node.render(num_samples, context, **extended_params)
 
 
 TEMPO_DEFINITION = NodeDefinition("tempo", TempoNode, TempoNodeModel)

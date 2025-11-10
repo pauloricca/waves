@@ -125,7 +125,7 @@ class SampleNode(BaseNode):
             # Reset playhead for this chunk to avoid mid-file discontinuity
             self._reset_playhead_this_chunk = True
 
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         # Evaluate 'chop' at every render and swap audio if needed
         self._pick_and_load_chop_audio(context, params)
 

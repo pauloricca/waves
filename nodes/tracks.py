@@ -51,7 +51,6 @@ class TracksNodeModel(BaseNodeModel):
 class TracksNode(BaseNode):
     def __init__(self, model: TracksNodeModel, node_id: str, state=None, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
-        self.is_stereo = True  # TracksNode always outputs stereo
 
         # Cache for last rendered track outputs (used for stem export)
         self.last_track_outputs = None
@@ -144,16 +143,16 @@ class TracksNode(BaseNode):
         Render all tracks individually and return dict of {track_name: stereo_array}.
         Used for exporting individual track stems.
         
-        Requests stereo output (num_channels=2) from child nodes. If a child returns:
+        Renders child nodes and handles mono/stereo conversion. If a child returns:
         - Mono (1D array): Apply panning to create stereo
-        - Stereo (2D array): Use as-is (already stereo)
+        - Stereo (2D array): Convert to mono first, then apply panning (unless pan is center)
         """
         track_outputs = {}
         self._pan_cache.clear()
 
         for track in self.tracks:
-            # Request stereo output (num_channels=2)
-            signal = track['node'].render(num_samples, context, num_channels=2, **params)
+            # Render child node (may return mono or stereo)
+            signal = track['node'].render(num_samples, context, **params)
             
             # If signal is empty, this track is done
             if len(signal) == 0:
@@ -197,13 +196,13 @@ class TracksNode(BaseNode):
         
         return track_outputs
     
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         """
         Render all tracks and mix them to stereo output.
         Also caches track outputs in self.last_track_outputs for stem export.
         Volume (_vol) is applied only to the mixdown, not to individual track exports.
         
-        Note: TracksNode always outputs stereo (ignores num_channels parameter).
+        Note: TracksNode always outputs stereo.
         
         Returns:
             2D array of shape (num_samples, 2) with mixed stereo audio

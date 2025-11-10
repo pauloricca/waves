@@ -4,7 +4,7 @@ from pydantic import ConfigDict
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
-from utils import empty_mono
+from utils import empty_mono, is_stereo, to_mono
 
 
 # Context node: Creates a scope where additional variables are added to render params.
@@ -20,7 +20,6 @@ class ContextNode(BaseNode):
     def __init__(self, model: ContextNodeModel, node_id: str, state, do_initialise_state=True):
         from nodes.wavable_value import WavableValueNode, WavableValueModel
         super().__init__(model, node_id, state, do_initialise_state)
-        self.is_stereo = True  # Context is a pass-through node, supports stereo
         self.model = model
         
         # Instantiate the signal node
@@ -36,7 +35,7 @@ class ContextNode(BaseNode):
         if do_initialise_state:
             self.state.total_samples_rendered = 0
     
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         # Resolve num_samples first (handles None case)
         num_samples = self.resolve_num_samples(num_samples)
         if num_samples is None:
@@ -61,15 +60,18 @@ class ContextNode(BaseNode):
         extended_params = params.copy()
         
         for name, node in self.context_args.items():
-            # Pass num_channels to context args so they match the expected output format
-            wave = node.render(num_samples, context, num_channels, **self.get_params_for_children(params))
+            # Render context args (may be mono or stereo)
+            wave = node.render(num_samples, context, **self.get_params_for_children(params))
             # If child returned empty, we're done
             if len(wave) == 0:
                 return empty_mono()
+            # Convert stereo context args to mono (context variables should be control signals)
+            if is_stereo(wave):
+                wave = to_mono(wave)
             extended_params[name] = wave
         
-        # Now render the signal with the extended params
-        result = self.signal_node.render(num_samples, context, num_channels, **extended_params)
+        # Now render the signal with the extended params (pass through whatever it returns)
+        result = self.signal_node.render(num_samples, context, **extended_params)
         
         # Track samples rendered
         self.state.total_samples_rendered += len(result)

@@ -95,9 +95,9 @@ class PitchNode(BaseNode):
         
         return frequency
     
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         # Get input signal
-        input_signal = self.signal_node.render(num_samples, context, num_channels, **params)
+        input_signal = self.signal_node.render(num_samples, context, **params)
         
         if len(input_signal) == 0:
             return np.array([])

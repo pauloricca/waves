@@ -77,7 +77,6 @@ class NodeMonitor:
         self.node_id = node_id
         self.node = node
         self.peak_level = 0.0
-        self.is_stereo = False
         self.peak_left = 0.0
         self.peak_right = 0.0
         
@@ -100,7 +99,6 @@ class NodeMonitor:
         
         # Check if output is stereo (2D array with 2 channels)
         if output.ndim == 2 and output.shape[1] == 2:
-            self.is_stereo = True
             if use_abs:
                 self.peak_left = float(np.max(np.abs(output[:, 0])))
                 self.peak_right = float(np.max(np.abs(output[:, 1])))
@@ -109,7 +107,6 @@ class NodeMonitor:
                 self.peak_right = float(np.max(output[:, 1]))
             self.peak_level = max(self.peak_left, self.peak_right)
         else:
-            self.is_stereo = False
             if use_abs:
                 self.peak_level = float(np.max(np.abs(output)))
             else:

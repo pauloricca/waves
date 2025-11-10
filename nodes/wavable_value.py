@@ -70,7 +70,7 @@ class WavableValueNode(BaseNode):
                 # Already numeric
                 self.compiled_interpolation.append(item)
 
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         from expression_globals import get_expression_context, evaluate_compiled
         
         if self.value_type == 'expression':

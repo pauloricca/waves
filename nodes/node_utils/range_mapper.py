@@ -114,7 +114,7 @@ class RangeMapper:
                     self, model.range, "range"
                 ) if model.range else None
             
-            def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+            def _do_render(self, num_samples=None, context=None, **params):
                 # ... render signal
                 
                 # Apply range mapping if specified

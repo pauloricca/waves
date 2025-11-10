@@ -41,7 +41,6 @@ class RetriggerModel(BaseNodeModel):
 class RetriggerNode(BaseNode):
     def __init__(self, model: RetriggerModel, node_id: str, state, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
-        self.is_stereo = True  # RetriggerNode supports stereo output
         self.model = model
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
         
@@ -50,26 +49,28 @@ class RetriggerNode(BaseNode):
             self.state.carry_over = np.array([], dtype=np.float32)
             self.state.carry_over_start_time = 0.0  # Track when carry_over samples should play
 
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         """
         Render retriggered signal with optional stereo spread and movement.
         
-        When num_channels=2 and spread > 0:
+        When spread > 0 or movement > 0:
         - Each retrigger is positioned in the stereo field
         - Position is determined by spread (0-1) and movement (rotation speed)
         - Returns 2D array of shape (num_samples, 2)
+        
+        Otherwise returns mono (1D array).
         """
-        # Check if we need stereo output
-        is_stereo = num_channels == 2 and (self.model.spread > 0 or self.model.movement > 0)
+        # Check if we need stereo output (based on whether stereo features are enabled)
+        do_stereo_output = (self.model.spread > 0 or self.model.movement > 0)
         
         # If num_samples is None, we need to render the full signal
         if num_samples is None:
             num_samples = self.resolve_num_samples(num_samples)
             if num_samples is None:
                 # For retrigger nodes, we need to get the full child signal first
-                child_signal = self.render_full_child_signal(self.signal_node, context, num_channels, **self.get_params_for_children(params))
+                child_signal = self.render_full_child_signal(self.signal_node, context,  **self.get_params_for_children(params))
                 if len(child_signal) == 0:
-                    if is_stereo:
+                    if do_stereo_output:
                         return empty_stereo()
                     return empty_mono()
                 
@@ -79,7 +80,7 @@ class RetriggerNode(BaseNode):
                 self._last_chunk_samples = total_length
                 
                 # Process the full signal at once
-                if is_stereo:
+                if do_stereo_output:
                     delayed_wave = np.zeros((total_length, 2), dtype=np.float32)
                     for i in range(self.model.repeat):
                         delay_time = i * self.model.time
@@ -122,17 +123,17 @@ class RetriggerNode(BaseNode):
                         delayed_wave[i * n_delay_time_samples : i * n_delay_time_samples + len(child_signal)] += child_signal * (self.model.feedback ** i)
                 return delayed_wave
         
-        signal_wave = self.signal_node.render(num_samples, context, num_channels=1, **self.get_params_for_children(params))
+        signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))
         
         # If signal is done and we have no carry over, we're done
         if len(signal_wave) == 0 and len(self.state.carry_over) == 0:
-            if is_stereo:
+            if do_stereo_output:
                 return empty_stereo()
             return empty_mono()
         
         n_delay_time_samples = int(SAMPLE_RATE * self.model.time)
         
-        if is_stereo:
+        if do_stereo_output:
             delayed_wave = np.zeros((len(signal_wave) + n_delay_time_samples * self.model.repeat, 2), dtype=np.float32)
             
             # Add delays with panning (only if we have signal)
@@ -185,7 +186,7 @@ class RetriggerNode(BaseNode):
         
         # Add carry over from previous render
         if len(self.state.carry_over) > 0:
-            if is_stereo:
+            if do_stereo_output:
                 # Ensure carry_over is stereo
                 self.state.carry_over = to_stereo(self.state.carry_over)
                 delayed_wave[:len(self.state.carry_over)] += self.state.carry_over[:len(delayed_wave)]

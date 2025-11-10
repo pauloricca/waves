@@ -80,7 +80,7 @@ class MultiplyNode(BaseNode):
             signal_copy = self.instantiate_child_node(self.model.signal, "signal", i)
             self.signal_instances.append(signal_copy)
     
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         num_samples = self.resolve_num_samples(num_samples)
         if num_samples is None:
             raise ValueError("Multiply node requires explicit duration")

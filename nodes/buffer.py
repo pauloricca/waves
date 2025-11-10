@@ -179,7 +179,7 @@ class BufferNode(BaseNode):
             self.state.last_playhead_position = 0.0
             self.state.total_samples_rendered = 0
     
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         # Check if we've exceeded duration limit
         if self.model.duration is not None:
             max_total_samples = time_to_samples(self.model.duration)

@@ -31,7 +31,6 @@ class DelayModel(BaseNodeModel):
 class DelayNode(BaseNode):
     def __init__(self, model: DelayModel, node_id: str, state, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
-        self.is_stereo = True  # Delay is a pass-through node, supports stereo
         self.model = model
         self.time_node = self.instantiate_child_node(model.time, "time")
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
@@ -60,13 +59,13 @@ class DelayNode(BaseNode):
             # Tape mode only
             self.state.tape_head_distance = None  # For TAPE mode
 
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, get the full child signal
         if num_samples is None:
             num_samples = self.resolve_num_samples(num_samples)
             if num_samples is None:
                 # Need to get full signal from child
-                signal_wave = self.render_full_child_signal(self.signal_node, context, num_channels, **self.get_params_for_children(params))
+                signal_wave = self.render_full_child_signal(self.signal_node, context, **self.get_params_for_children(params))
                 if len(signal_wave) == 0:
                     return np.array([])
                 
@@ -83,7 +82,7 @@ class DelayNode(BaseNode):
         previous_delay_time_snapshot = self.state.previous_delay_time
         
         # Now render the input signal (which may trigger recursive calls)
-        signal_wave = self.signal_node.render(num_samples, context, num_channels, **self.get_params_for_children(params))
+        signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))
         
         # Restore buffer state for our read/write operations
         self.state.buffer = buffer_snapshot

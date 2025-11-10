@@ -151,7 +151,7 @@ class AutomationNode(BaseNode):
         total_duration = total_steps * interval * self.repeat
         return time_to_samples(total_duration )
 
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         # Evaluate interval for this chunk
         num_samples_resolved = self.resolve_num_samples(num_samples)
         if num_samples_resolved is None:

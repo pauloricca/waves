@@ -18,7 +18,6 @@ class ExpressionNode(BaseNode):
         super().__init__(model, node_id, state, do_initialise_state)
         
         # ExpressionNode is stereo-capable - it can process and pass through stereo signals
-        self.is_stereo = True
         
         # Compile the main expression using centralized function
         try:
@@ -48,7 +47,7 @@ class ExpressionNode(BaseNode):
             self.state.total_samples_rendered = 0
     
 
-    def _do_render(self, num_samples=None, context=None, num_channels=1, **params):
+    def _do_render(self, num_samples=None, context=None, **params):
         from expression_globals import get_expression_context, evaluate_compiled
         
         # Resolve num_samples first (handles None case)
@@ -98,8 +97,8 @@ class ExpressionNode(BaseNode):
         all_children_finished = True
         for name, value in self.args.items():
             if isinstance(value, BaseNode):
-                # Render node - pass num_channels to allow stereo children
-                wave = value.render(num_samples, context, num_channels,
+                # Render node (may return mono or stereo)
+                wave = value.render(num_samples, context,
                                    **self.get_params_for_children(params))
                 
                 # Track if any child is still producing samples
@@ -116,19 +115,17 @@ class ExpressionNode(BaseNode):
                         pad_width = [(0, num_samples - len(wave))] + [(0, 0)] * (wave.ndim - 1)
                         wave = np.pad(wave, pad_width, mode='constant', constant_values=0)
                 
-                # Normalize channel count: if we're in stereo mode and got mono, convert to stereo
-                if num_channels == 2 and not is_stereo(wave):
-                    wave = to_stereo(wave)
+                # Expression node works with mono signals for mathematical operations
+                # Convert stereo to mono for use in expressions
+                if is_stereo(wave):
+                    wave = to_mono(wave)
                 
                 eval_context[name] = wave
             # Note: scalar values are handled below in compiled_args
         
         # If all children have finished (returned empty arrays), signal completion
         if all_children_finished and len(self.args) > 0:
-            if num_channels == 1:
-                return empty_mono()
-            else:
-                return empty_stereo()
+            return empty_mono()
         
         # Evaluate compiled arguments (expressions and constants)
         for name, compiled_info in self.compiled_args.items():
@@ -155,13 +152,11 @@ class ExpressionNode(BaseNode):
                 output = result.astype(np.float32)
         elif isinstance(result, (int, float, np.number)):
             output = np.full(num_samples, float(result), dtype=np.float32)
-            if num_channels == 2:
-                output = to_stereo(output)
         else:
             raise ValueError(f"Expression returned unsupported type: {type(result)}")
         
-        # Handle channel mismatch (expression result might be stereo/mono regardless of request)
-        output = to_mono(output) if num_channels == 1 else to_stereo(output)
+        # Expression node always returns mono (mathematical operations work on mono signals)
+        # Stereo child signals were converted to mono earlier for use in expressions
         
         # Track samples rendered
         self.state.total_samples_rendered += len(output)
