@@ -1,5 +1,5 @@
 modulation:
-  tracks:
+  mix:
     screech:
       osc:
         freq:

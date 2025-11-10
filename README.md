@@ -13,7 +13,7 @@ Waves is a flexible audio synthesis framework where sounds are created by connec
 - **Expression system**: Use Python expressions for dynamic, mathematical sound design
 - **Multi-file organization**: Organize sounds across multiple YAML files with cross-referencing
 - **MIDI support**: Use MIDI controllers for live performance and parameter control
-- **Stereo mixing with tracks**: Multi-track mixing with panning and individual stem export
+- **Stereo mixing**: Multi-track mixing with panning, volume control, and individual stem export
 
 ## Requirements
 
@@ -187,9 +187,9 @@ Edit `config.py` to customize:
 - **expression**: Arbitrary Python expressions with multiple inputs
 
 ### Structure
-- **mix**: Mix multiple signals together
+- **mix**: Combine multiple tracks into a mixdown (outputs stereo if any child is stereo)
+- **track**: Convert mono signal to stereo with panning and volume control
 - **sequencer**: Step sequencer for patterns
-- **tracks**: Multi-track stereo mixer with panning
 - **context**: Set variables/parameters for child nodes
 - **tempo**: Set BPM for child nodes
 

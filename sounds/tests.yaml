@@ -1,6 +1,6 @@
-# Test stereo node with static pan
-test_stereo_node:
-  stereo:
+# Test track node with static pan
+test_track_node:
+  track:
     pan: -0.7  # Pan left
     signal:
       osc:
@@ -57,11 +57,13 @@ test_pitch_sample:
 
 
 voice:
-  tracks:
-    voz_vol: 0
+  mix:
     voz:
-      input:
-        id: voz
+      track:
+        volume: 0
+        signal:
+          input:
+            id: voz
     instrument:
       osc:
         duration: 300
@@ -115,7 +117,7 @@ test_buffer_shared_write:
 
 # Test buffer node - speed control
 test_buffer_speed:
-  tracks:
+  mix:
     duration: 20
     # left_pan: -1
     left_vol: 1
@@ -178,11 +180,11 @@ test_buffer_multi_read:
           offset: 1
 
 # Test pass-through nodes (context/tempo) wrapping tracks
-test_pass_through_tracks:
+test_pass_through_mix:
   context:
     v: 0.5
     signal:
-      tracks:
+      mix:
         duration: 2
         left:
           osc:
@@ -198,11 +200,11 @@ test_pass_through_tracks:
         right_pan: 1
 
 # Test tempo wrapping tracks
-test_tempo_tracks:
+test_tempo_mix:
   tempo:
     bpm: 120
     signal:
-      tracks:
+      mix:
         duration: 2
         kick:
           osc:
@@ -219,7 +221,7 @@ test_nested_pass_through:
       context:
         v: 0.8
         signal:
-          tracks:
+          mix:
             duration: 2
             main:
               osc:
@@ -231,7 +233,7 @@ test_nested_pass_through:
 
 # Test stereo node with dynamic pan (auto-pan)
 test_stereo_autopan:
-  stereo:
+  track:
     pan:
       osc:
         type: sin
@@ -243,49 +245,59 @@ test_stereo_autopan:
         freq: 440
         duration: 4
 
-# Test stereo tracks node
-test_stereo:
-  tracks:
+# Test stereo mix node with track nodes for panning
+test_track:
+  mix:
+    duration: 2
     left:
-      osc:
-        type: sin
-        freq: 440
-        duration: 2
-    left_pan: -1
+      track:
+        pan: -1
+        signal:
+          osc:
+            type: sin
+            freq: 440
     right:
-      osc:
-        type: sin
-        freq: 880
-        duration: 2
-    right_pan: 1
+      track:
+        pan: 1
+        signal:
+          osc:
+            type: sin
+            freq: 880
     center:
-      osc:
-        type: sin
-        freq: 220
-        duration: 2
-    center_pan: 0
+      track:
+        pan: 0
+        signal:
+          osc:
+            type: sin
+            freq: 220
 
-# Test volume control per track
+# Test volume and pan control per track
 test_volume:
-  tracks:
+  mix:
     duration: 2
     loud:
-      osc:
-        type: sin
-        freq: 440
-    loud_pan: -1
-    loud_vol: 1.0
+      track:
+        pan: -1
+        volume: 1.0
+        signal:
+          osc:
+            type: sin
+            freq: 440
     quiet:
-      osc:
-        type: sin
-        freq: 880
-    quiet_pan: 1
-    quiet_vol: 0.3
+      track:
+        pan: 1
+        volume: 0.3
+        signal:
+          osc:
+            type: sin
+            freq: 880
     dynamic_vol:
-      osc:
-        type: sin
-        freq: 220
-    dynamic_vol_pan: 0
+      track:
+        pan: 0
+        signal:
+          osc:
+            type: sin
+            freq: 220
     dynamic_vol_vol:
       osc:
         type: sin
@@ -293,8 +305,8 @@ test_volume:
         range: [0, 1]
 
 # Test stereo retrigger with spread
-test_retrigger_stereo:
-  tracks:
+test_retrigger_track:
+  mix:
     duration: 3
     main:
       retrigger:
@@ -311,7 +323,7 @@ test_retrigger_stereo:
 
 # Test stereo retrigger with movement
 test_retrigger_movement:
-  tracks:
+  mix:
     duration: 6
     main:
       retrigger:
@@ -330,7 +342,7 @@ test_retrigger_movement:
 
 # Test musical stereo retrigger
 test_retrigger_musical:
-  tracks:
+  mix:
     duration: 4
     clicks:
       retrigger:
@@ -361,7 +373,7 @@ test_retrigger_musical:
 
 # Test dynamic panning
 test_autopan:
-  tracks:
+  mix:
     duration: 20
     sound:
       osc:

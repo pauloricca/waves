@@ -60,7 +60,7 @@ All nodes must handle both mono and stereo signals transparently:
        return mono_result  # 1D array
    ```
 
-2. **Stereo-capable nodes** (tracks, stereo, mix): Handle both, decide based on children
+2. **Stereo-capable nodes** (mix, track): Handle both, decide based on children
    ```python
    def _do_render(self, num_samples=None, context=None, **params):
        child_signal = self.child_node.render(num_samples, context, **params)
@@ -354,48 +354,76 @@ my_composition:
 
 When a node type isn't recognized in the NODE_REGISTRY, the parser checks if it matches a root-level sound name. If found, it instantiates that sound and applies any provided parameters directly to its model. This enables modular composition and sound reuse.
 
-### Stereo Routing and the Tracks Node
+### Stereo Routing: Mix and Track Nodes
 
-The system supports stereo/multi-channel output through the `tracks` node, which is a special root-level node for multi-track stereo mixing with panning and volume control. All individual nodes remain mono by default, and stereo routing is handled at the tracks level.
+The system supports stereo/multi-channel output through a combination of `mix` (for combining multiple signals) and `track` (for stereo positioning with panning and volume control).
 
-**Basic tracks usage:**
+**The mix node:**
+Combines multiple audio tracks into a mixdown. Accepts arbitrary named track arguments and outputs mono if all children are mono, or stereo if any child is stereo.
+
 ```yaml
 my_sound:
-  tracks:
-    track1:  # Track name (arbitrary)
+  mix:
+    drums:  # Track name (arbitrary)
+      osc:
+        type: sin
+        freq: 100
+    lead:
+      track:  # Use track node for panning/volume
+        pan: -0.5
+        volume: 0.8
+        signal:
+          osc:
+            type: sin
+            freq: 440
+    bass:
+      osc:
+        type: sin
+        freq: 110
+```
+
+**The track node:**
+Converts a mono signal to stereo with panning and volume control. This is the fundamental stereo signal generator.
+
+Parameters:
+- `signal`: Input signal (mono or stereo - will be converted to mono if stereo)
+- `pan`: Pan position from -1 (full left) to 1 (full right), default 0 (center). Can be static or dynamic (WavableValue). Uses equal-power panning law.
+- `volume`: Volume multiplier, default 1.0. Can be static or dynamic (WavableValue).
+
+```yaml
+# Static panning and volume
+panned_sound:
+  track:
+    pan: -0.7
+    volume: 0.8
+    signal:
       osc:
         type: sin
         freq: 440
-    track1_pan: -1  # Pan left (-1 = left, 0 = center, 1 = right)
-    track1_vol: 0.8  # Volume for mixdown only (doesn't affect stem export)
-    
-    track2:
+
+# Dynamic panning with LFO
+autopan:
+  track:
+    pan:
       osc:
         type: sin
-        freq: 880
-    track2_pan: 1  # Pan right
-    track2_vol: 1.0
+        freq: 0.5
+        range: [-1, 1]
+    signal:
+      osc:
+        type: sin
+        freq: 440
 ```
 
 **Key features:**
-- Arbitrary track names using `ConfigDict(extra='allow')` pattern
-- Pan with `{track_name}_pan` suffix (static value or WavableValue for dynamic panning)
-- Volume with `{track_name}_vol` suffix (only affects mixdown, not individual stem exports)
-- Equal-power panning law using trigonometric functions for natural stereo imaging
-- Auto-wrapping: Non-tracks sounds are automatically wrapped in a single-track TracksNode for stereo playback
-
-**Stereo handling:**
-When rendering tracks, the tracks node:
-1. Renders each track's child node (which may return mono or stereo)
-2. Checks the returned array shape:
-   - If 1D (mono): Applies panning to create stereo
-   - If 2D (stereo): Converts to mono first, then applies panning (unless pan is default center, in which case uses as-is)
+- `mix`: Arbitrary track names using `ConfigDict(extra='allow')` pattern, combines all child signals
+- `track`: Always outputs stereo (2D array), applies equal-power panning
+- Auto-wrapping: Sounds without explicit `mix:` are automatically wrapped in a single-track mix node for stereo playback
 
 **Multi-track export:**
+When using `mix:` node explicitly:
 - Individual track stems are exported as `{sound_name}__{track_name}.wav`
 - Mixdown is exported as `{sound_name}.wav`
-- Track stems export without `_vol` applied (full amplitude)
-- Mixdown has `_vol` applied during mixing
 - Controlled by `DO_SAVE_MULTITRACK` config option
 
 ## Running the code

@@ -16,7 +16,7 @@ pretty:
             steps: [0, 2, 1, -1, 6]
         scale: minor
     signal:
-      tracks:
+      mix:
         # percussion:
         #   sequencer:
         #     interval: 0.1

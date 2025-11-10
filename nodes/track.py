@@ -8,32 +8,32 @@ from nodes.node_utils.panning import apply_panning
 from utils import match_length, empty_mono, empty_stereo, to_mono, is_stereo
 
 """
-Stereo Node
+Track Node
 
-Converts a mono signal to stereo with optional panning and per-channel gain.
+Converts a mono signal to stereo with panning and volume control.
 This is the fundamental stereo signal generator in the system.
 
 Parameters:
 - signal: Input mono signal
 - pan: Pan position (-1 = left, 0 = center, 1 = right). Can be static or dynamic (WavableValue).
        Uses equal-power panning law for natural stereo imaging.
-- left: Left channel gain multiplier (default: 1.0). Can be static or dynamic.
-- right: Right channel gain multiplier (default: 1.0). Can be static or dynamic.
+- volume: Volume multiplier (default: 1.0). Can be static or dynamic (WavableValue).
 
 Output: 2D array of shape (num_samples, 2) with [left, right] channels.
 
 Examples:
 
-# Pan a sine wave to the left
-stereo:
+# Pan a sine wave to the left with reduced volume
+track:
   signal:
     osc:
       type: sin
       freq: 440
   pan: -1
+  volume: 0.7
 
 # Dynamic panning with an LFO
-stereo:
+track:
   signal:
     osc:
       type: sin
@@ -44,31 +44,35 @@ stereo:
       freq: 0.5
       range: [-1, 1]
 
-# Custom channel gains
-stereo:
+# Dynamic volume envelope
+track:
   signal:
     sample:
       file: kick.wav
-  left: 0.8
-  right: 1.2
+  volume:
+    envelope:
+      attack: 0.01
+      release: 0.3
 """
 
-class StereoNodeModel(BaseNodeModel):
+class TrackNodeModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     signal: WavableValue = None
     pan: WavableValue = 0.0  # Pan position: -1 (left) to 1 (right), default center
+    volume: WavableValue = 1.0  # Volume multiplier, default unity gain
 
 
-class StereoNode(BaseNode):
-    def __init__(self, model: StereoNodeModel, node_id: str, state, do_initialise_state=True):
+class TrackNode(BaseNode):
+    def __init__(self, model: TrackNodeModel, node_id: str, state, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
         self.pan_node = self.instantiate_child_node(model.pan, "pan")
+        self.volume_node = self.instantiate_child_node(model.volume, "volume")
 
     def _do_render(self, num_samples=None, context=None, **params):
         """
-        Render signal with panning to create stereo output.
+        Render signal with panning and volume to create stereo output.
         Always outputs stereo (2D array).
         """
         # Render the child signal (may be mono or stereo)
@@ -93,7 +97,18 @@ class StereoNode(BaseNode):
         # Apply panning to create stereo
         stereo_signal = apply_panning(signal, pan_value)
         
+        # Get volume value (static or dynamic)
+        volume_value = self.volume_node.render(len(signal), context, **params)
+        
+        # Ensure volume_value matches signal length (and convert to mono if needed)
+        if is_stereo(volume_value):
+            volume_value = to_mono(volume_value)
+        volume_value = match_length(volume_value, len(signal))
+        
+        # Apply volume to both channels
+        stereo_signal *= volume_value[:, np.newaxis]
+        
         return stereo_signal
 
 
-STEREO_DEFINITION = NodeDefinition("stereo", StereoNode, StereoNodeModel)
+TRACK_DEFINITION = NodeDefinition("track", TrackNode, TrackNodeModel)

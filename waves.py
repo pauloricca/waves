@@ -46,7 +46,7 @@ def get_innermost_node(node: BaseNode) -> BaseNode:
     
     Pass-through nodes like ContextNode and TempoNode just add params but pass
     through their child signal unchanged. This function recursively unwraps them
-    to find the actual signal-generating node (e.g., TracksNode).
+    to find the actual signal-generating node (e.g., MixNode).
     
     Args:
         node: A BaseNode instance to unwrap
@@ -62,29 +62,29 @@ def get_innermost_node(node: BaseNode) -> BaseNode:
     return node
 
 
-def has_tracks_node_inside(model) -> bool:
+def has_mix_node_inside(model) -> bool:
     """
-    Check if a model is or contains a TracksNode, unwrapping pass-through nodes.
+    Check if a model is or contains a MixNode, unwrapping pass-through nodes.
     
     Pass-through nodes like 'context' and 'tempo' just add render params but don't 
-    change the audio. We recursively unwrap them to see if there's a TracksNode inside.
+    change the audio. We recursively unwrap them to see if there's a MixNode inside.
     
     Args:
         model: A BaseNodeModel to check
         
     Returns:
-        True if the model is a TracksNodeModel or contains one inside pass-through nodes
+        True if the model is a MixNodeModel or contains one inside pass-through nodes
     """
-    from nodes.tracks import TracksNodeModel
+    from nodes.mix import MixNodeModel
     
     # Direct check
-    if isinstance(model, TracksNodeModel):
+    if isinstance(model, MixNodeModel):
         return True
     
     # Check if this is a pass-through node with a signal child
     if hasattr(model, 'is_pass_through') and model.is_pass_through:
         if hasattr(model, 'signal'):
-            return has_tracks_node_inside(model.signal)
+            return has_mix_node_inside(model.signal)
     
     return False
 
@@ -141,11 +141,11 @@ def perform_hot_reload_background(sound_name_to_play: str, changed_filename: str
             from nodes.node_utils.node_string_parser import apply_params_to_model
             new_model = apply_params_to_model(new_model, params)
         
-        # Auto-wrap in tracks node if not already a tracks node (or contains one inside pass-through nodes)
-        if not has_tracks_node_inside(new_model):
-            from nodes.tracks import TracksNodeModel
-            # Wrap in a tracks node with the sound name as the track name
-            wrapped_model = TracksNodeModel()
+        # Auto-wrap in mix node if not already a mix node (or contains one inside pass-through nodes)
+        if not has_mix_node_inside(new_model):
+            from nodes.mix import MixNodeModel
+            # Wrap in a mix node with the sound name as the track name
+            wrapped_model = MixNodeModel()
             wrapped_model.__pydantic_extra__ = {sound_name_to_play: new_model}
             new_model = wrapped_model
         
@@ -232,11 +232,11 @@ def save_recording(sound_name=None):
         save(recorded_audio, unique_filename)
         print(f"Recording saved: {unique_filename} ({len(recorded_audio) / SAMPLE_RATE:.2f} seconds)")
         
-        # Save individual track stems if this is an explicit tracks node
-        from nodes.tracks import TracksNode
-        # Unwrap pass-through nodes to find the actual TracksNode
+        # Save individual track stems if this is an explicit mix node
+        from nodes.mix import MixNode
+        # Unwrap pass-through nodes to find the actual MixNode
         innermost_recording_node = get_innermost_node(recording_sound_node) if recording_sound_node else None
-        if DO_SAVE_MULTITRACK and recording_is_explicit_tracks and isinstance(innermost_recording_node, TracksNode) and recording_track_buffers:
+        if DO_SAVE_MULTITRACK and recording_is_explicit_tracks and isinstance(innermost_recording_node, MixNode) and recording_track_buffers:
             for track_name, track_buffer in recording_track_buffers.items():
                 if len(track_buffer) > 0:
                     track_audio = concatenate_blocks(track_buffer)
@@ -257,7 +257,7 @@ def signal_handler(sig, frame):
     save_recording(current_sound_name)
     sys.exit(0)
 
-def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_name: str = None, is_explicit_tracks: bool = False):
+def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_name: str = None, is_explicit_mix: bool = False):
     global recording_buffer, recording_active, current_sound_name, current_sound_node, yaml_changed
     global recording_track_buffers, recording_sound_node, recording_is_explicit_tracks
     
@@ -267,13 +267,13 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
         recording_active = True
         current_sound_name = sound_name
         recording_sound_node = sound_node
-        recording_is_explicit_tracks = is_explicit_tracks
+        recording_is_explicit_tracks = is_explicit_mix
         
-        # Initialize track buffers if this is an explicit tracks node
-        # Unwrap pass-through nodes to find the actual TracksNode
-        from nodes.tracks import TracksNode
+        # Initialize track buffers if this is an explicit mix node
+        # Unwrap pass-through nodes to find the actual MixNode
+        from nodes.mix import MixNode
         innermost_node = get_innermost_node(sound_node)
-        if is_explicit_tracks and isinstance(innermost_node, TracksNode):
+        if is_explicit_mix and isinstance(innermost_node, MixNode):
             recording_track_buffers = {name: deque() for name in innermost_node.get_track_names()}
         else:
             recording_track_buffers = None
@@ -292,10 +292,11 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
     active_sound_node = sound_node  # Local reference to current node
     stored_sound_name = sound_name  # Store the sound name for hot reload
 
-    # Determine output channels by checking if the innermost node is a TracksNode
-    from nodes.tracks import TracksNode
+    # Determine output channels by checking if any child outputs stereo
+    # MixNode will output stereo if any of its children are stereo (e.g., track nodes)
     innermost = get_innermost_node(sound_node)
-    output_channels_ref = [2 if isinstance(innermost, TracksNode) else 1]
+    from nodes.mix import MixNode
+    output_channels_ref = [2 if isinstance(innermost, MixNode) else 1]
     
     # References for display thread (using lists so they can be modified in nested scope)
     should_stop_ref = [False]
@@ -383,7 +384,7 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
             recording_buffer.append(np.array(audio_data, copy=True))  # Store full stereo for recording
 
             # Also record individual tracks if this is a multi-track recording
-            # Need to unwrap pass-through nodes to get to the TracksNode
+            # Need to unwrap pass-through nodes to get to the MixNode
             innermost_active_node = get_innermost_node(active_sound_node)
             if recording_track_buffers and hasattr(innermost_active_node, 'last_track_outputs') and innermost_active_node.last_track_outputs:
                 for track_name, track_data in innermost_active_node.last_track_outputs.items():
@@ -471,13 +472,13 @@ def main():
     if params:
         sound_model_to_play = apply_params_to_model(sound_model_to_play, params)
     
-    # Auto-wrap in tracks node if not already a tracks node (or contains one inside pass-through nodes)
-    is_explicit_tracks = has_tracks_node_inside(sound_model_to_play)
+    # Auto-wrap in mix node if not already a mix node (or contains one inside pass-through nodes)
+    is_explicit_mix = has_mix_node_inside(sound_model_to_play)
     
-    if not is_explicit_tracks:
-        from nodes.tracks import TracksNodeModel
-        # Wrap in a tracks node with the sound name as the track name
-        wrapped_model = TracksNodeModel()
+    if not is_explicit_mix:
+        from nodes.mix import MixNodeModel
+        # Wrap in a mix node with the sound name as the track name
+        wrapped_model = MixNodeModel()
         # Store the original sound as a track using __pydantic_extra__
         wrapped_model.__pydantic_extra__ = {sound_name_to_play: sound_model_to_play}
         sound_model_to_play = wrapped_model
@@ -493,7 +494,7 @@ def main():
     sound_duration = look_for_duration(sound_model_to_play)
 
     if DO_PLAY_IN_REAL_TIME:
-        play_in_real_time(sound_node_to_play, sound_duration, sound_name_to_play, is_explicit_tracks)
+        play_in_real_time(sound_node_to_play, sound_duration, sound_name_to_play, is_explicit_mix)
     else:
         # Non-realtime mode requires a duration
         if not sound_duration:
@@ -505,15 +506,15 @@ def main():
             
         rendering_start_time = time.time()
         
-        # Check if this is a tracks node for multi-file export
+        # Check if this is a mix node for multi-file export
         # Export individual tracks if:
-        # 1. User explicitly used 'tracks:' node AND has at least one track
-        # 2. User explicitly used 'tracks:' with multiple tracks
-        # Unwrap pass-through nodes to find the actual TracksNode
-        from nodes.tracks import TracksNode
+        # 1. User explicitly used 'mix:' node AND has at least one track
+        # 2. User explicitly used 'mix:' with multiple tracks
+        # Unwrap pass-through nodes to find the actual MixNode
+        from nodes.mix import MixNode
         innermost_node = get_innermost_node(sound_node_to_play)
-        is_tracks = isinstance(innermost_node, TracksNode)
-        should_export_tracks = is_explicit_tracks and is_tracks and len(innermost_node.get_track_names()) >= 1
+        is_mix = isinstance(innermost_node, MixNode)
+        should_export_tracks = is_explicit_mix and is_mix and len(innermost_node.get_track_names()) >= 1
         
         # Render mixdown (always needed)
         if DO_PRE_RENDER_WHOLE_SOUND:

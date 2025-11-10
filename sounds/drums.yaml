@@ -31,7 +31,7 @@ drum-kit:
 
 
 drums:
-  tracks:
+  mix:
     perc:
       drum-kit: {}
     kick_vol: 0.3
