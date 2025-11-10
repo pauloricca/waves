@@ -421,67 +421,63 @@ hihat:
 kick:
   mix:
     duration: 1
-    signals:
-      # Rumble
-      - osc:
-          type: sin
-          freq: [420, [55, 0.02], [45, 0.15]]
-          amp: 0.6
-          attack: 0.001
-          release: 0.6
-          duration: 0.75
+    rumble:
+      osc:
+        type: sin
+        freq: [420, [55, 0.02], [45, 0.15]]
+        amp: 0.6
+        attack: 0.001
+        release: 0.6
+        duration: 0.75
+    body:
+      osc:
+        type: sin
+        freq: [150, [55, 0.015]]
+        amp: 0.3
+        attack: 0.0001
+        release: 0.25
+        duration: 0.2
+        phase:
+          osc:
+            type: sin
+            freq: [250, [85, 0.015]]
+            amp: [0.8, [0.1, 0.03]]
+            attack: 0.0005
+            release: 0.15
+            duration: 0.2
+    upper_harmonics:
+      osc:
+        type: tri
+        freq: [180, [110, 0.01]]
+        amp: 0.01
+        attack: 0.001
+        release: 0.15
+        duration: 0.2
+    punch:
+      osc:
+        type: noise
+        amp: 0.02
+        attack: 0.0001
+        release: 0.008
+        duration: 0.004
       
-      # Body
-      - osc:
-          type: sin
-          freq: [150, [55, 0.015]]
-          amp: 0.3
-          attack: 0.0001
-          release: 0.25
-          duration: 0.2
-          phase:
-            osc:
-              type: sin
-              freq: [250, [85, 0.015]]
-              amp: [0.8, [0.1, 0.03]]
-              attack: 0.0005
-              release: 0.15
-              duration: 0.2
+    extra_punch:
+      osc:
+        type: sin
+        freq: [3500, [800, 0.003]]
+        amp: 0.1
+        attack: 0.0001
+        release: 0.006
+        duration: 0.01
       
-      # Upper harmonics
-      - osc:
-          type: tri
-          freq: [180, [110, 0.01]]
-          amp: 0.01
-          attack: 0.001
-          release: 0.15
-          duration: 0.2
-      
-      # Punch
-      - osc:
-          type: noise
-          amp: 0.02
-          attack: 0.0001
-          release: 0.008
-          duration: 0.004
-      
-      # Extra punch
-      - osc:
-          type: sin
-          freq: [3500, [800, 0.003]]
-          amp: 0.1
-          attack: 0.0001
-          release: 0.006
-          duration: 0.01
-      
-      # Sub harmonic
-      - osc:
-          type: sin
-          freq: 40
-          amp: 0.4
-          attack: 0.002
-          release: 0.5
-          duration: 0.6
+    sub_harmonic:
+      osc:
+        type: sin
+        freq: 40
+        amp: 0.4
+        attack: 0.002
+        release: 0.5
+        duration: 0.6
 
 kick2:
   map:

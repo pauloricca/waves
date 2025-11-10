@@ -17,7 +17,7 @@ from sound_library import get_sound_model, load_all_sound_libraries, reload_soun
 from nodes.node_utils.base_node import BaseNode
 from nodes.node_utils.instantiate_node import instantiate_node
 from nodes.node_utils.render_context import RenderContext
-from utils import look_for_duration, play, save, visualise_wave, is_stereo as check_is_stereo
+from utils import look_for_duration, play, save, visualise_wave, is_stereo as check_is_stereo, to_mono
 from display_stats import run_visualizer_and_stats, print_average_cpu_usage
 
 rendered_sounds: dict[np.ndarray] = {}
@@ -373,12 +373,6 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
         else:
             is_stereo = output_channels_ref[0] == 2
 
-        # For visualization and recording, use mono (left channel if stereo)
-        if is_stereo:
-            mono_for_vis = audio_data[:, 0]  # Left channel
-        else:
-            mono_for_vis = audio_data
-
         # Add to recording buffer if recording is enabled (before clipping for visualization)
         if recording_active and recording_buffer is not None:
             recording_buffer.append(np.array(audio_data, copy=True))  # Store full stereo for recording
@@ -391,7 +385,8 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
                     if track_name in recording_track_buffers and len(track_data) > 0:
                         recording_track_buffers[track_name].append(np.array(track_data, copy=True))
 
-        visualised_wave_buffer.extend(mono_for_vis)  # Visualize left channel only
+        # Add to visualization buffer - keep stereo for meter, will convert to mono for waveform display
+        visualised_wave_buffer.extend(audio_data)
 
         # Clip in-place to avoid additional allocations on the realtime thread
         if not audio_data.flags.writeable:
@@ -574,11 +569,8 @@ def main():
             save(rendered_sound, f"{sound_name_to_play}.wav")
 
         if DO_VISUALISE_OUTPUT:
-            # Visualize mixdown (left channel if stereo)
-            if check_is_stereo(rendered_sound):
-                visualise_wave(rendered_sound[:, 0])
-            else:
-                visualise_wave(rendered_sound)
+            # Visualize mixdown (convert stereo to mono)
+            visualise_wave(to_mono(rendered_sound))
 
         # Calculate peak from mixdown
         peak = np.max(np.abs(rendered_sound))
