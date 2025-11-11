@@ -4,6 +4,7 @@ numpy==1.26.4
 pycparser==2.22
 pydantic==2.11.4
 pydantic_core==2.33.2
+keyboard==0.13.5
 python-rtmidi==1.5.8
 PyYAML==6.0.2
 scipy==1.15.2
