@@ -7,6 +7,9 @@ Run with root privileges so the script can capture keyboard events:
     sudo python3 scripts/keyboard.py minor -1
 
 Pass an optional octave shift after the scale name to transpose the layout.
+
+Press Shift while holding notes to latch them; the next key press will release
+latched notes and resume normal playback.
 """
 
 from __future__ import annotations
@@ -44,6 +47,8 @@ DEFAULT_ROOT_NOTE = 60  # Middle C (C4)
 DEFAULT_VELOCITY = 100
 DEFAULT_CHANNEL = 0
 
+SHIFT_KEYS = {"shift", "shift left", "left shift", "shift right", "right shift"}
+
 
 @dataclass
 class MidiNoteMapping:
@@ -66,6 +71,8 @@ class MidiKeyboardController:
         self.velocity = max(0, min(127, velocity))
         self.channel = max(0, min(15, channel))
         self._active_notes: Dict[str, int] = {}
+        self._latched_keys: set[str] = set()
+        self._latch_active = False
 
     def handle_event(self, event: keyboard.KeyboardEvent) -> None:
         key_name = event.name
@@ -73,8 +80,18 @@ class MidiKeyboardController:
             return
 
         key = key_name.lower()
-        if key not in self.key_map:
+        if key in SHIFT_KEYS:
+            if event.event_type == "down":
+                self._activate_latch()
             return
+
+        if key not in self.key_map:
+            if event.event_type == "down" and self._latch_active:
+                self._deactivate_latch()
+            return
+
+        if event.event_type == "down" and self._latch_active:
+            self._deactivate_latch()
 
         if event.event_type == "down":
             self._handle_key_down(key)
@@ -97,11 +114,42 @@ class MidiKeyboardController:
         note = self._active_notes.pop(key, None)
         if note is None:
             return
+
+        if self._latch_active:
+            # Keep the note active until the latch is released.
+            self._active_notes[key] = note
+            self._latched_keys.add(key)
+            return
+
         self.output_port.send(
             mido.Message("note_off", channel=self.channel, note=note, velocity=0)
         )
 
+    def _activate_latch(self) -> None:
+        if self._latch_active:
+            return
+        self._latch_active = True
+
+    def _deactivate_latch(self) -> None:
+        if not self._latch_active:
+            return
+        self._release_latched_notes()
+        self._latch_active = False
+
+    def _release_latched_notes(self) -> None:
+        for key in list(self._latched_keys):
+            note = self._active_notes.pop(key, None)
+            if note is not None:
+                self.output_port.send(
+                    mido.Message(
+                        "note_off", channel=self.channel, note=note, velocity=0
+                    )
+                )
+        self._latched_keys.clear()
+
     def all_notes_off(self) -> None:
+        self._release_latched_notes()
+        self._latch_active = False
         for note in list(self._active_notes.values()):
             self.output_port.send(
                 mido.Message("note_off", channel=self.channel, note=note, velocity=0)
@@ -202,7 +250,10 @@ def print_mapping_info(key_map: Dict[str, MidiNoteMapping]) -> None:
             mapping = key_map[key]
             row_display.append(f"{key.upper()}:{mapping.note_number:>3d}")
         print(f"  Row {row_label.upper()}: {'  '.join(row_display)}")
-    print("\nPress keys to send MIDI notes. Press Ctrl+C to exit.\n")
+    print(
+        "\nPress keys to send MIDI notes. Press Shift to latch notes; the next key press"
+        " unlatches. Press Ctrl+C to exit.\n"
+    )
 
 
 def main(argv: Optional[List[str]] = None) -> int:
