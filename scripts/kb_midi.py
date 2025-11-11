@@ -3,12 +3,12 @@
 
 Run with root privileges so the script can capture keyboard events:
 
-    sudo python3 scripts/keyboard.py major
-    sudo python3 scripts/keyboard.py minor -1
+    sudo python3 scripts/kb_midi.py major
+    sudo python3 scripts/kb_midi.py minor -1
 
 Pass an optional octave shift after the scale name to transpose the layout.
 
-Press Shift while holding notes to latch them; the next key press will release
+Press Shift while holding notes to latch them. Press Shift again to release 
 latched notes and resume normal playback.
 """
 
@@ -21,15 +21,9 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 import mido
+import keyboard
 
-try:
-    import keyboard  # type: ignore
-except ImportError as exc:  # pragma: no cover - handled at runtime
-    print("The 'keyboard' package is required for this script.")
-    print("Install dependencies with: pip install -r requirements.txt")
-    raise SystemExit(1) from exc
-
-from config import MIDI_OUTPUT_DEVICE
+MIDI_OUTPUT_DEVICE = None # "IAC Driver Bus 1" # Set to None to use first available output
 
 
 SCALES: Dict[str, List[int]] = {
@@ -82,16 +76,14 @@ class MidiKeyboardController:
         key = key_name.lower()
         if key in SHIFT_KEYS:
             if event.event_type == "down":
-                self._activate_latch()
+                if self._latch_active:
+                    self._deactivate_latch()
+                else:
+                    self._activate_latch()
             return
 
         if key not in self.key_map:
-            if event.event_type == "down" and self._latch_active:
-                self._deactivate_latch()
             return
-
-        if event.event_type == "down" and self._latch_active:
-            self._deactivate_latch()
 
         if event.event_type == "down":
             self._handle_key_down(key)
@@ -251,8 +243,8 @@ def print_mapping_info(key_map: Dict[str, MidiNoteMapping]) -> None:
             row_display.append(f"{key.upper()}:{mapping.note_number:>3d}")
         print(f"  Row {row_label.upper()}: {'  '.join(row_display)}")
     print(
-        "\nPress keys to send MIDI notes. Press Shift to latch notes; the next key press"
-        " unlatches. Press Ctrl+C to exit.\n"
+        "\nPress keys to send MIDI notes. Press Shift while holding notes to latch them."
+        "\nPress Shift again to unlatch. Press Ctrl+C to exit.\n"
     )
 
 

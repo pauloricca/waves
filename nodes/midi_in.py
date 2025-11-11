@@ -13,12 +13,14 @@ from nodes.node_utils.midi_utils import (
     MIDI_DEBUG
 )
 
+NOTE_STEALING_FADE_MS = 5  # milliseconds for quick fade-out when voice stealing
+
 
 class MidiInModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
     channel: int = 0  # MIDI channel to listen to (0-15)
     signal: WavableValue  # The sound/signal to play when a note is triggered
-    voices: int = 16  # Maximum number of simultaneous voices (polyphony limit)
+    voices: int = 8  # Maximum number of simultaneous voices (polyphony limit)
     device: str | None = None  # Optional device key from config, None = use default
     duration: float = math.inf
 
@@ -34,7 +36,7 @@ class MidiInNode(BaseNode):
         # Persistent state for active notes (survives hot reload)
         # Note: We store only the data, not the node instances - nodes are ephemeral
         if do_initialise_state:
-            self.state.active_notes = {}  # {note_id: {note_number, render_args, samples_rendered, is_in_sustain}}
+            self.state.active_notes = {}  # {note_id: {note_number, render_args, samples_rendered, is_in_sustain, fade_out_remaining}}
             self.state.note_id_counter = 0
             self.state.note_number_to_ids = {}  # {note_number: [id1, id2, ...]}
         
@@ -69,29 +71,29 @@ class MidiInNode(BaseNode):
         amplitude = midi_velocity_to_amplitude(velocity)
         velocity_norm = velocity / 127.0  # Normalise velocity to 0-1
         
-        # Voice stealing: if we've reached max voices, remove the oldest note
+        # Voice stealing: if we've reached max voices, fade out the oldest note
         if len(self.state.active_notes) >= self.max_voices:
-            # Find the oldest note (lowest note_id)
-            oldest_note_id = min(self.state.active_notes.keys())
-            oldest_note_data = self.state.active_notes[oldest_note_id]
-            oldest_note_number = oldest_note_data['note_number']
+            # Find the oldest note that isn't already fading out (lowest note_id)
+            oldest_note_id = None
+            for note_id in sorted(self.state.active_notes.keys()):
+                if self.state.active_notes[note_id].get('fade_out_remaining', 0) == 0:
+                    oldest_note_id = note_id
+                    break
             
-            # Remove it from state
-            del self.state.active_notes[oldest_note_id]
-            
-            # Remove from ephemeral nodes
-            if oldest_note_id in self.active_note_nodes:
-                del self.active_note_nodes[oldest_note_id]
-            
-            # Clean up note_number_to_ids mapping
-            if oldest_note_number in self.state.note_number_to_ids:
-                if oldest_note_id in self.state.note_number_to_ids[oldest_note_number]:
-                    self.state.note_number_to_ids[oldest_note_number].remove(oldest_note_id)
-                if not self.state.note_number_to_ids[oldest_note_number]:
-                    del self.state.note_number_to_ids[oldest_note_number]
-            
-            if MIDI_DEBUG:
-                print(f"Voice stealing: removed note {oldest_note_number} (id {oldest_note_id}) to make room")
+            # If we found a note to steal, mark it for fade-out
+            if oldest_note_id is not None:
+                oldest_note_data = self.state.active_notes[oldest_note_id]
+                oldest_note_number = oldest_note_data['note_number']
+                
+                # Mark for quick fade-out (5ms = 220 samples at 44.1kHz)
+                from config import SAMPLE_RATE
+                fade_duration_ms = NOTE_STEALING_FADE_MS
+                fade_samples = int(SAMPLE_RATE * fade_duration_ms / 1000)
+                oldest_note_data['fade_out_remaining'] = fade_samples
+                oldest_note_data['fade_out_total'] = fade_samples
+                
+                if MIDI_DEBUG:
+                    print(f"Voice stealing: fading out note {oldest_note_number} (id {oldest_note_id}) to make room")
         
         # Generate unique ID for this note instance
         note_index = self.state.note_id_counter
@@ -119,7 +121,9 @@ class MidiInNode(BaseNode):
             'note_number': note_number,
             'render_args': render_args,
             'samples_rendered': 0,
-            'is_in_sustain': True
+            'is_in_sustain': True,
+            'fade_out_remaining': 0,  # 0 means no fade-out in progress
+            'fade_out_total': 0
         }
         
         # Track note ID for this note number (for note off handling)
@@ -162,6 +166,8 @@ class MidiInNode(BaseNode):
             note_number = note_data['note_number']
             render_args = note_data['render_args']
             is_in_sustain = note_data['is_in_sustain']
+            fade_out_remaining = note_data.get('fade_out_remaining', 0)
+            fade_out_total = note_data.get('fade_out_total', 0)
             
             # Get the node instance from the ephemeral dictionary
             sound_node = self.active_note_nodes.get(note_id)
@@ -188,6 +194,34 @@ class MidiInNode(BaseNode):
             
             # Update samples rendered counter
             note_data['samples_rendered'] += len(note_chunk)
+            
+            # Apply fade-out if voice stealing is active
+            if fade_out_remaining > 0:
+                chunk_len = len(note_chunk)
+                samples_to_fade = min(chunk_len, fade_out_remaining)
+                
+                # Create a linear fade-out envelope for this chunk
+                if samples_to_fade == chunk_len:
+                    # Whole chunk is within fade-out period
+                    fade_start = 1.0 - (fade_out_total - fade_out_remaining) / fade_out_total
+                    fade_end = 1.0 - (fade_out_total - fade_out_remaining + chunk_len) / fade_out_total
+                    fade_envelope = np.linspace(fade_start, fade_end, chunk_len)
+                else:
+                    # Only part of chunk needs fading
+                    fade_start = 1.0 - (fade_out_total - fade_out_remaining) / fade_out_total
+                    fade_envelope = np.concatenate([
+                        np.linspace(fade_start, 0.0, samples_to_fade),
+                        np.zeros(chunk_len - samples_to_fade)
+                    ])
+                
+                note_chunk = note_chunk * fade_envelope
+                
+                # Update fade counter
+                note_data['fade_out_remaining'] = max(0, fade_out_remaining - chunk_len)
+                
+                # If fade is complete, mark for removal
+                if note_data['fade_out_remaining'] == 0:
+                    notes_to_remove.append((note_id, note_number))
             
             # Mix into output (pad if needed)
             if len(note_chunk) < len(output_wave):
