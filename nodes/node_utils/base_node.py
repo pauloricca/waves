@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 
 from config import *
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Union, Literal
 from pydantic import BaseModel
 
 from constants import RenderArgs
@@ -18,7 +18,7 @@ class BaseNodeModel(BaseModel):
     duration: Optional[float] = None
     id: Optional[str] = None  # Unique identifier for this node to enable referencing
     is_pass_through: bool = False  # Override to True for nodes that just pass through their signal child
-    monitor: bool = False  # Enable real-time output visualization for this node
+    monitor: Union[bool, Literal["bipolar"]] = False  # Enable real-time output visualization: True (abs), "bipolar" (centered at 0)
     pass
 
 
@@ -143,6 +143,8 @@ class BaseNode:
         # Update monitor with the result
         if hasattr(self, 'model') and self.model.monitor and self.node_id:
             from nodes.node_utils.monitor_registry import get_monitor_registry
+            # Set monitor mode: bipolar (centered at 0) or absolute value
+            self._monitor_use_abs = self.model.monitor != "bipolar"
             get_monitor_registry().update(self.node_id, result)
         
         return result

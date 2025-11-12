@@ -17,7 +17,7 @@ from sound_library import get_sound_model, load_all_sound_libraries, reload_soun
 from nodes.node_utils.base_node import BaseNode
 from nodes.node_utils.instantiate_node import instantiate_node
 from nodes.node_utils.render_context import RenderContext
-from utils import look_for_duration, play, save, visualise_wave, is_stereo as check_is_stereo, to_mono
+from utils import look_for_duration, play, save, visualise_wave, is_stereo as check_is_stereo, to_mono, to_stereo
 from display_stats import run_visualizer_and_stats, print_average_cpu_usage
 
 rendered_sounds: dict[np.ndarray] = {}
@@ -292,11 +292,8 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
     active_sound_node = sound_node  # Local reference to current node
     stored_sound_name = sound_name  # Store the sound name for hot reload
 
-    # Determine output channels by checking if any child outputs stereo
-    # MixNode will output stereo if any of its children are stereo (e.g., track nodes)
-    innermost = get_innermost_node(sound_node)
-    from nodes.mix import MixNode
-    output_channels_ref = [2 if isinstance(innermost, MixNode) else 1]
+    # Always output stereo (mono signals are converted to stereo in the callback)
+    output_channels_ref = [2]
     
     # References for display thread (using lists so they can be modified in nested scope)
     should_stop_ref = [False]
@@ -361,21 +358,12 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
         # Apply master gain
         audio_data *= RENDERED_MASTER_GAIN
 
-        # Use cached channel information, falling back to runtime detection if layout changes
-        if audio_data.ndim == 2 and audio_data.shape[1] == 2:
-            if output_channels_ref[0] != 2:
-                output_channels_ref[0] = 2
-            is_stereo = True
-        elif audio_data.ndim == 1:
-            if output_channels_ref[0] != 1:
-                output_channels_ref[0] = 1
-            is_stereo = False
-        else:
-            is_stereo = output_channels_ref[0] == 2
+        # Detect if audio is stereo (before conversion)
+        is_stereo = audio_data.ndim == 2 and audio_data.shape[1] == 2
 
         # Add to recording buffer if recording is enabled (before clipping for visualization)
         if recording_active and recording_buffer is not None:
-            recording_buffer.append(np.array(audio_data, copy=True))  # Store full stereo for recording
+            recording_buffer.append(np.array(audio_data, copy=True))  # Store audio for recording
 
             # Also record individual tracks if this is a multi-track recording
             # Need to unwrap pass-through nodes to get to the MixNode
@@ -393,15 +381,17 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
             audio_data = np.array(audio_data, copy=True)
         np.clip(audio_data, -1.0, 1.0, out=audio_data)
 
+        # Convert mono to stereo for output (so it plays from both speakers)
+        if not is_stereo:
+            audio_data = to_stereo(audio_data)
+
         # Prepare output buffer without per-chunk allocations
         outdata.fill(0)
         frames_rendered = len(audio_data)
         frames_to_copy = min(frames_rendered, frames)
 
-        if is_stereo:
-            outdata[:frames_to_copy, :2] = audio_data[:frames_to_copy]
-        else:
-            outdata[:frames_to_copy, 0] = audio_data[:frames_to_copy]
+        # Audio is always stereo at this point
+        outdata[:frames_to_copy, :2] = audio_data[:frames_to_copy]
 
         if frames_rendered < frames:
             should_stop = True
