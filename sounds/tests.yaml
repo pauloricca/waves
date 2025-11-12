@@ -1601,3 +1601,84 @@ test_monitor_seq:
           type: sin
           freq: 80
           amp: 0.3
+
+# Test glide node with stepped frequency changes
+test_glide:
+  osc:
+    type: sin
+    duration: 4
+    freq:
+      glide:
+        time: 0.1  # 300ms glide time
+        signal:
+          automation:
+            interval: 0.5
+            mode: step
+            repeat: 2
+            steps:
+              - 220  # A3
+              - 330  # E4
+              - 440  # A4
+              - 550  # C#5
+
+# Test glide with fast changes
+test_glide_fast:
+  osc:
+    type: saw
+    duration: 3
+    freq:
+      glide:
+        time: 0.05  # 50ms glide time
+        signal:
+          automation:
+            interval: 0.25
+            mode: step
+            repeat: 3
+            steps:
+              - 200
+              - 400
+              - 300
+              - 500
+
+# Test glide with dynamic glide time
+test_glide_dynamic_time:
+  osc:
+    type: sin
+    duration: 3
+    freq:
+      glide:
+        time:
+          # Slow glide at start, fast at end
+          osc:
+            type: sin
+            freq: 0.5
+            range: [0.5, 0.01]
+        signal:
+          automation:
+            interval: 0.5
+            mode: step
+            repeat: 2
+            steps:
+              - 220
+              - 440
+              - 330
+              - 550
+
+# Test glide with zero time (no glide)
+test_glide_zero:
+  osc:
+    type: sin
+    duration: 2
+    freq:
+      glide:
+        time: 0  # No glide, instant changes
+        signal:
+          automation:
+            interval: 0.25
+            mode: step
+            repeat: 2
+            steps:
+              - 220
+              - 440
+              - 330
+              - 550
