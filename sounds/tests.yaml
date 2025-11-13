@@ -618,53 +618,52 @@ midi-test:
 # MIDI with more complex sound
 midi-synth:
   midi_in:
+    duration: 9999
     channel: 0
     signal:
       envelope:
         duration: 1
         attack: 0.2
-        release: 0.8
+        release: 2.8
+        gate: gate
+        end: true
         signal:
           expression:
-            exp: "signal * 1"
+            exp: "signal * 0.1"
             signal:
               mix:
-                signals:
-                  - envelope:
-                      duration: 0.01
-                      signal:
-                        expression:
-                          exp: "signal * 0.4"
-                          signal:
-                            mix:
-                              signals:
-                                - osc:
-                                    freq: f
-                                    attack: 0.2
-                                - osc:
-                                    freq: "f * 2"
-                                    amp: 0.5
-                                    attack: 0.2
-                                - osc:
-                                    freq: "f * 2.2"
-                                    amp: 0.5
-                                    attack: 0.2
-                                - osc:
-                                    freq: "f * 2.3"
-                                    amp: 0.5
-                                    attack: 0.2
-                                - osc:
-                                    freq: "f * 5"
-                                    amp: 0.5
-                                    attack: 0.2
-                  - osc:
-                      freq: "f * 1.5"
-                      amp: 0.5
-                      attack: 0.2
-                  - osc:
-                      freq: "f * 2"
-                      amp: 0.5
-                      attack: 0.2
+                main:
+                  envelope:
+                    duration: 0.01
+                    signal:
+                      expression:
+                        exp: "signal * 0.4"
+                        signal:
+                          mix:
+                            signal1:
+                              osc:
+                                freq: f
+                                attack: 0.2
+                            signal2:
+                              osc:
+                                freq: "f * 0.4"
+                                amp: 0.5
+                                attack: 0.2
+                            signal3:
+                              osc:
+                                freq: "f * 2.2"
+                                amp: 0.5
+                                attack: 0.2
+                            signal4:
+                              osc:
+                                freq: "f * 2.3"
+                                amp: 0.5
+                                attack: 0.2
+                            signal5:
+                              osc:
+                                freq: "f * 5"
+                                amp: 0.5
+                                attack: 0.2
 
 # MIDI with more complex sound
 midi-env:
