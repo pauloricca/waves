@@ -3,8 +3,8 @@
 
 Run with root privileges so the script can capture keyboard events:
 
-    sudo python3 scripts/kb_midi.py major
-    sudo python3 scripts/kb_midi.py minor -1
+    sudo python3 scripts/midi_keyboard.py major
+    sudo python3 scripts/midi_keyboard.py minor -1
 
 Pass an optional octave shift after the scale name to transpose the layout.
 
