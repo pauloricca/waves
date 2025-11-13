@@ -12,8 +12,9 @@ class EnvelopeModel(BaseNodeModel):
     attack: Union[float, str] = 0 # length of attack in seconds (or expression)
     decay: Union[float, str] = 0 # length of decay in seconds (or expression)
     sustain: Union[float, str] = 1.0 # sustain level (0 to 1) (or expression)
+    sustain_duration: Union[float, str] | None = None # how long to hold at sustain level before release (or expression). If None and no gate, release immediately after decay
     release: Union[float, str] = 0 # length of release in seconds (or expression)
-    gate: Optional[WavableValue] = 1.0 # gate signal (>= 0.5 = on, < 0.5 = trigger release)
+    gate: Optional[WavableValue] = None  # gate signal (>= 0.5 = on, < 0.5 = trigger release). If None, use duration-based envelope
     trigger: Optional[WavableValue] = None # trigger signal (0→1 crossing retriggers envelope)
     signal: WavableValue = None # If none, uses a constant signal of 1.0, effectively making it a simple envelope generator
     end: bool | None = None # if True, return empty array after release is complete (signals parent to stop rendering)
@@ -29,7 +30,9 @@ class EnvelopeNode(BaseNode):
 
         # If no gate or end is defined, set end to True for envelope completion
         if model.end is None:
-            self.end = True if model.gate == 1.0 else False
+            # If gate is None (duration-based), default end to True
+            # If gate is specified (gate-based), default end to False
+            self.end = True if model.gate is None else False
         else:
             self.end = model.end
         
@@ -46,12 +49,14 @@ class EnvelopeNode(BaseNode):
             self.state.previous_gate_state = True  # Track previous gate state for retrigger detection
             self.state.sustain_duration_samples = None  # For duration-based envelopes (drums)
             self.state.last_trigger_value = 0.0  # For trigger edge detection
+            self.state.envelope_sample_count = 0  # Track samples within current envelope cycle (resets on retrigger)
 
     def _do_render(self, num_samples, context=None, **params):
         # Evaluate expression parameters
         attack = self.eval_scalar(self.model.attack, context, **params)
         decay = self.eval_scalar(self.model.decay, context, **params)
         sustain = self.eval_scalar(self.model.sustain, context, **params)
+        sustain_duration = self.eval_scalar(self.model.sustain_duration, context, **params) if self.model.sustain_duration is not None else None
         release = self.eval_scalar(self.model.release, context, **params)
         
         # Check for trigger events
@@ -93,6 +98,7 @@ class EnvelopeNode(BaseNode):
                 # Set current_amplitude to the stored value for smooth transition
                 self.state.current_amplitude = retrigger_start_amplitude
                 self.state.sustain_duration_samples = None  # Reset duration tracking
+                self.state.envelope_sample_count = 0  # Reset envelope cycle sample counter
             
             # Update previous gate state
             self.state.previous_gate_state = current_gate_high
@@ -101,9 +107,34 @@ class EnvelopeNode(BaseNode):
             # Use the last gate value to decide
             is_in_sustain = current_gate_high
         else:
-            # No gate parameter - use duration to calculate when to release (for drums)
-            if self.duration is not None:
-                # Calculate sustain duration: total_duration - attack - decay - release
+            # No gate node - but check if we should retrigger from trigger signal
+            if should_retrigger:
+                # Retrigger! Reset envelope to attack phase
+                retrigger_start_amplitude = self.state.current_amplitude
+                
+                self.state.fade_in_multiplier = None
+                self.state.decay_multiplier = None
+                self.state.fade_out_multiplier = None
+                self.state.is_in_decay_phase = False
+                self.state.is_in_sustain_phase = False
+                self.state.is_in_release_phase = False
+                self.state.release_started = False
+                self.state.current_amplitude = retrigger_start_amplitude
+                self.state.sustain_duration_samples = None  # Reset duration tracking
+                self.state.envelope_sample_count = 0  # Reset envelope cycle sample counter
+            # No gate parameter - use sustain_duration or duration to calculate when to release
+            if sustain_duration is not None:
+                # Use explicit sustain_duration parameter (takes precedence over duration)
+                # Great for trigger-based envelopes where you want precise control
+                if self.state.sustain_duration_samples is None:
+                    self.state.sustain_duration_samples = time_to_samples(sustain_duration)
+                
+                # Check if we've exceeded sustain duration
+                sustain_end_sample = time_to_samples(attack ) + time_to_samples(decay ) + self.state.sustain_duration_samples
+                is_in_sustain = self.state.envelope_sample_count < sustain_end_sample
+            elif self.duration is not None:
+                # Calculate sustain duration from total duration: total_duration - attack - decay - release
+                # Used when you want to specify total envelope length
                 if self.state.sustain_duration_samples is None:
                     attack_samples = time_to_samples(attack )
                     decay_samples = time_to_samples(decay )
@@ -113,9 +144,9 @@ class EnvelopeNode(BaseNode):
                 
                 # Check if we've exceeded sustain duration
                 sustain_end_sample = time_to_samples(attack ) + time_to_samples(decay ) + self.state.sustain_duration_samples
-                is_in_sustain = self.number_of_chunks_rendered < sustain_end_sample
+                is_in_sustain = self.state.envelope_sample_count < sustain_end_sample
             else:
-                # No gate and no duration - stay open indefinitely (never release)
+                # No gate, no duration, no trigger - stay open indefinitely (never release)
                 is_in_sustain = True
         
         # Transition from sustain to release
@@ -210,9 +241,28 @@ class EnvelopeNode(BaseNode):
             self.state.is_in_sustain_phase = True
             self.state.current_amplitude = sustain
         
-        # Apply sustain level to remaining unprocessed samples
+        # Apply sustain level to remaining unprocessed samples (only if not in release)
         if self.state.is_in_sustain_phase and not self.state.is_in_release_phase and processed_samples < len(signal_wave):
-            signal_wave[processed_samples:] *= sustain
+            # Calculate how many samples until release should start (if duration-based envelope)
+            if self.duration is not None and not self.gate_node:
+                sustain_end_sample = time_to_samples(attack) + time_to_samples(decay) + self.state.sustain_duration_samples
+                samples_until_release = sustain_end_sample - self.state.envelope_sample_count
+                
+                # If release starts within this chunk, only apply sustain up to that point
+                if samples_until_release < len(signal_wave) - processed_samples:
+                    if samples_until_release > 0:
+                        signal_wave[processed_samples:processed_samples + samples_until_release] *= sustain
+                    # Trigger transition to release for the remaining samples in this chunk
+                    self.state.is_in_release_phase = True
+                    self.state.release_started = True
+                    self.state.is_in_sustain_phase = False
+                    processed_samples += samples_until_release
+                else:
+                    # Apply sustain to all remaining samples
+                    signal_wave[processed_samples:] *= sustain
+            else:
+                # Gate-based or infinite sustain
+                signal_wave[processed_samples:] *= sustain
             # Current amplitude stays at sustain level
             self.state.current_amplitude = sustain
         
@@ -262,6 +312,9 @@ class EnvelopeNode(BaseNode):
             # If end=True, return empty array to signal completion
             if self.end:
                 return empty_mono()
+        
+        # Increment envelope sample counter for duration tracking
+        self.state.envelope_sample_count += num_samples
 
         return signal_wave
 

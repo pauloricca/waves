@@ -131,14 +131,15 @@ hihat:
 
 snare:
   mix:
-    signals:
-      - osc:
-          type: sin
-          freq: 200
-          duration: 0.15
-      - osc:
-          type: noise
-          duration: 0.1
+    duration: 0.15
+    my_main_sound:
+        osc:
+            type: sin
+            freq: 200
+    my_noise:
+        osc:
+            type: noise
+            duration: 0.1
 ```
 
 ### Example 4: Expression-Based Sound Design
@@ -230,13 +231,15 @@ my_bass:
 # Use it multiple times with overrides
 composition:
   mix:
-    signals:
-      - my_bass:
-          freq: 100
-      - my_bass:
-          freq: 150
-      - my_bass:
-          freq: 200
+        my_bass_1:
+            osc:
+                freq: 100
+        my_bass_2:
+            osc:
+                freq: 150
+        my_bass_3:
+            osc:
+                freq: 200
 ```
 
 ## Output

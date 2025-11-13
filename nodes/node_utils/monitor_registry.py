@@ -10,61 +10,117 @@ if TYPE_CHECKING:
     from nodes.node_utils.base_node import BaseNode
 
 
-def create_monitor_meter(value: float, min_val: float, max_val: float, width: int = 40, color_scheme: str = "level") -> str:
+def create_monitor_meter(value: float, min_val: float, max_val: float, width: int = 40, color_scheme: str = "level", is_bipolar: bool = False) -> str:
     """
-    Create a visual meter using vertical bars (reuses display_stats logic).
+    Create a visual meter representation of a value.
     
     Args:
-        value: Current value
-        min_val: Minimum value of the range
-        max_val: Maximum value of the range
-        width: Width of the meter in characters
-        color_scheme: "level" for green-yellow-red, "value" for blue
+        value: The current value to display
+        min_val: The minimum value in the range
+        max_val: The maximum value in the range
+        width: The width of the meter in characters
+        color_scheme: Either "level" for level-based coloring or "value" for single color
+        is_bipolar: If True, display as centered meter (negative left, positive right)
     
     Returns:
-        A string representing the meter with colors
+        A colored string representation of the meter
     """
-    # Normalize value to 0-1 range
-    if max_val == min_val:
-        normalized = 0.5  # Default to middle if no range
-    else:
-        normalized = (value - min_val) / (max_val - min_val)
-        normalized = max(0.0, min(1.0, normalized))  # Clamp to 0-1
+    # Clamp value to range
+    value = max(min_val, min(max_val, value))
     
-    # Calculate how many blocks to fill
+    # Bipolar mode: centered at 0
+    if is_bipolar:
+        # Purple color for bipolar meters
+        color = '\033[95m'  # Magenta/Purple
+        reset = '\033[0m'
+        empty_color = '\033[90m'  # Grey
+        
+        # Calculate center position (ensure even width)
+        half_width = width // 2
+        
+        # Determine if value is negative or positive
+        if value > 0:
+            # Positive: fill from center to right
+            normalized = value / max_val if max_val > 0 else 0
+            filled = normalized * half_width
+            full_blocks = int(filled)
+            partial = filled - full_blocks
+            
+            # Unicode block characters for smooth visualization
+            blocks = ['▏', '▎', '▍', '▌', '▋', '▊', '▉', '█']
+            partial_char = blocks[min(int(partial * 8), 7)] if partial > 0 else ''
+            
+            # Build: empty left + filled right + empty right
+            empty_left = empty_color + ('│' * half_width) + reset
+            filled_right = color + ('█' * full_blocks) + partial_char + reset
+            empty_right = empty_color + ('│' * (half_width - full_blocks - (1 if partial_char else 0))) + reset
+            
+            return empty_left + filled_right + empty_right
+        elif value < 0:
+            # Negative: fill from center to left
+            normalized = abs(value) / abs(min_val) if min_val < 0 else 0
+            filled = normalized * half_width
+            full_blocks = int(filled)
+            partial = filled - full_blocks
+            
+            # For left-side fill, we need the partial block to appear filled from the RIGHT
+            # Use inverse video to flip colors: show the complement block with inverted colors
+            # e.g., to show 1/8 filled from right, show 7/8 filled from left with inverse video
+            blocks = ['▏', '▎', '▍', '▌', '▋', '▊', '▉', '█']
+            # Calculate complement: 1/8 becomes 7/8, 2/8 becomes 6/8, etc.
+            complement_index = 7 - min(int(partial * 8), 7)
+            partial_char = blocks[complement_index] if partial > 0 and complement_index < 7 else ''
+            
+            # Use inverse video for the partial block to flip foreground/background
+            inverse = '\033[7m'  # Inverse video
+            
+            # Build: empty left + inverted partial (appears filled from right) + full blocks + empty right
+            # The inverted partial block on the LEFT edge shows growth from left
+            empty_left = empty_color + ('│' * (half_width - full_blocks - (1 if partial_char else 0))) + reset
+            if partial_char:
+                filled_left = inverse + color + partial_char + reset + reset + color + ('█' * full_blocks) + reset
+            else:
+                filled_left = color + ('█' * full_blocks) + reset
+            empty_right = empty_color + ('│' * half_width) + reset
+            
+            return empty_left + filled_left + empty_right
+        else:
+            # Zero: just show empty meter
+            return empty_color + ('│' * width) + reset
+    
+    # Standard mode: left-to-right fill
+    # Normalize to 0-1 range
+    normalized = (value - min_val) / (max_val - min_val) if max_val > min_val else 0
+    
+    # Calculate how many characters to fill
     filled = normalized * width
     full_blocks = int(filled)
     partial = filled - full_blocks
     
-    # Choose partial block character based on fractional part
-    # Unicode block elements: ▏▎▍▌▋▊▉█
-    partial_chars = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉']
-    partial_idx = int(partial * len(partial_chars))
-    partial_char = partial_chars[partial_idx] if partial_idx < len(partial_chars) else ''
+    # Unicode block characters for smooth visualization
+    blocks = ['▏', '▎', '▍', '▌', '▋', '▊', '▉', '█']
+    partial_char = blocks[min(int(partial * 8), 7)] if partial > 0 else ''
+    
+    # Create the meter string
+    if color_scheme == "level":
+        # Green-yellow-red gradient based on level
+        if normalized < 0.5:
+            color = '\033[92m'  # Green
+        elif normalized < 0.8:
+            color = '\033[93m'  # Yellow
+        else:
+            color = '\033[91m'  # Red
+    else:
+        color = '\033[94m'  # Blue
+    
+    reset = '\033[0m'
+    empty_color = '\033[90m'  # Grey
     
     # Build the meter
-    # Choose color scheme
-    if color_scheme == "value":
-        # Blue for value-based meters (not heat/level based)
-        color_code = '\033[94m'  # Blue
-    else:
-        # Level-based: Green (0-0.7), Yellow (0.7-0.9), Red (0.9+)
-        if normalized < 0.7:
-            color_code = '\033[92m'  # Green
-        elif normalized < 0.9:
-            color_code = '\033[93m'  # Yellow
-        else:
-            color_code = '\033[91m'  # Red
+    filled_part = color + ('█' * full_blocks) + partial_char + reset
+    empty_part = empty_color + ('│' * (width - full_blocks - (1 if partial_char else 0))) + reset
     
-    reset_code = '\033[0m'
-    grey_code = '\033[90m'
-    
-    # Full blocks
-    filled_part = '█' * full_blocks + partial_char
-    # Empty part with vertical bars
-    empty_part = f"{grey_code}{'|' * (width - full_blocks - (1 if partial_char else 0))}{reset_code}"
-    
-    return f"{color_code}{filled_part}{reset_code}{empty_part}"
+    return filled_part + empty_part
 
 
 class NodeMonitor:
@@ -79,6 +135,11 @@ class NodeMonitor:
         self.peak_level = 0.0
         self.peak_left = 0.0
         self.peak_right = 0.0
+        self.min_level = 0.0  # For bipolar mode
+        self.min_left = 0.0  # For bipolar stereo mode
+        self.min_right = 0.0  # For bipolar stereo mode
+        self.is_stereo = False  # Track whether the last update was stereo
+        self.is_bipolar = False  # Track whether this is a bipolar monitor
         
         # Use explicit ID if available, otherwise use the full node_id
         self.display_name = node_id
@@ -96,27 +157,36 @@ class NodeMonitor:
         
         # Get monitor settings from node
         use_abs = getattr(self.node, '_monitor_use_abs', True)
+        self.is_bipolar = not use_abs  # Store bipolar mode for display
         
         # Check if output is stereo (2D array with 2 channels)
         if output.ndim == 2 and output.shape[1] == 2:
+            self.is_stereo = True
             if use_abs:
                 self.peak_left = float(np.max(np.abs(output[:, 0])))
                 self.peak_right = float(np.max(np.abs(output[:, 1])))
             else:
+                # For bipolar, track both positive and negative peaks
                 self.peak_left = float(np.max(output[:, 0]))
                 self.peak_right = float(np.max(output[:, 1]))
+                self.min_left = float(np.min(output[:, 0]))
+                self.min_right = float(np.min(output[:, 1]))
             self.peak_level = max(self.peak_left, self.peak_right)
         else:
+            self.is_stereo = False
             if use_abs:
                 self.peak_level = float(np.max(np.abs(output)))
             else:
+                # For bipolar, track both positive and negative peaks
                 self.peak_level = float(np.max(output))
+                self.min_level = float(np.min(output))
     
     def format_line(self) -> str:
         """Format display line for this monitor. Override in subclasses for custom display."""
         # Get monitor range and color scheme from node (dynamically, so it picks up changes)
         min_val, max_val = getattr(self.node, '_monitor_range', (0.0, 1.0))
         color_scheme = getattr(self.node, '_monitor_color_scheme', 'level')
+        is_bipolar = getattr(self, 'is_bipolar', False)
         
         # Total width for meters (slightly wider than main output meter)
         total_meter_width = 24
@@ -124,13 +194,25 @@ class NodeMonitor:
         if self.is_stereo:
             # Show separate L/R meters for stereo
             # Total: "L " (2) + meter (10) + " R " (3) + meter (9) = 24 chars
-            meter_l = create_monitor_meter(self.peak_left, min_val, max_val, width=10, color_scheme=color_scheme)
-            meter_r = create_monitor_meter(self.peak_right, min_val, max_val, width=9, color_scheme=color_scheme)
-            value_str = f"L:{self.peak_left:.2f} R:{self.peak_right:.2f}"
+            if is_bipolar:
+                # For bipolar, show both positive and negative ranges
+                meter_l = create_monitor_meter(self.peak_left, min_val, max_val, width=10, color_scheme=color_scheme, is_bipolar=True)
+                meter_r = create_monitor_meter(self.peak_right, min_val, max_val, width=9, color_scheme=color_scheme, is_bipolar=True)
+                value_str = f"L:{self.peak_left:.2f} R:{self.peak_right:.2f}"
+            else:
+                meter_l = create_monitor_meter(self.peak_left, min_val, max_val, width=10, color_scheme=color_scheme)
+                meter_r = create_monitor_meter(self.peak_right, min_val, max_val, width=9, color_scheme=color_scheme)
+                value_str = f"L:{self.peak_left:.2f} R:{self.peak_right:.2f}"
             return f"L {meter_l} R {meter_r}  {self.display_name} ({value_str})"
         else:
-            meter = create_monitor_meter(self.peak_level, min_val, max_val, width=total_meter_width, color_scheme=color_scheme)
-            return f"{meter}  {self.display_name} ({self.peak_level:.2f})"
+            if is_bipolar:
+                # For bipolar mono, show the value that's further from zero
+                display_value = self.peak_level if abs(self.peak_level) > abs(getattr(self, 'min_level', 0)) else getattr(self, 'min_level', 0)
+                meter = create_monitor_meter(display_value, min_val, max_val, width=total_meter_width, color_scheme=color_scheme, is_bipolar=True)
+                return f"{meter}  {self.display_name} ({display_value:.2f})"
+            else:
+                meter = create_monitor_meter(self.peak_level, min_val, max_val, width=total_meter_width, color_scheme=color_scheme)
+                return f"{meter}  {self.display_name} ({self.peak_level:.2f})"
 
 
 class SequencerMonitor(NodeMonitor):
@@ -152,9 +234,10 @@ class SequencerMonitor(NodeMonitor):
             # Get monitor range and color scheme from node (dynamically)
             min_val, max_val = getattr(self.node, '_monitor_range', (0.0, 1.0))
             color_scheme = getattr(self.node, '_monitor_color_scheme', 'level')
+            is_bipolar = getattr(self, 'is_bipolar', False)
             
             # Create a narrower meter (about 1/3 of standard width = 8 chars)
-            meter = create_monitor_meter(self.peak_level, min_val, max_val, width=8, color_scheme=color_scheme)
+            meter = create_monitor_meter(self.peak_level, min_val, max_val, width=8, color_scheme=color_scheme, is_bipolar=is_bipolar)
             
             # Build timeline visualization with | | | █ | | |
             # One character per step, with █ for current step

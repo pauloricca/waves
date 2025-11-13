@@ -22,7 +22,7 @@ MIDI_OUTPUT_DEVICE = None  # MIDI output device name, or None to use first avail
 MIDI_CLOCK_ENABLED = True  # Enable MIDI clock output when tempo node has source='internal'
 
 
-RENDERED_MASTER_GAIN = 0.6
+RENDERED_MASTER_GAIN = 1
 DO_NORMALISE_EACH_SOUND = False
 DEFAULT_PLAYBACK_TIME = 4  # seconds, for nodes without explicit duration
 
