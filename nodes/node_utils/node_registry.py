@@ -10,6 +10,7 @@ from nodes.follow import FOLLOW_DEFINITION
 from nodes.hold import HOLD_DEFINITION
 from nodes.input import INPUT_DEFINITION
 from nodes.interval import INTERVAL_DEFINITION
+from nodes.glide import GLIDE_DEFINITION
 from nodes.non_realtime.invert import INVERT_DEFINITION
 from nodes.map import MAP_DEFINITION
 from nodes.midi_in import MIDI_IN_DEFINITION
@@ -57,6 +58,7 @@ NODE_REGISTRY = [
     MULTIPLY_DEFINITION,
     REFERENCE_DEFINITION,
     HOLD_DEFINITION,
+    GLIDE_DEFINITION,
     FOLLOW_DEFINITION,
     INPUT_DEFINITION,
     INTERVAL_DEFINITION,
