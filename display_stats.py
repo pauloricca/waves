@@ -10,6 +10,7 @@ from collections import deque
 from config import *
 from utils import get_cached_terminal_size, visualise_wave
 from nodes.node_utils.midi_utils import get_last_midi_message_display
+from nodes.node_utils.monitor_registry import create_monitor_meter
 
 
 # Global rolling average tracker for CPU usage
@@ -35,54 +36,10 @@ def print_average_cpu_usage():
         print(f"Average CPU usage: {avg_cpu:.2f}%")
 
 
-def create_loudness_meter(loudness: float, width: int = 20) -> str:
-    """
-    Create a visual loudness meter using Unicode block characters.
-    
-    Args:
-        loudness: Loudness level from 0.0 to 1.0 (and potentially higher for clipping)
-        width: Width of the meter in characters
-    
-    Returns:
-        A string representing the loudness meter with colors
-    """
-    # Clamp loudness to max 1.0 for display to keep meter width fixed
-    display_loudness = min(loudness, 1.0)
-    
-    # Calculate how many blocks to fill
-    filled = display_loudness * width
-    full_blocks = int(filled)
-    partial = filled - full_blocks
-    
-    # Choose partial block character based on fractional part
-    # Unicode block elements: ▏▎▍▌▋▊▉█
-    partial_chars = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉']
-    partial_idx = int(partial * len(partial_chars))
-    partial_char = partial_chars[partial_idx] if partial_idx < len(partial_chars) else ''
-    
-    # Build the meter
-    # Use different colors based on level:
-    # Green (0-0.7), Yellow (0.7-0.9), Red (0.9+)
-    if loudness < 0.7:
-        color_code = '\033[92m'  # Green
-    elif loudness < 0.9:
-        color_code = '\033[93m'  # Yellow
-    else:
-        color_code = '\033[91m'  # Red
-    
-    reset_code = '\033[0m'
-    
-    # Full blocks
-    filled_part = '█' * full_blocks + partial_char
-    # Empty part
-    # Use grey color for empty blocks
-    grey_code = '\033[90m'
-    empty_part = f"{grey_code}{'|' * (width - full_blocks - (1 if partial_char else 0))}{reset_code}"
-    
-    return f"{color_code}{filled_part}{reset_code}{empty_part}"
 
 
-def format_stats_line(cpu_usage_percent: float, elapsed_seconds: float, is_recording: bool, loudness: float = 0.0, midi_message: str = None) -> str:
+
+def format_stats_line(cpu_usage_percent: float, elapsed_seconds: float, is_recording: bool, loudness: float = 0.0, loudness_left: float = None, loudness_right: float = None, midi_message: str = None) -> str:
     """
     Format the statistics line with CPU usage, elapsed time, and recording status.
     
@@ -90,8 +47,9 @@ def format_stats_line(cpu_usage_percent: float, elapsed_seconds: float, is_recor
         cpu_usage_percent: CPU usage as a percentage (0-100+)
         elapsed_seconds: Elapsed time in seconds since start
         is_recording: Whether recording is currently active
-        loudness: Current loudness level (0.0 to 1.0+)
-        show_loudness: Whether to show the loudness meter
+        loudness: Current loudness level (0.0 to 1.0+) - used for mono or max of stereo
+        loudness_left: Optional left channel loudness for stereo display
+        loudness_right: Optional right channel loudness for stereo display
         midi_message: Optional MIDI message display string
     
     Returns:
@@ -100,8 +58,15 @@ def format_stats_line(cpu_usage_percent: float, elapsed_seconds: float, is_recor
     # Build parts list starting with optional loudness meter
     parts = []
     
-    # Add loudness meter
-    loudness_meter = create_loudness_meter(loudness, width=24)
+    # Add loudness meter (stereo or mono)
+    if loudness_left is not None and loudness_right is not None:
+        # Stereo meter: "L " (2) + meter (10) + " R " (3) + meter (9) = 24 chars
+        meter_l = create_monitor_meter(loudness_left, 0.0, 1.0, width=10, color_scheme="level")
+        meter_r = create_monitor_meter(loudness_right, 0.0, 1.0, width=9, color_scheme="level")
+        loudness_meter = f"L {meter_l} R {meter_r}"
+    else:
+        # Mono meter
+        loudness_meter = create_monitor_meter(loudness, 0.0, 1.0, width=24, color_scheme="level")
     parts.append(loudness_meter)
     
     # Format CPU usage
@@ -172,8 +137,20 @@ def run_visualizer_and_stats(
                 cpu_usage_samples.append(cpu_usage_percent)
                 
                 # Calculate loudness (peak of recent samples)
+                # Note: visualised_wave_buffer contains stereo data if available (from waves.py)
                 buffer_array = np.array(visualised_wave_buffer)
-                loudness = np.max(np.abs(buffer_array)) if len(buffer_array) > 0 else 0.0
+                
+                # Check if buffer contains stereo data (2D array with 2 columns)
+                if buffer_array.ndim == 2 and buffer_array.shape[1] == 2:
+                    # Stereo: calculate separate L/R loudness
+                    loudness_left = np.max(np.abs(buffer_array[:, 0])) if len(buffer_array) > 0 else 0.0
+                    loudness_right = np.max(np.abs(buffer_array[:, 1])) if len(buffer_array) > 0 else 0.0
+                    loudness = max(loudness_left, loudness_right)
+                else:
+                    # Mono
+                    loudness = np.max(np.abs(buffer_array)) if len(buffer_array) > 0 else 0.0
+                    loudness_left = None
+                    loudness_right = None
                 
                 # Get last MIDI message for display
                 midi_message = get_last_midi_message_display()
@@ -184,6 +161,8 @@ def run_visualizer_and_stats(
                     elapsed,
                     recording_active_ref[0],
                     loudness,
+                    loudness_left,
+                    loudness_right,
                     midi_message=midi_message
                 )
                 
@@ -196,9 +175,15 @@ def run_visualizer_and_stats(
                 
                 # Add visualization if enabled
                 if DO_VISUALISE_OUTPUT:
+                    # Convert buffer to numpy array and to mono for waveform display
+                    buffer_for_viz = np.array(visualised_wave_buffer)
+                    # Import to_mono from utils
+                    from utils import to_mono as convert_to_mono
+                    mono_buffer = convert_to_mono(buffer_for_viz)
+                    
                     # Render visualization to buffer (returns a string with newlines)
                     viz_output = visualise_wave(
-                        np.array(visualised_wave_buffer),
+                        mono_buffer,
                         do_normalise=False
                     )
                     

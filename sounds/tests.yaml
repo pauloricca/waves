@@ -956,115 +956,11 @@ sample-control:
 
 flanger:
   delay:
-    time:
-      osc:
-        type: sin
-        freq: 0.5
-        range: [0.001, 0.01]  # Varies from 1ms to 10ms
+    time: 0.2
     signal:
       osc:
         type: sin
         freq: 440
-
-# CC 21 wet amp
-# CC 22 delay time
-# CC 23 sample offset
-# CC 4  dry to wet amp
-# CC 5  dry amp
-# CC 6  feedback amp
-# CC 7  sample speed
-echo:
-  mix:
-    signals:
-      - map:
-          from: [-1, 1]
-          to: 
-            - midi_cc:
-                channel: 0
-                cc: 5
-                range: [0, -1]
-                initial: -1
-            - midi_cc:
-                channel: 0
-                cc: 5
-                range: [0, 1]
-                initial: 1
-          signal:
-            sample:
-              id: paulo
-              file: samples/satanic.wav
-              loop: true
-              start: 0.5
-              offset:
-                midi_cc:
-                  channel: 0
-                  cc: 23
-                  range: [-1, 1]
-                  initial: 0
-              speed:
-                midi_cc:
-                  channel: 0
-                  cc: 7
-                  range: [-2, 2]
-                  initial: 1
-      - map:
-          from: [-1, 1]
-          to: 
-            - midi_cc:
-                channel: 0
-                cc: 21
-                range: [0, -1]
-                initial: 0
-            - midi_cc:
-                channel: 0
-                cc: 21
-                range: [0, 1]
-                initial: 0
-          signal:
-            delay: 
-              id: echo
-              mode: tape
-              time: 
-                midi_cc:
-                  channel: 0
-                  cc: 22
-                  range: [0, 5]
-                  initial: 1
-              signal:
-                mix:
-                  signals:
-                    - map:
-                        from: [-1, 1]
-                        to: 
-                          - midi_cc:
-                              channel: 0
-                              cc: 4
-                              range: [0, -1]
-                              initial: 0
-                          - midi_cc:
-                              channel: 0
-                              cc: 4
-                              range: [0, 1]
-                              initial: 0
-                        signal:
-                          reference:
-                            ref: paulo
-                    - map:
-                        from: [-1, 1]
-                        to: 
-                          - midi_cc:
-                              channel: 0
-                              cc: 6
-                              range: [0, -1]
-                              initial: 0
-                          - midi_cc:
-                              channel: 0
-                              cc: 6
-                              range: [0, 1]
-                              initial: 0
-                        signal:
-                          reference:
-                            ref: echo
 
 
 # CC 21 wet amp
@@ -1076,115 +972,116 @@ echo:
 # CC 7  sample speed
 echo-exp:
   mix:
-    signals:
       # DRY Signal
-      - expression:
-          exp: "amp * signal"
-          signal:
-            sample:
-              id: paulo
-              file: samples/satanic.wav
-              loop: true
-              start: 0.5
-              offset:
-                midi_cc:
-                  channel: 0
-                  cc: 23
-                  range: [-1, 1]
-                  initial: 0
-              speed:
-                midi_cc:
-                  channel: 0
-                  cc: 7
-                  range: [-2, 2]
-                  initial: 1
-          amp:
-            midi_cc:
-              channel: 0
-              cc: 5
-              range: [0, 1]
-              initial: 1
-      # WET Signal
-      - expression:
-          exp: "amp * signal"
-          amp:
-            midi_cc:
-              channel: 0
-              cc: 21
-              range: [0, 1]
-              initial: 0
-          signal:
-            delay: 
-              id: echo
-              mode: tape
-              time: 
-                midi_cc:
-                  channel: 0
-                  cc: 22
-                  range: [0, 5]
-                  initial: 1
-              signal:
-                mix:
-                  signals:
-                    # DRY into delay
-                    - expression:
-                        exp: "max(amp_a, amp_b) * signal"
-                        amp_a:
-                          midi_cc:
-                            channel: 0
-                            cc: 4
-                            range: [0, 1]
-                            initial: 0
-                        amp_b:
-                          midi_cc:
-                            channel: 0
-                            cc: 36
-                            range: [0, 1]
-                            initial: 0
-                        signal:
-                          reference:
-                            ref: paulo
-                    # WET Feedback into delay
-                    - expression:
-                        exp: "amp * signal"
-                        amp:
-                          midi_cc:
-                            channel: 0
-                            cc: 6
-                            range: [0, 1]
-                            initial: 0
-                        signal:
-                          reference:
-                            ref: echo
+    dry:
+      expression:
+        exp: "amp * signal"
+        signal:
+          sample:
+            id: paulo
+            file: samples/satanic.wav
+            loop: true
+            start: 0.5
+            offset:
+              midi_cc:
+                channel: 0
+                cc: 23
+                range: [-1, 1]
+                initial: 0
+            speed:
+              midi_cc:
+                channel: 0
+                cc: 7
+                range: [-2, 2]
+                initial: 1
+        amp:
+          midi_cc:
+            channel: 0
+            cc: 5
+            range: [0, 1]
+            initial: 1
+    wet:
+      expression:
+        exp: "amp * signal"
+        amp:
+          midi_cc:
+            channel: 0
+            cc: 21
+            range: [0, 1]
+            initial: 0
+        signal:
+          delay: 
+            id: echo
+            mode: tape
+            time: 
+              midi_cc:
+                channel: 0
+                cc: 22
+                range: [0, 5]
+                initial: 1
+            signal:
+              mix:
+                dry:
+                  expression:
+                    exp: "max(amp_a, amp_b) * signal"
+                    amp_a:
+                      midi_cc:
+                        channel: 0
+                        cc: 4
+                        range: [0, 1]
+                        initial: 0
+                    amp_b:
+                      midi_cc:
+                        channel: 0
+                        cc: 36
+                        range: [0, 1]
+                        initial: 0
+                    signal:
+                      reference:
+                        ref: paulo
+                wet:
+                  expression:
+                    exp: "amp * signal"
+                    amp:
+                      midi_cc:
+                        channel: 0
+                        cc: 6
+                        range: [0, 1]
+                        initial: 0
+                    signal:
+                      reference:
+                        ref: echo
 
 
 echo2:
   mix:
     duration: 3
-    signals:
-      - osc:
-          id: paulo
-          type: sin
-          freq: 440
-          duration: 0.1
-      - map:
-          from: [-1, 1]
-          to: [-0.7, 0.7]
-          signal:
-            delay: 
-              id: echo
-              time: 0.2
-              signal:
-                mix:
-                  signals:
-                    - reference:
-                        ref: paulo
-                    - map:
-                        from: [-1, 1]
-                        to: [-0.7, 0.7]
-                        signal:
-                          reference:
-                            ref: echo
+    dry:
+      osc:
+        id: paulo
+        type: sin
+        freq: 440
+        duration: 0.1
+    wet:
+      map:
+        from: [-1, 1]
+        to: [-0.7, 0.7]
+        signal:
+          delay: 
+            id: echo
+            time: 0.2
+            signal:
+              mix:
+                dry:
+                  reference:
+                    ref: paulo
+                wet:
+                  map:
+                    from: [-1, 1]
+                    to: [-0.7, 0.7]
+                    signal:
+                      reference:
+                        ref: echo
 
 
 # Test snap with range and interval
@@ -1266,110 +1163,7 @@ test-snap-midi_in:
                     cc: 23
                     range: [200, 600]
 
-# Test envelope follower
-test-follow:
-  tempo:
-    bpm: 119.9
-    signal:
-      mix:
-        signals:
-          - sequencer:
-              interval: sixteenth
-              repeat: 1000
-              steps:
-                -
-                - 
-                - chop c10
-                -
-                - hihat
-                - 
-                - chop
-                -
-                -
-                - 
-                - chop c3
-                -
-                - hihat
-                - 
-                - chop
-                -
-          - sequencer:
-              id: kick-drum
-              interval: sixteenth
-              repeat: 1000
-              steps:
-                - kick
-                - kick
-                - kick
-                - kick
-                - kick
-                - 
-                -
-                -
-                - kick
-                - 
-                -
-                -
-                - kick
-                - 
-                -
-                -
-          - context:
-              # freq:
-              #   follow:
-              #     attack: 0.002
-              #     release: 0.3
-              #     range: [40, 80]
-              #     signal:
-              #       reference:
-              #         ref: kick-drum
-              freq:
-                automation:
-                  mode: overlap
-                  interval: bar * 2
-                  overlap: 0.5
-                  repeat: 100
-                  steps:
-                  - 60
-                  - 90
-                  - 75
-                  - 110
-              signal:
-                expression:
-                    exp: amp * (osc1 + osc2)
-                    amp:
-                      follow:
-                        attack: 0.002
-                        release: 0.3
-                        signal:
-                          reference:
-                            ref: kick-drum
-                    osc1:
-                      osc:
-                        type: tri
-                        freq: freq
-                    osc2:
-                      osc:
-                        type: tri
-                        amp: 0.5
-                        freq: freq * 2
-                
 
-test-2:
-  tempo:
-    bpm: 119.9
-    signal:
-      mix:
-        signals:
-          - sequencer:
-              id: kick-drum
-              interval: sixteenth
-              repeat: 1000
-              steps:
-                - kick
-                - 
-                - 
-                - 
 
 # Test automation node
 test-automation-step:
@@ -1444,35 +1238,6 @@ test-automation-nodes:
               freq: 5
               range: [400, 800]
 
-# Test interval node with chromatic scale (default)
-test_interval_chromatic:
-  osc:
-    duration: 2
-    type: sin
-    freq:
-      interval:
-        root: A4
-        note:
-          automation:
-            interval: 0.25
-            mode: step
-            steps: [0, 3, 4, 5, 7, 9, 11, 12]  # Major scale degrees
-
-# Test interval node with blues scale
-test_interval_blues:
-  osc:
-    duration: 2
-    type: sin
-    freq:
-      interval:
-        root: C4
-        note:
-          automation:
-            interval: 0.2
-            mode: step
-            steps: [0, 1, 2, 3, 4, 5, 6, 7]  # Indices in blues scale
-        scale: blues  # Expression evaluates to [0, 3, 5, 6, 7, 10]
-
 # Test interval node with major pentatonic scale using list
 test_interval_pentatonic:
   osc:
@@ -1492,32 +1257,18 @@ test_interval_pentatonic:
 test_dollar_reference:
   mix:
     duration: 2
-    signals:
+    lfo:
       # Define an LFO with an id
-      - osc:
-          id: my_lfo
-          type: sin
-          freq: 2
-          range: [200, 800]
-      
-      # Use it directly in an expression with $ syntax (no quotes needed!)
-      - osc:
-          type: sin
-          freq:
-            expression:
-              exp: $my_lfo  # Syntax sugar for referencing my_lfo
-      
-      # Use it in a more complex expression
-      - osc:
-          type: tri
-          freq:
-            expression:
-              exp: $my_lfo * 1.5  # Modulate with multiplication
-      
+      osc:
+        id: my_lfo
+        type: sin
+        freq: 2
+        range: [200, 800]
+    referencing:
       # Use it directly as a WavableValue without quotes
-      - osc:
-          type: saw
-          freq: $my_lfo * 0.5  # $ works in string expressions without quotes!
+      osc:
+        type: saw
+        freq: $my_lfo * 0.5  # $ works in string expressions without quotes!
 
 # Test $ syntax with multiple references
 test_dollar_multi_reference:

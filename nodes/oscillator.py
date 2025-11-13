@@ -81,9 +81,13 @@ class OscillatorNode(BaseNode):
         # Create range mapper if range is specified
         self.range_mapper = RangeMapper.from_model_range(self, model.range)
         
-        # Set monitor range if range is specified (for static ranges)
+        # Set monitor range
         if model.range and isinstance(model.range[0], (int, float)) and isinstance(model.range[1], (int, float)):
+            # Use specified range for monitoring
             self.set_monitor_range(float(model.range[0]), float(model.range[1]))
+        else:
+            # Default oscillator range is [-1, 1]
+            self.set_monitor_range(-1.0, 1.0)
         
         # Persistent state (survives hot reload)
         if do_initialise_state:

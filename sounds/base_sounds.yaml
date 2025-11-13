@@ -421,67 +421,63 @@ hihat:
 kick:
   mix:
     duration: 1
-    signals:
-      # Rumble
-      - osc:
-          type: sin
-          freq: [420, [55, 0.02], [45, 0.15]]
-          amp: 0.6
-          attack: 0.001
-          release: 0.6
-          duration: 0.75
+    rumble:
+      osc:
+        type: sin
+        freq: [420, [55, 0.02], [45, 0.15]]
+        amp: 0.6
+        attack: 0.001
+        release: 0.6
+        duration: 0.75
+    body:
+      osc:
+        type: sin
+        freq: [150, [55, 0.015]]
+        amp: 0.3
+        attack: 0.0001
+        release: 0.25
+        duration: 0.2
+        phase:
+          osc:
+            type: sin
+            freq: [250, [85, 0.015]]
+            amp: [0.8, [0.1, 0.03]]
+            attack: 0.0005
+            release: 0.15
+            duration: 0.2
+    upper_harmonics:
+      osc:
+        type: tri
+        freq: [180, [110, 0.01]]
+        amp: 0.01
+        attack: 0.001
+        release: 0.15
+        duration: 0.2
+    punch:
+      osc:
+        type: noise
+        amp: 0.02
+        attack: 0.0001
+        release: 0.008
+        duration: 0.004
       
-      # Body
-      - osc:
-          type: sin
-          freq: [150, [55, 0.015]]
-          amp: 0.3
-          attack: 0.0001
-          release: 0.25
-          duration: 0.2
-          phase:
-            osc:
-              type: sin
-              freq: [250, [85, 0.015]]
-              amp: [0.8, [0.1, 0.03]]
-              attack: 0.0005
-              release: 0.15
-              duration: 0.2
+    extra_punch:
+      osc:
+        type: sin
+        freq: [3500, [800, 0.003]]
+        amp: 0.1
+        attack: 0.0001
+        release: 0.006
+        duration: 0.01
       
-      # Upper harmonics
-      - osc:
-          type: tri
-          freq: [180, [110, 0.01]]
-          amp: 0.01
-          attack: 0.001
-          release: 0.15
-          duration: 0.2
-      
-      # Punch
-      - osc:
-          type: noise
-          amp: 0.02
-          attack: 0.0001
-          release: 0.008
-          duration: 0.004
-      
-      # Extra punch
-      - osc:
-          type: sin
-          freq: [3500, [800, 0.003]]
-          amp: 0.1
-          attack: 0.0001
-          release: 0.006
-          duration: 0.01
-      
-      # Sub harmonic
-      - osc:
-          type: sin
-          freq: 40
-          amp: 0.4
-          attack: 0.002
-          release: 0.5
-          duration: 0.6
+    sub_harmonic:
+      osc:
+        type: sin
+        freq: 40
+        amp: 0.4
+        attack: 0.002
+        release: 0.5
+        duration: 0.6
 
 kick2:
   map:
@@ -537,3 +533,203 @@ kick2:
               release: 0.5
               duration: 0.4
               freq: 18
+
+snare:
+  mix:
+    # Tonal component (shell resonance)
+    tone:
+      osc:
+        type: tri
+        freq: [260, [180, 0.05]]
+        amp: 0.4
+        attack: 0.001
+        release: 0.15
+        duration: 0.2
+    # Noise component (snares)
+    noise:
+      filter:
+        type: highpass
+        cutoff: 2000
+        signal:
+          osc:
+            type: noise
+            amp: 0.3
+            attack: 0.001
+            release: 0.08
+            duration: 0.15
+
+snare_test:
+  sequencer:
+    interval: 0.12
+    steps:
+      - kick
+      -
+      - clap
+      -
+      - kick, snare
+      -
+      - clap
+      - 
+      - kick
+      -
+      - clap
+      -
+      - kick, snare
+      -
+      - clap
+      -
+
+clap:
+  mix:
+    # Initial burst
+    first:
+      filter:
+        type: bandpass
+        cutoff: 1500
+        peak: 2
+        signal:
+          osc:
+            type: noise
+            amp: 0.5
+            attack: 0.0001
+            release: 0.015
+            duration: 0.02
+    # Second burst (slight delay)
+    second:
+      delay:
+        time: 0.015
+        signal:
+          filter:
+            type: bandpass
+            cutoff: 1800
+            peak: 2
+            signal:
+              osc:
+                type: noise
+                amp: 0.4
+                attack: 0.0001
+                release: 0.012
+                duration: 0.018
+    # Third burst
+    third:
+      delay:
+        time: 0.028
+        signal:
+          filter:
+            type: bandpass
+            cutoff: 2000
+            peak: 2.5
+            signal:
+              osc:
+                type: noise
+                amp: 0.45
+                attack: 0.0001
+                release: 0.018
+                duration: 0.025
+    # Tail/reverb component
+    tail:
+      delay:
+        time: 0.045
+        signal:
+          filter:
+            type: highpass
+            cutoff: 3000
+            signal:
+              osc:
+                type: noise
+                amp: 0.15
+                attack: 0.001
+                release: 0.08
+                duration: 0.1
+      
+
+cling:
+  envelope:
+    attack: 0.1
+    duration: 4
+    decay: 0.1
+    sustain: 0.8
+    release: 2
+    signal:
+      osc:
+        freq:
+          osc:
+            freq: [10, 10000]
+            range: [100, 2000]
+        
+
+
+cling_test:
+  sequencer:
+    interval: 1
+    steps:
+      - cling
+      -
+      -
+
+# Test envelope with gate control (gate opens/closes)
+envelope_gate_test:
+  envelope:
+    attack: 0.1
+    decay: 0.1
+    sustain: 0.1
+    release: 0.5
+    gate:
+      osc:
+        type: sqr
+        freq: 0.5  # Opens/closes twice per second
+    signal:
+      osc:
+        type: sin
+        freq: 440
+
+# Test envelope with trigger (retriggers on each pulse)
+envelope_trigger_example:
+  envelope:
+    monitor: true
+    duration: 999
+    attack: 0.01
+    decay: 0.1
+    sustain: 0.3
+    sustain_duration: 0
+    release: 0.5
+    end: false
+    trigger:
+      osc:
+        id: trigger
+        monitor: bipolar
+        type: saw
+        freq: 1
+    signal:
+      spawn:
+        trigger: $trigger
+        voices: 1
+        signal:
+          # expression:
+          #   exp:  pow(signal, 0.5)
+          #   signal:
+              osc:
+                duration: 5
+                type: sin
+                amp: 1
+                freq: 
+                  osc:
+                    freq: [3000, [0, 0.01]]
+                    range:
+                      - osc:
+                          freq: [10000, [0, 0.01]]
+                          range: [1000, 0]
+                      - 0
+
+# Test duration-based envelope (the original cling behavior)
+envelope_duration_test:
+  envelope:
+    attack: 0.1
+    decay: 0.1
+    sustain: 0.8
+    release: 0.5
+    duration: 2  # Total 2 seconds: 0.1 attack + 0.1 decay + 1.3 sustain + 0.5 release
+    signal:
+      osc:
+        type: tri
+        freq: 330 
