@@ -430,7 +430,11 @@ def main():
 
     if not load_all_sound_libraries(SOUNDS_DIR):
         return
-    
+
+    # Enumerate audio interfaces and configured aliases
+    from audio_interfaces import get_audio_interface_manager
+    get_audio_interface_manager()
+
     # Initialize MIDI system early to avoid hiccups during playback
     # This ensures MIDI devices are detected and opened before audio starts
     from nodes.node_utils.midi_utils import MidiInputManager

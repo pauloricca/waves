@@ -1,15 +1,13 @@
 from __future__ import annotations
-from threading import Lock
-from collections import deque
 import numpy as np
-import sounddevice as sd
 from pydantic import ConfigDict
 
-from config import SAMPLE_RATE, BUFFER_SIZE
+from audio_interfaces import get_audio_input_registry, normalise_channel_mapping
+from config import BUFFER_SIZE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
-from utils import empty_mono, time_to_samples
+from utils import empty_mono, time_to_samples, match_length, to_mono
 
 
 class InputModel(BaseNodeModel):
@@ -24,94 +22,28 @@ class InputModel(BaseNodeModel):
     - amp: Amplitude/gain multiplier for the input signal
     """
     model_config = ConfigDict(extra='forbid')
-    device: int | str | None = None  # Input device index or name (None = default)
+    device: int | str | None = None  # Input device alias or index (None = default)
+    channels: int | list[int] | tuple[int, ...] | None = 1  # Channel numbers (1-indexed)
     amp: WavableValue = 1.0  # Gain/amplitude multiplier
-
-
-# Global shared audio input stream and buffer
-# This ensures we only have one input stream active, shared across all input nodes
-_input_stream = None
-_input_buffer = None
-_input_lock = Lock()
-_input_device = None
-_stream_active = False
-
-
-def _audio_input_callback(indata, frames, time_info, status):
-    """Callback for sounddevice input stream - captures audio into buffer."""
-    global _input_buffer
-    if status:
-        print(f"Input stream status: {status}")
-    if _input_buffer is not None:
-        # Copy incoming audio to buffer (already mono)
-        _input_buffer.extend(indata[:, 0].copy())
-
-
-def _start_input_stream(device=None):
-    """Start the shared audio input stream if not already running."""
-    global _input_stream, _input_buffer, _input_device, _stream_active
-    
-    with _input_lock:
-        # If stream is already running with the same device, nothing to do
-        if _stream_active and _input_device == device:
-            return
-        
-        # Stop existing stream if device changed
-        if _stream_active:
-            _stop_input_stream()
-        
-        # Initialize buffer
-        _input_buffer = deque(maxlen=SAMPLE_RATE * 10)  # 10 second buffer max
-        _input_device = device
-        
-        # Start new input stream
-        try:
-            _input_stream = sd.InputStream(
-                device=device,
-                channels=1,
-                samplerate=SAMPLE_RATE,
-                blocksize=BUFFER_SIZE,
-                callback=_audio_input_callback
-            )
-            _input_stream.start()
-            _stream_active = True
-            print(f"Audio input stream started (device: {device if device is not None else 'default'})")
-        except Exception as e:
-            print(f"Error starting audio input stream: {e}")
-            _stream_active = False
-
-
-def _stop_input_stream():
-    """Stop the shared audio input stream."""
-    global _input_stream, _input_buffer, _stream_active
-    
-    with _input_lock:
-        if _input_stream is not None:
-            _input_stream.stop()
-            _input_stream.close()
-            _input_stream = None
-        _input_buffer = None
-        _stream_active = False
 
 
 class InputNode(BaseNode):
     def __init__(self, model: InputModel, node_id: str, state=None, do_initialise_state=True):
         super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
-        
+
         # Child nodes
         self.amp_node = self.instantiate_child_node(model.amp, "amp")
-        
+
+        self.channel_mapping = normalise_channel_mapping(model.channels, (1,))
+        self.channel_count = len(self.channel_mapping)
+        self.stream_entry = get_audio_input_registry().get_stream(model.device, self.channel_mapping)
+
         # Persistent state (survives hot reload)
         if do_initialise_state:
             self.state.total_samples_rendered = 0
-        
-        # Start the shared input stream
-        _start_input_stream(model.device)
-    
+
     def _do_render(self, num_samples=None, context=None, **params):
-        global _input_buffer
-        
         # Resolve num_samples from duration if None
         num_samples = self.resolve_num_samples(num_samples)
         if num_samples is None:
@@ -123,30 +55,40 @@ class InputNode(BaseNode):
             total_duration_samples = time_to_samples(self.duration )
             if self.state.total_samples_rendered >= total_duration_samples:
                 # We're done, return empty array
-                return empty_mono()
+                return self._empty_output()
             
             # Limit num_samples to not exceed duration
             remaining = total_duration_samples - self.state.total_samples_rendered
             num_samples = min(num_samples, remaining)
         
         # Get audio from the shared buffer
-        audio_data = np.zeros(num_samples, dtype=np.float32)
-        
-        with _input_lock:
-            if _input_buffer is not None and len(_input_buffer) > 0:
-                # Get as much as we can from the buffer
-                available = min(num_samples, len(_input_buffer))
-                for i in range(available):
-                    audio_data[i] = _input_buffer.popleft()
-        
+        audio_data = self.stream_entry.read(num_samples)
+
         # Apply amplitude/gain
         amp = self.amp_node.render(num_samples, context, **params)
-        audio_data = audio_data * amp
-        
+        amp_array = np.asarray(amp, dtype=np.float32)
+        if amp_array.ndim > 1:
+            amp_array = to_mono(amp_array)
+
+        if amp_array.ndim == 0:
+            amp_array = np.full(num_samples, float(amp_array), dtype=np.float32)
+        else:
+            amp_array = match_length(amp_array, num_samples)
+
+        if self.channel_count == 1:
+            audio_data = audio_data * amp_array
+        else:
+            audio_data = audio_data * amp_array[:, np.newaxis]
+
         # Update state
         self.state.total_samples_rendered += num_samples
-        
+
         return audio_data
+
+    def _empty_output(self):
+        if self.channel_count == 1:
+            return empty_mono()
+        return np.zeros((0, self.channel_count), dtype=np.float32)
 
 
 # Node definition for registry

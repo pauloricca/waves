@@ -1,11 +1,12 @@
 from __future__ import annotations
 import numpy as np
 from pydantic import ConfigDict
+from audio_interfaces import get_audio_output_router, normalise_channel_mapping
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
 from nodes.node_utils.panning import apply_panning
-from utils import match_length, empty_mono, empty_stereo, to_mono, is_stereo
+from utils import match_length, empty_stereo, to_mono, is_stereo
 
 """
 Track Node
@@ -60,6 +61,8 @@ class TrackNodeModel(BaseNodeModel):
     signal: WavableValue = None
     pan: WavableValue = 0.0  # Pan position: -1 (left) to 1 (right), default center
     volume: WavableValue = 1.0  # Volume multiplier, default unity gain
+    output_device: str | int | None = None  # Optional audio interface alias/index
+    output_channels: int | list[int] | tuple[int, ...] | None = None  # Channel mapping when routing
 
 
 class TrackNode(BaseNode):
@@ -69,6 +72,13 @@ class TrackNode(BaseNode):
         self.signal_node = self.instantiate_child_node(model.signal, "signal")
         self.pan_node = self.instantiate_child_node(model.pan, "pan")
         self.volume_node = self.instantiate_child_node(model.volume, "volume")
+        self.output_device = model.output_device
+        self.output_channels = (
+            normalise_channel_mapping(model.output_channels, (1, 2))
+            if model.output_channels is not None
+            else None
+        )
+        self.output_router = get_audio_output_router() if self.output_channels else None
 
     def _do_render(self, num_samples=None, context=None, **params):
         """
@@ -107,7 +117,12 @@ class TrackNode(BaseNode):
         
         # Apply volume to both channels
         stereo_signal *= volume_value[:, np.newaxis]
-        
+
+        if self.output_router and self.output_channels:
+            # Route to dedicated interface outputs and remove from main mix
+            self.output_router.send(self.output_device, self.output_channels, np.array(stereo_signal, copy=True))
+            return np.zeros_like(stereo_signal)
+
         return stereo_signal
 
 
