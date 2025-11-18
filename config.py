@@ -21,6 +21,17 @@ MIDI_CC_SAVE_INTERVAL = 2.0  # Seconds between saving CC values to file
 MIDI_OUTPUT_DEVICE = None  # MIDI output device name, or None to use first available (for MIDI clock out)
 MIDI_CLOCK_ENABLED = True  # Enable MIDI clock output when tempo node has source='internal'
 
+# Audio interface settings
+# Dictionary mapping device keys to audio device names for quick selection
+AUDIO_INPUT_DEVICES = {
+    # "scarlett": "Focusrite USB",
+}
+AUDIO_OUTPUT_DEVICES = {
+    # "scarlett": "Focusrite USB",
+}
+AUDIO_DEFAULT_INPUT_DEVICE_KEY = None  # Default audio input alias (None = system default)
+AUDIO_DEFAULT_OUTPUT_DEVICE_KEY = None  # Default audio output alias for track routing
+
 
 RENDERED_MASTER_GAIN = 1
 DO_NORMALISE_EACH_SOUND = False
