@@ -1,0 +1,188 @@
+granular:
+  tempo:
+    bpm: 130
+    signal:
+      mix:
+        beat:
+          sequencer:
+            interval: beat / 4
+            steps:
+              - kick
+              - 
+              - hihat
+              - hihat v.15
+        grains:
+          spawn:
+            id: grains
+            monitor: true
+            trigger: 
+              expression:
+                monitor: true
+                exp: eighth_tick
+                # exp: 1 if rand() > 0.7 else 0
+            signal:
+              track:
+                pan: 
+                  hold:
+                    signal: rand(-1, 1)
+                signal:
+                  context:
+                    start: rand(0.2, 0.25)
+                    signal:
+                      envelope:
+                        attack: 0.02
+                        release: 0.8
+                        decay: 0.1
+                        sustain: 0.2
+                        sustain_duration: 0.1
+                        signal:
+                          sample:
+                            file: samples/paulo.wav
+                            start: 
+                              hold:
+                                signal: start
+                            end: 
+                              hold:
+                                signal: start + 0.1
+
+
+
+eerie:
+  filter:
+    cutoff:
+      osc:
+        freq: 1
+        type: tri
+        range: [800, 2000]
+    signal:
+      expression:
+        exp: pow(signal, 1) * 0.5
+        signal:
+          buffer:
+            file: samples/hum.wav
+            duration: 999
+            start: 0.1
+            end: 0.2
+            speed: 0.2
+            loop: True
+
+
+playback:
+  filter:
+    cutoff:
+      osc:
+        id: filter
+        monitor: true
+        freq: 0.1
+        range: [2000, 4000]
+    signal:
+      context:
+        pattern: 2
+        start:
+          osc:
+            id: start
+            monitor: true
+            freq: 0.01
+            range: [0.2, 0.5]
+        distortion:
+          automation:
+            id: distortion
+            interval: 1
+            monitor: true
+            mode: ramp
+            steps:
+              - 0.3
+              -
+              -
+              - 
+              -
+              - 0.1
+        signal:
+          expression:
+            exp: pow(signal, distortion) * 0.5
+            signal:
+              buffer:
+                file: samples/paulo.wav
+                duration: 999
+                start: start
+                end: start + 0.1
+                speed:
+                  # expression:
+                  #   id: speed
+                  #   monitor: true
+                  #   exp: pow(signal, 6) * 100
+                  #   signal:
+                  #     midi_cc:
+                  #       cc: 16
+                  select:
+                    id: speed
+                    monitor: true
+                    test: pattern
+                    "0": 0.2
+                    "1": 
+                      automation:
+                        steps:
+                          - 0.2
+                          - 
+                          - 0.1
+                          - 96
+                    "2": 
+                      automation:
+                        interval: 0.1
+                        steps:
+                          - 0.2
+                          - 
+                          - 0.1
+                          - 100
+                          - 0.1
+                          - 100
+                          - 0.2
+                          -
+                          - 2
+                          - 0.2
+                          -
+                          - 2
+                          - 10
+                          - .2
+                          -
+                          -
+                          -
+                          -
+                          -
+                    "3": 
+                      automation:
+                        interval: 0.05
+                        steps:
+                          - 0.2
+                          - 
+                          - 0.1
+                          - 100
+                          - 0.1
+                          - 100
+                          - 0.2
+                          -
+                          - 2
+                          - 0.2
+                          -
+                          -
+                          -
+                          -
+                          -
+                          -
+                          -
+                          -
+                          -
+                loop: True
+
+perc:
+  context:
+    duration: 3
+    distortion: [0.3, [1, 0.02]]
+    signal:
+      expression:
+        exp: pow(signal, distortion)
+        signal:
+          sample:
+            file: output/thump f100.wav
+            start: 0
+            end: 1

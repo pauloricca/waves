@@ -194,15 +194,9 @@ class NodeMonitor:
         if self.is_stereo:
             # Show separate L/R meters for stereo
             # Total: "L " (2) + meter (10) + " R " (3) + meter (9) = 24 chars
-            if is_bipolar:
-                # For bipolar, show both positive and negative ranges
-                meter_l = create_monitor_meter(self.peak_left, min_val, max_val, width=10, color_scheme=color_scheme, is_bipolar=True)
-                meter_r = create_monitor_meter(self.peak_right, min_val, max_val, width=9, color_scheme=color_scheme, is_bipolar=True)
-                value_str = f"L:{self.peak_left:.2f} R:{self.peak_right:.2f}"
-            else:
-                meter_l = create_monitor_meter(self.peak_left, min_val, max_val, width=10, color_scheme=color_scheme)
-                meter_r = create_monitor_meter(self.peak_right, min_val, max_val, width=9, color_scheme=color_scheme)
-                value_str = f"L:{self.peak_left:.2f} R:{self.peak_right:.2f}"
+            meter_l = create_monitor_meter(self.peak_left, min_val, max_val, width=10, color_scheme=color_scheme, is_bipolar=is_bipolar)
+            meter_r = create_monitor_meter(self.peak_right, min_val, max_val, width=9, color_scheme=color_scheme, is_bipolar=is_bipolar)
+            value_str = f"L:{self.peak_left:.2f} R:{self.peak_right:.2f}"
             return f"L {meter_l} R {meter_r}  {self.display_name} ({value_str})"
         else:
             if is_bipolar:
@@ -259,6 +253,148 @@ class SequencerMonitor(NodeMonitor):
             return super().format_line()
 
 
+class SampleMonitor(NodeMonitor):
+    """Custom monitor for sample nodes that shows audio waveform with playhead indicator."""
+    
+    def format_line(self) -> str:
+        """Show sample waveform visualization with playhead position."""
+        # Total width matches standard meter width
+        total_width = 24
+        
+        # Get the audio buffer and playhead position
+        if not hasattr(self.node, 'audio') or len(self.node.audio) == 0:
+            return super().format_line()
+        
+        audio = self.node.audio
+        audio_length = len(audio)
+        playhead_pos = getattr(self.node.state, 'last_playhead_position', 0)
+        
+        # Calculate playhead position as fraction of buffer (0-1)
+        playhead_fraction = (playhead_pos % audio_length) / audio_length if audio_length > 0 else 0
+        
+        # Build waveform visualization
+        grey = '\033[90m'
+        white = '\033[97m'
+        reset = '\033[0m'
+        
+        # Unicode block characters for amplitude visualization (0-8 levels)
+        # Use underscore for 0 so read head is always visible
+        blocks = ['_', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█']
+        
+        waveform_chars = []
+        samples_per_char = max(1, audio_length // total_width)
+        
+        for i in range(total_width):
+            # Calculate which section of the audio this character represents
+            start_sample = i * samples_per_char
+            end_sample = min(start_sample + samples_per_char, audio_length)
+            
+            if start_sample >= audio_length:
+                waveform_chars.append(grey + '_' + reset)
+                continue
+            
+            # Get peak amplitude for this section
+            section = audio[start_sample:end_sample]
+            if len(section) == 0:
+                peak = 0
+            else:
+                peak = float(np.max(np.abs(section)))
+            
+            # Convert peak to block character index (0-8)
+            block_idx = min(8, int(peak * 8))
+            char = blocks[block_idx]
+            
+            # Determine if this character represents the playhead position
+            char_start_fraction = i / total_width
+            char_end_fraction = (i + 1) / total_width
+            is_playhead = char_start_fraction <= playhead_fraction < char_end_fraction
+            
+            # Color: white for playhead, grey for others
+            color = white if is_playhead else grey
+            waveform_chars.append(color + char + reset)
+        
+        waveform = ''.join(waveform_chars)
+        
+        # Add position info
+        position_info = f"pos: {int(playhead_pos)}/{audio_length}"
+        return f"{waveform}  {self.display_name} ({position_info})"
+
+
+class BufferMonitor(NodeMonitor):
+    """Custom monitor for buffer nodes that shows buffer waveform with playhead indicator."""
+    
+    def format_line(self) -> str:
+        """Show buffer waveform visualization with playhead/write-head position."""
+        # Total width matches standard meter width
+        total_width = 24
+        
+        # Get the buffer data
+        if not hasattr(self.node, 'buffer_ref'):
+            return super().format_line()
+        
+        buffer_data = self.node.buffer_ref['data']
+        buffer_length = len(buffer_data)
+        
+        # Determine position based on mode
+        if self.node.is_position_mode:
+            # Position mode: use last_playhead_position
+            position = getattr(self.node.state, 'last_playhead_position', 0)
+        else:
+            # Offset mode: use write_head
+            position = self.node.buffer_ref.get('write_head', 0)
+        
+        # Calculate position as fraction of buffer (0-1)
+        position_fraction = (position % buffer_length) / buffer_length if buffer_length > 0 else 0
+        
+        # Build waveform visualization
+        grey = '\033[90m'
+        white = '\033[97m'
+        reset = '\033[0m'
+        
+        # Unicode block characters for amplitude visualization (0-8 levels)
+        # Use underscore for 0 so read head is always visible
+        blocks = ['_', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█']
+        
+        waveform_chars = []
+        samples_per_char = max(1, buffer_length // total_width)
+        
+        for i in range(total_width):
+            # Calculate which section of the buffer this character represents
+            start_sample = i * samples_per_char
+            end_sample = min(start_sample + samples_per_char, buffer_length)
+            
+            if start_sample >= buffer_length:
+                waveform_chars.append(grey + '_' + reset)
+                continue
+            
+            # Get peak amplitude for this section
+            section = buffer_data[start_sample:end_sample]
+            if len(section) == 0:
+                peak = 0
+            else:
+                peak = float(np.max(np.abs(section)))
+            
+            # Convert peak to block character index (0-8)
+            block_idx = min(8, int(peak * 8))
+            char = blocks[block_idx]
+            
+            # Determine if this character represents the position
+            char_start_fraction = i / total_width
+            char_end_fraction = (i + 1) / total_width
+            is_position = char_start_fraction <= position_fraction < char_end_fraction
+            
+            # Color: white for position, grey for others
+            color = white if is_position else grey
+            waveform_chars.append(color + char + reset)
+        
+        waveform = ''.join(waveform_chars)
+        
+        # Add position info and mode
+        mode = "pos" if self.node.is_position_mode else "wr"
+        position_info = f"{mode}: {int(position)}/{buffer_length}"
+        return f"{waveform}  {self.display_name} ({position_info})"
+
+
 class MonitorRegistry:
     """
     Global registry for monitored nodes.
@@ -270,9 +406,15 @@ class MonitorRegistry:
     
     def register(self, node_id: str, node: BaseNode):
         """Register a node for monitoring. Creates appropriate monitor type."""
-        # Check if this is a sequencer or automation node (both have step-based structure)
-        if node.__class__.__name__ in ('SequencerNode', 'AutomationNode'):
+        node_class_name = node.__class__.__name__
+        
+        # Check node type and create appropriate monitor
+        if node_class_name in ('SequencerNode', 'AutomationNode'):
             self.monitors[node_id] = SequencerMonitor(node_id, node)
+        elif node_class_name == 'SampleNode':
+            self.monitors[node_id] = SampleMonitor(node_id, node)
+        elif node_class_name == 'BufferNode':
+            self.monitors[node_id] = BufferMonitor(node_id, node)
         else:
             # Default monitor for all other nodes
             self.monitors[node_id] = NodeMonitor(node_id, node)

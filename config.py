@@ -46,5 +46,6 @@ DO_ONLY_VISUALISE_ONE_BUFFER = False
 DO_SCRAMBLE_VISUALISATION_ROWS = False  # Scramble row order for interesting glitch effect
 VISUALISATION_ROW_HEIGHT = 10
 VISUALISATION_FPS = 30
+CHANCE_OF_CLEARING_ONE_LESS_ROW = 0  # Chance of clearing one row each frame for glitch effect
 
 DISABLE_GARBAGE_COLLECTION = False

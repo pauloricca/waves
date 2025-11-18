@@ -6,7 +6,7 @@ from pydantic import ConfigDict
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
-from utils import detect_triggers
+from utils import detect_triggers, is_stereo, to_stereo
 
 
 class SpawnModel(BaseNodeModel):
@@ -149,6 +149,9 @@ class SpawnNode(BaseNode):
                 # Update samples rendered counter
                 instance_data['samples_rendered'] += len(instance_chunk)
                 
+                if (is_stereo(instance_chunk)):
+                    output_wave = to_stereo(output_wave)
+
                 # Mix into output at the correct offset
                 output_wave[trigger_offset:trigger_offset + len(instance_chunk)] += instance_chunk
                 
@@ -165,10 +168,14 @@ class SpawnNode(BaseNode):
                 
                 # Update samples rendered counter
                 instance_data['samples_rendered'] += len(instance_chunk)
-                
+
                 # Mix into output (pad if needed)
-                if len(instance_chunk) < len(output_wave):
-                    instance_chunk = np.pad(instance_chunk, (0, len(output_wave) - len(instance_chunk)))
+                if (is_stereo(instance_chunk)):
+                    output_wave = to_stereo(output_wave)
+                    if len(instance_chunk) < len(output_wave):
+                        instance_chunk = np.pad(instance_chunk, [(0, len(output_wave) - len(instance_chunk)), (0, 0)])
+                elif len(instance_chunk) < len(output_wave):
+                    instance_chunk = np.pad(instance_chunk, (0, len(output_wave) - len(instance_chunk))) 
                 
                 output_wave[:len(instance_chunk)] += instance_chunk
         

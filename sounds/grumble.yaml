@@ -1,0 +1,124 @@
+grumble:
+  context:
+    duration: 9999
+    distortion1: 0.6
+    noise_vol: 0.8
+    ding_vol: 0.5
+    interference: 0.2
+    scan: 1
+    ding_phase_distortion: 1000
+    signal:
+      tempo:
+        bpm: 100
+        signal:
+          mix:
+            noise:
+              track:
+                volume: noise_vol
+                pan:
+                  osc:
+                    freq: 0.1
+                    range: [-0.2, 0.2]
+                    monitor: bipolar
+                signal:
+                  expression:
+                    exp: pow(signal, exponent) + pow(signal, exponent) * second * scan - second * interference
+                    second:
+                      osc:
+                        freq:
+                          automation:
+                            monitor: true
+                            interval: 5
+                            steps:
+                              - 100
+                              -
+                              -
+                              -
+                              - 350
+                        amp:
+                          expression:
+                            exp: pow(signal, 4)
+                            monitor: true
+                            signal:
+                              osc:
+                                freq: 0.05
+                                range: [0, 1]
+                    exponent:
+                      automation:
+                        interval: beat / 3
+                        mode: ramp
+                        steps:
+                          - 1
+                          -
+                          - 1
+                          - 
+                          -
+                          - distortion1
+                          - 1
+                          - 
+                          - 0.8
+                    signal:
+                      osc:
+                        amp:
+                          osc:
+                            freq: 20
+                            range: [0.4, 1]
+                        freq:
+                          automation:
+                            monitor: true
+                            interval: beat / 4
+                            steps:
+                              - 60
+                              - 50
+                              -
+                              -
+                              -
+                              -
+                              - 120
+                              - 60
+                              -
+
+            ding:
+              track:
+                volume: ding_vol
+                monitor: true
+                signal:
+                  retrigger:
+                    repeat: 3
+                    time: 0.4
+                    feedback: 0.2
+                    spread: 1
+                    movement: 3
+                    signal:
+                      retrigger:
+                        repeat: 5
+                        time: 0.3
+                        feedback: 0.4
+                        signal:
+                          sequencer:
+                            interval: beat * 8
+                            steps:
+                              - 
+                              - envelope:
+                                  duration: 0.25
+                                  release: 0.2
+                                  signal: 
+                                    expression:
+                                      exp: pow(signal, exponent)
+                                      exponent: 0.6
+                                      signal:
+                                        osc:
+                                          amp:
+                                            osc:
+                                              freq: 20000
+                                              range: [0.1, 0.3]
+                                          freq:
+                                            hold:
+                                              signal: rand([120000, 120000, 120000, 100000, 90000])
+                                          phase:
+                                            osc:
+                                              freq: ding_phase_distortion
+                                            
+
+
+  

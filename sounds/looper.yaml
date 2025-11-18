@@ -1,0 +1,71 @@
+# gate:
+#   context:
+#     signal:
+#       expression:
+#         signal:
+#           input:
+#             id: 
+
+
+looper:
+  tempo:
+    duration: 9999
+    bpm: 100
+    signal:
+      mix:
+        drums:
+          id: drums
+          track:
+            volume: 0.2
+            signal:
+              sequencer:
+                interval: beat / 4
+                steps:
+                  - kick
+                  - 
+                  - hihat v.2
+                  -
+                  - hihat v.2
+                  -
+        loop:
+          buffer:
+            monitor: true
+            id: loop
+            length: bar
+            signal:
+              expression:
+                exp: feedback + signal
+                signal:
+                  input: {}
+                feedback:
+                  expression:
+                    exp: pow(signal, 0.95) * 0.85
+                    signal:
+                      filter: 
+                        cutoff: 1300
+                        signal:
+                          buffer:
+                            name: loop
+        scanning:
+          osc:
+            freq: 30
+            phase:
+              osc:
+                type: tri
+                freq: 2000
+                amp: 
+                  osc:
+                    freq: 10
+                  range: [0.01, 0.04]
+            amp: 
+              osc:
+                freq: .3
+                range: [0, 0.3]
+                phase:
+                  osc:
+                    type: tri
+                    freq: 700
+                    amp: 
+                      osc:
+                        freq: 100
+                      range: [0.01, 0.04]

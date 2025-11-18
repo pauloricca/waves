@@ -1,15 +1,18 @@
 import math
 import numpy as np
 from config import SAMPLE_RATE
-from random import uniform, choice
+from random import uniform, choice, random
 
-def rand(a: float | list, b: float | None = None) -> float:
+def rand(a: float | list | None = None, b: float | None = None) -> float:
     """Return a random value based on input pattern:
+       - rand(): random float between 0 and 1
        - rand(a, b): uniform random between a and b
        - rand(a): uniform random between 0 and a
        - rand([list]): random choice from list"""
     # Handle different input patterns for rand function
-    if isinstance(a, list):
+    if a is None:
+        return random()
+    elif isinstance(a, list):
         return choice(a)
     elif b is None:
         return uniform(0, a)

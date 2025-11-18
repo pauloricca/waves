@@ -3,6 +3,7 @@ Display statistics during playback.
 Handles CPU usage, elapsed time, and recording status display.
 """
 import os
+from random import random
 import time
 import numpy as np
 from collections import deque
@@ -203,6 +204,10 @@ def run_visualizer_and_stats(
                     
                     # Calculate total lines that will be printed
                     total_lines = viz_lines + len(stats_monitor_lines)
+
+                    # Randomly reduce number of lines displayed occasionally as a glitch effect
+                    if random() < CHANCE_OF_CLEARING_ONE_LESS_ROW:
+                        last_printed_lines = max(0, last_printed_lines - 1)
                     
                     # Clear previous output if needed
                     if last_printed_lines > 0:

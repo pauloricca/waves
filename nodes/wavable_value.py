@@ -58,14 +58,10 @@ class WavableValueNode(BaseNode):
                 # Single expression
                 self.compiled_interpolation.append(compile_expression(item))
             elif isinstance(item, list):
-                # [value, position] - compile value if it's a string
-                if isinstance(item[0], str):
-                    compiled_value = compile_expression(item[0])
-                    # Keep position as-is (it should be numeric)
-                    self.compiled_interpolation.append([compiled_value, item[1]])
-                else:
-                    # Already numeric
-                    self.compiled_interpolation.append(item)
+                # [value, position] - compile both value and position if they're strings
+                compiled_value = compile_expression(item[0]) if isinstance(item[0], str) else item[0]
+                compiled_position = compile_expression(item[1]) if isinstance(item[1], str) else item[1]
+                self.compiled_interpolation.append([compiled_value, compiled_position])
             else:
                 # Already numeric
                 self.compiled_interpolation.append(item)
@@ -142,7 +138,8 @@ class WavableValueNode(BaseNode):
                     value = float(value)
                 evaluated.append(value)
             elif isinstance(item, list):
-                # [value/compiled, position]
+                # [value/compiled, position/compiled]
+                # Evaluate value
                 if isinstance(item[0], tuple):
                     # It's a compiled expression
                     value = evaluate_compiled(item[0], eval_context, num_samples=None)
@@ -151,10 +148,24 @@ class WavableValueNode(BaseNode):
                         value = float(value.flat[0]) if value.size > 0 else 0.0
                     elif isinstance(value, (int, float)):
                         value = float(value)
-                    evaluated.append([value, item[1]])
                 else:
                     # Already numeric
-                    evaluated.append(item)
+                    value = float(item[0])
+                
+                # Evaluate position
+                if isinstance(item[1], tuple):
+                    # It's a compiled expression
+                    position = evaluate_compiled(item[1], eval_context, num_samples=None)
+                    # Ensure it's a simple float
+                    if isinstance(position, np.ndarray):
+                        position = float(position.flat[0]) if position.size > 0 else 0.0
+                    elif isinstance(position, (int, float)):
+                        position = float(position)
+                else:
+                    # Already numeric
+                    position = float(item[1])
+                
+                evaluated.append([value, position])
             else:
                 # Already numeric - ensure it's float
                 if isinstance(item, (int, float)):

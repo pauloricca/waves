@@ -427,3 +427,92 @@ test_slow:
                   hold:
                     signal: rand(0.8, 1.7)
                 amp: 0.1
+
+
+shahi:
+  tempo:
+    bpm: 130
+    signal:
+      expression:
+        exp: signal * amp
+        amp:
+          midi_cc:
+            monitor: true
+            cc: 3
+            range: [0.5, 3]
+        signal:
+          filter:
+            type: highpass
+            peak:
+              midi_cc:
+                cc: 20
+            cutoff:
+              midi_cc:
+                cc: 19
+                range: [0, 20000]
+            signal:
+              filter:
+                peak:
+                  midi_cc:
+                    monitor: true
+                    cc: 18
+                cutoff:
+                  midi_cc:
+                    monitor: true
+                    cc: 17
+                    range: [0, 20000]
+                signal:
+                  expression:
+                    monitor: true
+                    exp: pow(signal, exponent)
+                    exponent:
+                      midi_cc:
+                        cc: 16
+                        range: [0, 2]
+                    signal:
+                      envelope:
+                        gate:
+                          osc:
+                            type: sqr
+                            freq: 1
+                        release: 5
+                        attack: 0.01
+                        signal:
+                          mix:
+                            duration: 1000
+                            perc:
+                              sequencer:
+                                monitor: true
+                                interval: beat / 4
+                                repeat: 1000
+                                steps:
+                                  - kick
+                                  - 
+                                  - kick
+                                  -
+                                  - 
+                                  -
+                            drone:
+                              osc:
+                                type: saw
+                                freq: A1
+                                amp: 0.005
+                            note:
+                              osc:
+                                monitor: true
+                                type: saw
+                                freq: E1
+                                amp: 0.005
+                                phase:
+                                  osc:
+                                    freq:
+                                      midi_cc:
+                                        cc: 0
+                                        range: [0, 1000]
+                                    range:
+                                      - midi_cc:
+                                          cc: 1
+                                          range: [-10, 0]
+                                      - midi_cc:
+                                          cc: 2
+                                          range: [0, 10]

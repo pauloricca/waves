@@ -44,7 +44,18 @@ def _audio_input_callback(indata, frames, time_info, status):
         print(f"Input stream status: {status}")
     if _input_buffer is not None:
         # Copy incoming audio to buffer (already mono)
-        _input_buffer.extend(indata[:, 0].copy())
+        # If buffer is getting too large, skip adding to prevent latency buildup
+        # Keep buffer size to max 2-3 chunks to minimize latency
+        max_buffer_samples = BUFFER_SIZE * 3
+        if len(_input_buffer) < max_buffer_samples:
+            _input_buffer.extend(indata[:, 0].copy())
+        else:
+            # Buffer is full - drop oldest samples to make room for new ones
+            # This prevents cumulative delay
+            for _ in range(len(indata)):
+                if len(_input_buffer) > 0:
+                    _input_buffer.popleft()
+            _input_buffer.extend(indata[:, 0].copy())
 
 
 def _start_input_stream(device=None):
@@ -60,8 +71,9 @@ def _start_input_stream(device=None):
         if _stream_active:
             _stop_input_stream()
         
-        # Initialize buffer
-        _input_buffer = deque(maxlen=SAMPLE_RATE * 10)  # 10 second buffer max
+        # Initialize buffer with a small max size to prevent latency buildup
+        # We only keep a few chunks worth of audio to minimize delay
+        _input_buffer = deque(maxlen=BUFFER_SIZE * 4)
         _input_device = device
         
         # Start new input stream

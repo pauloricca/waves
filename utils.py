@@ -425,18 +425,27 @@ def samples_to_time(samples: int) -> float:
 def ensure_array(value, num_samples: int) -> np.ndarray:
     """
     Ensures a value is a numpy array of the specified length.
-    If value is already an array, returns it as-is.
+    If value is already an array of the correct length, returns it as-is.
+    If value is an array of wrong length, truncates or pads to match num_samples.
     If value is a scalar, creates an array filled with that value.
     
     Args:
         value: Scalar value or numpy array
-        num_samples: Desired length for scalar conversion
+        num_samples: Desired length
         
     Returns:
         Numpy array of length num_samples
     """
     if isinstance(value, np.ndarray):
-        return value
+        if len(value) == num_samples:
+            return value
+        elif len(value) > num_samples:
+            # Truncate to requested length
+            return value[:num_samples]
+        else:
+            # Pad to requested length with last value
+            padding = np.full(num_samples - len(value), value[-1] if len(value) > 0 else 0, dtype=np.float32)
+            return np.concatenate([value, padding])
     return np.full(num_samples, value, dtype=np.float32)
 
 

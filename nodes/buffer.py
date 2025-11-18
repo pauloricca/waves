@@ -95,7 +95,7 @@ class BufferModel(BaseNodeModel):
     name: str = None  # Buffer name (defaults to node_id if not specified)
     
     # Buffer initialization
-    length: float = 10.0  # Buffer length in seconds
+    length: WavableValue = None  # Buffer length in seconds (if None and file is specified, uses file length)
     file: str = None  # Optional: load audio file into buffer
     
     # Write parameters
@@ -128,9 +128,24 @@ class BufferNode(BaseNode):
         # Check if this node will be writing to the buffer
         is_writer = model.signal is not None or model.file is not None
         
+        # Instantiate length node (if provided)
+        self.length_node = self.instantiate_child_node(model.length, "length") if model.length is not None else None
+        
+        # Determine initial buffer length
+        if model.length is not None:
+            # Length specified - will be evaluated dynamically
+            # For initialization, use default length (will be updated on first render)
+            requested_buffer_length = time_to_samples(10.0)
+        elif model.file is not None:
+            # No length specified but file provided - use file length
+            audio_data = load_wav_file(model.file)
+            requested_buffer_length = len(audio_data)
+        else:
+            # No length or file - use default
+            requested_buffer_length = time_to_samples(10.0)
+        
         if is_writer:
-            # Writer node: create buffer with specified length if it doesn't exist
-            requested_buffer_length = time_to_samples(model.length)
+            # Writer node: create buffer with determined length if it doesn't exist
             self.buffer_ref = get_or_create_buffer(self.buffer_name, requested_buffer_length)
         else:
             # Reader node: use existing buffer (or create a minimal one if it doesn't exist yet)
@@ -139,12 +154,7 @@ class BufferNode(BaseNode):
                 self.buffer_ref = _GLOBAL_BUFFERS[self.buffer_name]
             else:
                 # Buffer doesn't exist yet - create a default one
-                # (This shouldn't normally happen, but handle gracefully)
-                default_length = time_to_samples(model.length)
-                self.buffer_ref = get_or_create_buffer(self.buffer_name, default_length)
-        
-        # IMPORTANT: Always use the actual buffer size from the shared buffer
-        self.buffer_length_samples = len(self.buffer_ref['data'])
+                self.buffer_ref = get_or_create_buffer(self.buffer_name, requested_buffer_length)
         
         # If we have a file, load it all at once into the buffer
         # and set write_head to start position (ready to "play" from the beginning)
@@ -179,7 +189,52 @@ class BufferNode(BaseNode):
             self.state.last_playhead_position = 0.0
             self.state.total_samples_rendered = 0
     
+    @property
+    def buffer_length_samples(self):
+        """Always get the current buffer length from the shared buffer reference"""
+        return len(self.buffer_ref['data'])
+    
+    def _resize_buffer_if_needed(self, new_length_samples, context, params):
+        """Resize the buffer if the length has changed"""
+        if new_length_samples == self.buffer_length_samples:
+            return  # No change needed
+        
+        old_data = self.buffer_ref['data']
+        old_length = len(old_data)
+        old_write_head = self.buffer_ref['write_head']
+        
+        # Create new buffer
+        new_data = np.zeros(new_length_samples, dtype=np.float32)
+        
+        if new_length_samples > old_length:
+            # Growing: copy all old data to start
+            new_data[:old_length] = old_data
+            # Write head stays at same position
+            new_write_head = old_write_head
+        else:
+            # Shrinking: keep the most recent data (from write_head backwards)
+            # Copy data from write_head backwards, wrapping around
+            samples_to_keep = min(new_length_samples, old_length)
+            for i in range(samples_to_keep):
+                old_idx = (old_write_head - samples_to_keep + i) % old_length
+                new_data[i] = old_data[old_idx]
+            # Wrap write_head to new buffer size
+            new_write_head = old_write_head % new_length_samples
+        
+        # Update buffer reference (buffer_length_samples is now a property, no need to set it)
+        self.buffer_ref['data'] = new_data
+        self.buffer_ref['write_head'] = new_write_head
+    
     def _do_render(self, num_samples=None, context=None, **params):
+        # Update buffer length if length node is provided
+        if self.length_node is not None:
+            length_values = self.length_node.render(1, context, **self.get_params_for_children(params))
+            new_length_seconds = length_values[0] if len(length_values) > 0 else 10.0
+            new_length_samples = time_to_samples(new_length_seconds)
+            # Ensure minimum buffer size
+            new_length_samples = max(new_length_samples, 1024)
+            self._resize_buffer_if_needed(new_length_samples, context, params)
+        
         # Check if we've exceeded duration limit
         if self.model.duration is not None:
             max_total_samples = time_to_samples(self.model.duration)

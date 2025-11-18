@@ -37,8 +37,8 @@ class OscillatorModel(BaseNodeModel):
     amp_interpolation: InterpolationTypes = InterpolationTypes.LINEAR
     phase: Optional[WavableValue] = None # Phase modulation (for FM synthesis)
     pulse_width: WavableValue = 0.5 # Pulse width for square wave (0.0 to 1.0, default 0.5 = 50% duty cycle)
-    attack: float = 0 # Attack time in seconds
-    release: float = 0 # Release time in seconds
+    attack: WavableValue = 0 # Attack time in seconds
+    release: WavableValue = 0 # Release time in seconds
     scale: float = 1.0 # Perlin/wander variation rate (higher = faster changes)
     seed: Optional[float] = None # Perlin/wander noise seed
     range: Optional[Tuple[WavableValue, WavableValue]] = None # Amplitude output range [min, max]
@@ -76,6 +76,8 @@ class OscillatorNode(BaseNode):
         self.amp = self.instantiate_child_node(model.amp, "amp")
         self.phase_mod = self.instantiate_child_node(model.phase, "phase_mod") if model.phase else None
         self.pulse_width = self.instantiate_child_node(model.pulse_width, "pulse_width")
+        self.attack = self.instantiate_child_node(model.attack, "attack")
+        self.release = self.instantiate_child_node(model.release, "release")
         self.seed = self.model.seed or random.randint(0, 10000)
         
         # Create range mapper if range is specified
@@ -290,7 +292,10 @@ class OscillatorNode(BaseNode):
             
             total_wave = amplitude * wander_wave
 
-        attack_number_of_samples = time_to_samples(self.model.attack )
+        # Evaluate attack as a single sample
+        attack_value = self.attack.render(1, context, **params_for_children)
+        attack_time = attack_value[0] if len(attack_value) > 0 else 0
+        attack_number_of_samples = time_to_samples(attack_time)
 
         if attack_number_of_samples > 0:
             if self.state.fase_in_multiplier is None:
@@ -303,7 +308,10 @@ class OscillatorNode(BaseNode):
             self.state.fase_in_multiplier = self.state.fase_in_multiplier[len(total_wave):]  # Keep the rest for next render
 
         if self.duration is not None:
-            release_number_of_samples = time_to_samples(self.model.release )
+            # Evaluate release as a single sample
+            release_value = self.release.render(1, context, **params_for_children)
+            release_time = release_value[0] if len(release_value) > 0 else 0
+            release_number_of_samples = time_to_samples(release_time)
             full_number_of_samples = time_to_samples(self.duration )
 
             if release_number_of_samples > 0:

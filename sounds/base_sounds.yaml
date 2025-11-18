@@ -1,3 +1,205 @@
+kick:
+  context:
+    tune: 50
+    signal:
+      mix:
+  
+        click:
+          osc:
+            type: sqr
+            freq: tune * 4
+            duration: 0.002
+            attack: 0.0001
+            amp: [0.3, 0]
+  
+        thump:
+          osc:
+            freq: [tune * 16, [tune * 2, 0.1]]
+            duration: 0.1
+            attack: 0.2
+            amp: [0.8, 0]
+            phase:
+              osc:
+                freq: tune
+                range: [0, 1]
+        body:
+          osc:
+            freq: [tune * 6, [tune, 0.12]]
+            duration: 0.2
+            attack: 0.2
+            amp: [1, 0]
+            phase:
+              osc:
+                freq: tune * 0.8
+                range: [0, 1]
+
+
+
+snare:
+  mix:
+    # Tonal component (shell resonance)
+    tone:
+      osc:
+        type: tri
+        freq: [260, [180, 0.05]]
+        amp: 0.4
+        attack: 0.001
+        release: 0.15
+        duration: 0.2
+    # Noise component (snares)
+    noise:
+      filter:
+        type: highpass
+        cutoff: 2000
+        signal:
+          osc:
+            type: noise
+            amp: 0.3
+            attack: 0.001
+            release: 0.08
+            duration: 0.15
+
+
+
+kick_tom:
+  context:
+    tune: 50
+    warp: 0 # 0: kick, 1: tom
+    signal:
+      mix:
+  
+        click:
+          osc:
+            type: sqr
+            freq: tune * 4
+            duration: 0.002
+            attack: 0.0001
+            amp: [0.3 * (1 - warp), 0]
+  
+        thump:
+          osc:
+            freq: [tune * 16 * (1 * 0.1 * warp), [tune * 2, 0.1 + 0.1 * warp]]
+            duration: 0.1
+            attack: 0.2
+            amp: [0.8, 0]
+            phase:
+              osc:
+                freq: tune
+                range: [0, 1]
+        body:
+          osc:
+            freq: [tune * (6 - 3 * warp), [tune * (1 + 0.5 * warp), 0.12 + 0.2 * warp]]
+            duration: 0.4
+            attack: 0.2 + 0.2 * warp
+            amp: [1, [0, 0.5 + 0.5 * warp]]
+            phase:
+              osc:
+                freq: tune * 0.8
+                range: [0, 1 - 1 * warp]
+
+
+
+
+tom_snare:
+  context:
+    tune: 50
+    warp: 0 # 0: kick, 1: tom
+    signal:
+      mix:
+  
+        thump:
+          osc:
+            freq: [tune * 32, [tune * 3, 0.1]]
+            duration: 0.1
+            attack: 0.2
+            amp: [0.8, 0]
+            phase:
+              osc:
+                freq: tune
+                range: [0, 1]
+
+        tone:
+          osc:
+            type: tri
+            freq: [260, [180, 0.05]]
+            amp: [0.3 * warp, 0.3 * warp]
+            attack: 0.001
+            release: 0.15
+            duration: 0.2
+
+        noise:
+          filter:
+            type: highpass
+            cutoff: 2000
+            signal:
+              osc:
+                type: noise
+                amp: [0.3 * warp, 0.3 * warp]
+                attack: 0.001
+                release: 0.08
+                duration: 0.15
+
+
+
+
+
+one_knob:
+  sequencer:
+    interval: 0.18
+    steps:
+      - kick_tom
+      -
+      - 
+      -
+      - kick_tom warp1
+      -
+      - 
+      -
+      # - tom_snare warp0
+      # -
+      # - 
+      # -
+      # - tom_snare warp1
+      # -
+      # -
+      # -
+      # - hihat
+      # - hihat
+      # - hihat
+      # - hihat
+
+
+
+yeum:
+  context:
+    tune: 50
+    warp: 0 # 0: kick, 1: tom
+    signal:
+      mix:
+  
+        thump:
+          osc:
+            freq: [tune * 16 * (0.1 * warp), [tune * 2 * (1 + 0.5 * warp), 0.1 + 0.6 * warp]]
+            duration: 0.1
+            attack: 0.2
+            amp: [0.8, 0]
+            phase:
+              osc:
+                freq: tune
+                range: [0, 1]
+        body:
+          osc:
+            freq: [tune * (1 + 0.5 * warp), [tune * (6 - 5 * warp), 0.12 + 0.4 * warp]]
+            duration: 0.4
+            attack: 0.2 + 0.6 * warp
+            amp: [1, [0, 0.5 + 0.5 * warp]]
+            phase:
+              osc:
+                freq: tune * 0.8
+                range: [0, 1 - 1 * warp]
+
+
+
 success:
   retrigger:
     duration: 2.2
@@ -14,95 +216,6 @@ success:
             interval: 0.2
             repeat: 1
             steps: [B3, D3, E3, G3]
-
-shahi:
-  tempo:
-    bpm: 130
-    signal:
-      expression:
-        exp: signal * amp
-        amp:
-          midi_cc:
-            monitor: true
-            cc: 3
-            range: [0.5, 3]
-        signal:
-          filter:
-            type: highpass
-            peak:
-              midi_cc:
-                cc: 20
-            cutoff:
-              midi_cc:
-                cc: 19
-                range: [0, 20000]
-            signal:
-              filter:
-                peak:
-                  midi_cc:
-                    monitor: true
-                    cc: 18
-                cutoff:
-                  midi_cc:
-                    monitor: true
-                    cc: 17
-                    range: [0, 20000]
-                signal:
-                  expression:
-                    monitor: true
-                    exp: pow(signal, exponent)
-                    exponent:
-                      midi_cc:
-                        cc: 16
-                        range: [0, 2]
-                    signal:
-                      envelope:
-                        gate:
-                          osc:
-                            type: sqr
-                            freq: 1
-                        release: 5
-                        attack: 0.01
-                        signal:
-                          mix:
-                            duration: 1000
-                            perc:
-                              sequencer:
-                                monitor: true
-                                interval: beat / 4
-                                repeat: 1000
-                                steps:
-                                  - kick-drum-dynamic
-                                  - 
-                                  - kick-drum-dynamic
-                                  -
-                                  - 
-                                  -
-                            drone:
-                              osc:
-                                type: saw
-                                freq: A1
-                                amp: 0.005
-                            note:
-                              osc:
-                                monitor: true
-                                type: saw
-                                freq: E1
-                                amp: 0.005
-                                phase:
-                                  osc:
-                                    freq:
-                                      midi_cc:
-                                        cc: 0
-                                        range: [0, 1000]
-                                    range:
-                                      - midi_cc:
-                                          cc: 1
-                                          range: [-10, 0]
-                                      - midi_cc:
-                                          cc: 2
-                                          range: [0, 10]
-
           
 
 
@@ -159,38 +272,7 @@ rumble:
                 range: [1, .1]
 
 
-kick-drum-dynamic:
-  context:
-    tune: 50
-    signal:
-      mix:
-        click:
-          osc:
-            type: sqr
-            freq: tune * 4
-            duration: 0.002
-            attack: 0.0001
-            amp: [0.3, 0]
-        thump:
-          osc:
-            freq: [tune * 16, [tune * 2, 0.1]]
-            duration: 0.1
-            attack: 0.2
-            amp: [0.8, 0]
-            phase:
-              osc:
-                freq: tune
-                range: [0, 1]
-        body:
-          osc:
-            freq: [tune * 6, [tune, 0.12]]
-            duration: 0.2
-            attack: 0.2
-            amp: [1, 0]
-            phase:
-              osc:
-                freq: tune * 0.8
-                range: [0, 1]
+
 
 
 
@@ -201,13 +283,13 @@ kick-test:
       sequencer:
         interval: beat / 4
         steps:
-          - kick-drum-dynamic
+          - kick
           - 
           - 
           -
 
 
-kick-with-rumble:
+kick_test:
   tempo:
     bpm: 130
     signal:
@@ -217,29 +299,34 @@ kick-with-rumble:
             id: kick
             interval: beat / 4
             steps:
-              - kick-drum-dynamic
+              - kick
               - 
               - hihat v.1
               -
-              - kick-drum-dynamic
+              - kick
               - 
               - glitch
               -
-              - kick-drum-dynamic
+              - kick
               - 
               - hihat v.1
               -
-              - kick-drum-dynamic
+              - kick
               - 
               - oscar
               -
             # steps:
-            #   - kick-drum-dynamic, hihat v.2
+            #   - kick, hihat v.1
+            #   - 
+            #   - hihat v.2
+            #   - 
+            # steps:
+            #   - kick
             #   - 
             #   - hihat v.1
             #   - 
             steps:
-              - kick-drum-dynamic
+              - kick
               - 
               -
               - 
@@ -255,98 +342,6 @@ kick-with-rumble:
                 signal: $kick * 2
 
 
-compressed-pow:
-  expression:
-    exp: pow(signal, 0.5)
-    exponent:
-      midi_cc:
-        cc: 16
-        range: [0, 2]
-
-    signal:
-      kick-with-rumble: {}
-
-compressor-test:
-  expression:
-    exp: "signal * (1 - ratio) + clip(signal, -threshold, threshold) * ratio"
-    signal:
-      kick-with-rumble: {}
-    threshold: 0.3
-    ratio: 0.7
-
-
-# Dynamic compressor with envelope follower
-# Usage as sub-patch: compressor: {signal: {...}, threshold: 0.3, ratio: 0.7, gain: 1.0}
-# The 'signal' parameter is automatically mapped to 'input_signal' for sub-patch compatibility
-compressor:
-  context:
-    input_signal:
-      kick-with-rumble: {}
-    threshold: 0.3
-    ratio: 0.7
-    gain: 1.0
-    attack: 0.01
-    release: 0.1
-    signal:
-      context:
-        env:
-          follow:
-            range: [0, 1]
-            attack: attack
-            release: release
-            signal: $input_signal
-        signal:
-          expression:
-            exp: "signal * (clip(where(env > threshold, 1 - (env - threshold) / (env + 1e-8) * ratio, 1), 0, 1) * gain).reshape(-1, 1)"
-            signal: $input_signal
-
-
-
-compressed:
-  tempo:
-    bpm: 130
-    signal:
-      compressor:
-        gain:
-          midi_cc:
-            cc: 16
-            range: [1, 5]
-        release:
-          midi_cc:
-            cc: 17
-            range: [0, 3]
-        threshold:
-          midi_cc:
-            cc: 18
-            range: [0, 3]
-        ratio:
-          midi_cc:
-            cc: 19
-            range: [0, 3]
-        signal:
-          mix:
-            rumble:
-              osc:
-                freq: 50
-                amp: 0.2
-                duration: 999
-            perc:
-              sequencer:
-                interval: beat
-                steps:
-                  - osc:
-                      freq: 100
-                      amp: 2
-                      duration: 0.5
-                      attack: 0.01
-                      release: 0.5
-                  -
-                  -
-                  -
-                  -
-                  -
-                  -
-                  -
 
 
 
@@ -418,9 +413,10 @@ hihat:
 
 
 
-kick:
+kick_ai:
   mix:
     duration: 1
+
     rumble:
       osc:
         type: sin
@@ -429,6 +425,7 @@ kick:
         attack: 0.001
         release: 0.6
         duration: 0.75
+  
     body:
       osc:
         type: sin
@@ -445,6 +442,7 @@ kick:
             attack: 0.0005
             release: 0.15
             duration: 0.2
+    
     upper_harmonics:
       osc:
         type: tri
@@ -453,6 +451,7 @@ kick:
         attack: 0.001
         release: 0.15
         duration: 0.2
+  
     punch:
       osc:
         type: noise
@@ -534,50 +533,6 @@ kick2:
               duration: 0.4
               freq: 18
 
-snare:
-  mix:
-    # Tonal component (shell resonance)
-    tone:
-      osc:
-        type: tri
-        freq: [260, [180, 0.05]]
-        amp: 0.4
-        attack: 0.001
-        release: 0.15
-        duration: 0.2
-    # Noise component (snares)
-    noise:
-      filter:
-        type: highpass
-        cutoff: 2000
-        signal:
-          osc:
-            type: noise
-            amp: 0.3
-            attack: 0.001
-            release: 0.08
-            duration: 0.15
-
-snare_test:
-  sequencer:
-    interval: 0.12
-    steps:
-      - kick
-      -
-      - clap
-      -
-      - kick, snare
-      -
-      - clap
-      - 
-      - kick
-      -
-      - clap
-      -
-      - kick, snare
-      -
-      - clap
-      -
 
 clap:
   mix:
@@ -642,94 +597,3 @@ clap:
                 release: 0.08
                 duration: 0.1
       
-
-cling:
-  envelope:
-    attack: 0.1
-    duration: 4
-    decay: 0.1
-    sustain: 0.8
-    release: 2
-    signal:
-      osc:
-        freq:
-          osc:
-            freq: [10, 10000]
-            range: [100, 2000]
-        
-
-
-cling_test:
-  sequencer:
-    interval: 1
-    steps:
-      - cling
-      -
-      -
-
-# Test envelope with gate control (gate opens/closes)
-envelope_gate_test:
-  envelope:
-    attack: 0.1
-    decay: 0.1
-    sustain: 0.1
-    release: 0.5
-    gate:
-      osc:
-        type: sqr
-        freq: 0.5  # Opens/closes twice per second
-    signal:
-      osc:
-        type: sin
-        freq: 440
-
-# Test envelope with trigger (retriggers on each pulse)
-envelope_trigger_example:
-  envelope:
-    monitor: true
-    duration: 999
-    attack: 0.01
-    decay: 0.1
-    sustain: 0.3
-    sustain_duration: 0
-    release: 0.5
-    end: false
-    trigger:
-      osc:
-        id: trigger
-        monitor: bipolar
-        type: saw
-        freq: 1
-    signal:
-      spawn:
-        trigger: $trigger
-        voices: 1
-        signal:
-          # expression:
-          #   exp:  pow(signal, 0.5)
-          #   signal:
-              osc:
-                duration: 5
-                type: sin
-                amp: 1
-                freq: 
-                  osc:
-                    freq: [3000, [0, 0.01]]
-                    range:
-                      - osc:
-                          freq: [10000, [0, 0.01]]
-                          range: [1000, 0]
-                      - 0
-
-# Test duration-based envelope (the original cling behavior)
-envelope_duration_test:
-  envelope:
-    attack: 0.1
-    decay: 0.1
-    sustain: 0.8
-    release: 0.5
-    duration: 2  # Total 2 seconds: 0.1 attack + 0.1 decay + 1.3 sustain + 0.5 release
-    signal:
-      osc:
-        type: tri
-        freq: 330 
