@@ -24,10 +24,10 @@ MIDI_CLOCK_ENABLED = True  # Enable MIDI clock output when tempo node has source
 # Audio interface settings
 # Dictionary mapping device keys to audio device names for quick selection
 AUDIO_INPUT_DEVICES = {
-    # "scarlett": "Focusrite USB",
+    "l6": "ZOOM L6",
 }
 AUDIO_OUTPUT_DEVICES = {
-    # "scarlett": "Focusrite USB",
+    "l6": "ZOOM L6",
 }
 AUDIO_DEFAULT_INPUT_DEVICE_KEY = None  # Default audio input alias (None = system default)
 AUDIO_DEFAULT_OUTPUT_DEVICE_KEY = None  # Default audio output alias for track routing

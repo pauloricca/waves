@@ -1,3 +1,29 @@
+# Test context variable chaining (define a, then use a to define b)
+test_context_chaining:
+  context:
+    a: 440
+    b: "a * 2"
+    c: "b / 4"
+    signal:
+      osc:
+        duration: 2
+        freq: c  # Should be 440 * 2 / 4 = 220 Hz
+
+# Test complex context variable chaining with time-based variables
+test_context_advanced:
+  context:
+    base_freq: 220
+    lfo_rate: "base_freq / 100"  # 2.2 Hz
+    mod_depth: "base_freq / 2"   # 110 Hz depth
+    final_freq:
+      osc:
+        freq: "lfo_rate"         # Uses the calculated LFO rate
+        range: ["base_freq - mod_depth", "base_freq + mod_depth"]
+    signal:
+      osc:
+        duration: 4
+        freq: final_freq  # Complex modulated frequency
+
 # Test track node with static pan
 test_track_node:
   track:
@@ -1413,6 +1439,75 @@ test_glide_dynamic_time:
               - 440
               - 330
               - 550
+
+
+# Test output
+output:
+  mix:
+    internal:
+      track:
+        signal:
+          input:
+            device: l6
+            channels: 7
+    exrernal:
+      track:
+        output_device: l6
+        output_channels: [1, 2]
+        volume: 0.8
+        signal:
+          osc:
+            duration: 999
+            freq: 50
+            phase:
+              osc:
+                freq: 150
+                range: [0.5, 1]
+            amp:
+              expression:
+                exp: a * b * c
+                a:
+                  osc:
+                    freq: 1
+                    amp: [0.8, 1]
+                b:
+                  osc:
+                    freq: 0.65
+                    amp: [0.8, 1]
+                c:
+                  osc:
+                    freq: 1.54
+                    amp: [0.8, 1]
+    exrernal2:
+      track:
+        output_device: l6
+        output_channels: [3, 4]
+        volume: 0.8
+        signal:
+          osc:
+            duration: 999
+            freq: 75
+            phase:
+              osc:
+                freq: 225
+                range: [0.5, 1]
+            amp:
+              expression:
+                exp: a * b * c
+                a:
+                  osc:
+                    freq: 1.1
+                    amp: [0.8, 1]
+                b:
+                  osc:
+                    freq: 0.7
+                    amp: [0.8, 1]
+                c:
+                  osc:
+                    freq: 1.5
+                    amp: [0.8, 1]
+
+
 
 # Test glide with zero time (no glide)
 test_glide_zero:

@@ -141,16 +141,18 @@ class _InputStreamEntry:
         self.buffer = deque(maxlen=SAMPLE_RATE * 10)
         self.lock = threading.Lock()
 
-        mapping = [ch - 1 for ch in channel_mapping] if channel_mapping else None
+        # Open stream with enough channels to accommodate the highest channel in mapping
+        max_channel = max(channel_mapping) if channel_mapping else 1
+        self.stream_channels = max_channel
+        self.mapping = [ch - 1 for ch in channel_mapping] if channel_mapping else None
 
         self.stream = sd.InputStream(
             device=self.device_index,
-            channels=self.channel_count,
+            channels=self.stream_channels,
             samplerate=SAMPLE_RATE,
             blocksize=BUFFER_SIZE,
             dtype='float32',
             callback=self._callback,
-            mapping=mapping,
         )
         self.stream.start()
         device_name = sd.query_devices(self.device_index)['name'] if self.device_index is not None else 'default'
@@ -159,8 +161,15 @@ class _InputStreamEntry:
     def _callback(self, indata, frames, time_info, status):
         if status:
             print(f"Audio input stream status: {status}")
+        
+        # Select only the requested channels using the mapping
+        if self.mapping is not None:
+            selected_data = indata[:, self.mapping]
+        else:
+            selected_data = indata
+        
         with self.lock:
-            self.buffer.extend(indata.copy())
+            self.buffer.extend(selected_data.copy())
 
     def read(self, num_samples: int) -> np.ndarray:
         if self.channel_count == 1:
@@ -217,16 +226,18 @@ class _OutputRoute:
         self._current_chunk: np.ndarray | None = None
         self._current_pos = 0
 
-        mapping = [ch - 1 for ch in channel_mapping] if channel_mapping else None
+        # Create stream with enough channels to accommodate the highest channel in mapping
+        max_channel = max(channel_mapping) if channel_mapping else 1
+        self.stream_channels = max_channel
+        self.mapping_indices = [ch - 1 for ch in channel_mapping] if channel_mapping else None
 
         self.stream = sd.OutputStream(
             device=self.device_index,
-            channels=self.channel_count,
+            channels=self.stream_channels,
             samplerate=SAMPLE_RATE,
             blocksize=BUFFER_SIZE,
             dtype='float32',
             callback=self._callback,
-            mapping=mapping,
         )
         self.stream.start()
         device_name = sd.query_devices(self.device_index)['name'] if self.device_index is not None else 'default'
@@ -253,8 +264,8 @@ class _OutputRoute:
             raise ValueError("Unsupported audio buffer shape for routing")
 
         with self._chunk_lock:
-            self._chunks.append(np.array(data, dtype=np.float32, copy=True))
-
+            self._chunks.append(data)
+            
     def _callback(self, outdata, frames, time_info, status):
         if status:
             print(f"Audio output route status: {status}")
@@ -278,7 +289,16 @@ class _OutputRoute:
             frames_to_copy = min(frames - frames_filled, available)
 
             chunk_slice = self._current_chunk[self._current_pos:self._current_pos + frames_to_copy]
-            outdata[frames_filled:frames_filled + frames_to_copy, :] = chunk_slice
+            
+            # Place audio data in the correct channels according to mapping
+            if self.mapping_indices is not None:
+                for i, channel_idx in enumerate(self.mapping_indices):
+                    outdata[frames_filled:frames_filled + frames_to_copy, channel_idx] = chunk_slice[:, i]
+            else:
+                outdata[frames_filled:frames_filled + frames_to_copy, :] = chunk_slice
+            
+            self._current_pos += frames_to_copy
+            frames_filled += frames_to_copy
             self._current_pos += frames_to_copy
             frames_filled += frames_to_copy
 
