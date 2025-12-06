@@ -2,6 +2,7 @@ import math
 import numpy as np
 from config import SAMPLE_RATE
 from random import uniform, choice, random
+from utils import to_mono
 
 def rand(a: float | list | None = None, b: float | None = None) -> float:
     """Return a random value based on input pattern:
@@ -60,7 +61,7 @@ GLOBAL_CONSTANTS = {
     'infinite': math.inf,
     'infinity': math.inf,
     
-
+    'to_mono': to_mono,
     'rand': rand,
     
     # Sample rate
