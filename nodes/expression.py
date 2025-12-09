@@ -19,6 +19,10 @@ class ExpressionNode(BaseNode):
         
         # ExpressionNode is stereo-capable - it can process and pass through stereo signals
         
+        # Configure bipolar monitoring for expressions (since they often output control signals with negative values)
+        self._monitor_use_abs = False  # Show bipolar values instead of absolute
+        self._monitor_range = (-1.0, 1.0)  # Typical range for normalized signals
+        
         # Compile the main expression using centralized function
         try:
             self.compiled_exp, self.exp_value, self.is_constant = compile_expression(model.exp)

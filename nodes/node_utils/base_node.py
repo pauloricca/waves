@@ -4,11 +4,11 @@ from __future__ import annotations
 import numpy as np
 
 from config import *
-from typing import Optional, TYPE_CHECKING, Union, Literal
+from typing import Optional, TYPE_CHECKING, Union, Literal, Dict, Any, List
 from pydantic import BaseModel
 
 from constants import RenderArgs
-from utils import empty_mono, empty_stereo, time_to_samples, samples_to_time, to_stereo, to_mono, is_stereo
+from utils import empty_mono, time_to_samples, samples_to_time
 
 if TYPE_CHECKING:
     from nodes.wavable_value import WavableValue
@@ -18,7 +18,7 @@ class BaseNodeModel(BaseModel):
     duration: Optional[float] = None
     id: Optional[str] = None  # Unique identifier for this node to enable referencing
     is_pass_through: bool = False  # Override to True for nodes that just pass through their signal child
-    monitor: Union[bool, Literal["bipolar"]] = False  # Enable real-time output visualization: True (abs), "bipolar" (centered at 0)
+    monitor: Union[bool, Literal["bipolar"], Dict[str, Any]] = False  # Enable real-time output visualization: True (abs), "bipolar" (centered at 0), or {"type": "bipolar", "range": [min, max]}
     pass
 
 
@@ -43,6 +43,55 @@ class BaseNode:
         if model.monitor and node_id:
             from nodes.node_utils.monitor_registry import get_monitor_registry
             get_monitor_registry().register(node_id, self)
+    
+    def _parse_monitor_config(self) -> tuple[bool, bool, tuple[float, float], str]:
+        """Parse monitor configuration and return (is_enabled, use_abs, range, color_scheme)."""
+        monitor = self.model.monitor
+        
+        if not monitor:
+            return False, True, (0.0, 1.0), 'level'
+        
+        if monitor is True:
+            return True, True, (0.0, 1.0), 'level'  # Default absolute monitoring with level colors
+        
+        if monitor == "bipolar":
+            return True, False, (-1.0, 1.0), 'bipolar'  # Bipolar monitoring with bipolar colors
+        
+        if isinstance(monitor, str):
+            # String format for type only
+            if monitor == "value":
+                return True, True, (0.0, 1.0), 'value'  # Value monitoring with blue colors
+            elif monitor == "level":
+                return True, True, (0.0, 1.0), 'level'  # Level monitoring with green-yellow-red
+            elif monitor == "bipolar":
+                return True, False, (-1.0, 1.0), 'bipolar'  # Bipolar with purple colors
+        
+        if isinstance(monitor, dict):
+            # Object format: {"type": "bipolar", "range": [min, max]}
+            monitor_type = monitor.get("type", "level")
+            monitor_range = monitor.get("range", [0.0, 1.0])
+            
+            # Determine use_abs and color_scheme based on type
+            if monitor_type == "bipolar":
+                use_abs = False
+                color_scheme = 'bipolar'
+                default_range = [-1.0, 1.0]
+            elif monitor_type == "value":
+                use_abs = True
+                color_scheme = 'value'
+                default_range = [0.0, 1.0]
+            else:  # "level" or any other value defaults to level
+                use_abs = True
+                color_scheme = 'level'
+                default_range = [0.0, 1.0]
+            
+            # Use provided range or default
+            if monitor_range is None:
+                monitor_range = default_range
+            
+            return True, use_abs, tuple(monitor_range), color_scheme
+        
+        return False, True, (0.0, 1.0), 'level'
 
 
     def instantiate_child_node(self, child: WavableValue, attribute_name: str, attribute_index: int | None = None) -> BaseNode:
@@ -106,7 +155,19 @@ class BaseNode:
                 cached_output = context.get_output(instance_id)
                 if cached_output is not None:
                     # Already rendered this chunk, return cached output
-                    return self._adjust_output_length(cached_output, num_samples)
+                    adjusted_output = self._adjust_output_length(cached_output, num_samples)
+                    
+                    # Update monitor even when returning cached output
+                    if hasattr(self, 'model') and self.model.monitor and self.node_id:
+                        from nodes.node_utils.monitor_registry import get_monitor_registry
+                        # Parse monitor configuration
+                        is_enabled, use_abs, monitor_range, color_scheme = self._parse_monitor_config()
+                        self._monitor_use_abs = use_abs
+                        self._monitor_range = monitor_range
+                        self._monitor_color_scheme = color_scheme
+                        get_monitor_registry().update(self.node_id, adjusted_output)
+                    
+                    return adjusted_output
             
             # Increment recursion, render, decrement, cache (if top level)
             context.increment_recursion(instance_id)
@@ -143,9 +204,14 @@ class BaseNode:
         # Update monitor with the result
         if hasattr(self, 'model') and self.model.monitor and self.node_id:
             from nodes.node_utils.monitor_registry import get_monitor_registry
-            # Set monitor mode: bipolar (centered at 0) or absolute value
-            self._monitor_use_abs = self.model.monitor != "bipolar"
-            get_monitor_registry().update(self.node_id, result)
+            # Parse monitor configuration
+            is_enabled, use_abs, monitor_range, color_scheme = self._parse_monitor_config()
+            self._monitor_use_abs = use_abs
+            self._monitor_range = monitor_range
+            self._monitor_color_scheme = color_scheme
+            # Use model.id for monitor registry if available, otherwise node_id
+            monitor_key = getattr(self.model, 'id', None) or self.node_id
+            get_monitor_registry().update(monitor_key, result)
         
         return result
     

@@ -192,19 +192,19 @@ class NodeMonitor:
         total_meter_width = 24
         
         if self.is_stereo:
-            # Show separate L/R meters for stereo
-            # Total: "L " (2) + meter (10) + " R " (3) + meter (9) = 24 chars
+            # Show peak values within current chunk for stereo
             meter_l = create_monitor_meter(self.peak_left, min_val, max_val, width=10, color_scheme=color_scheme, is_bipolar=is_bipolar)
             meter_r = create_monitor_meter(self.peak_right, min_val, max_val, width=9, color_scheme=color_scheme, is_bipolar=is_bipolar)
             value_str = f"L:{self.peak_left:.2f} R:{self.peak_right:.2f}"
             return f"L {meter_l} R {meter_r}  {self.display_name} ({value_str})"
         else:
             if is_bipolar:
-                # For bipolar mono, show the value that's further from zero
+                # For bipolar mono, show the value that's further from zero within current chunk
                 display_value = self.peak_level if abs(self.peak_level) > abs(getattr(self, 'min_level', 0)) else getattr(self, 'min_level', 0)
                 meter = create_monitor_meter(display_value, min_val, max_val, width=total_meter_width, color_scheme=color_scheme, is_bipolar=True)
                 return f"{meter}  {self.display_name} ({display_value:.2f})"
             else:
+                # Show peak value within current chunk for mono
                 meter = create_monitor_meter(self.peak_level, min_val, max_val, width=total_meter_width, color_scheme=color_scheme)
                 return f"{meter}  {self.display_name} ({self.peak_level:.2f})"
 
