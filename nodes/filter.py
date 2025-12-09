@@ -7,7 +7,7 @@ from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
-from utils import empty_mono
+from utils import empty_mono, is_stereo
 
 class FilterTypes(str, Enum):
     HIGHPASS = "HIGHPASS"
@@ -39,10 +39,15 @@ class FilterNode(BaseNode):
         
         # Persistent state for continuity between chunks (survives hot reload)
         if do_initialise_state:
-            self.state.x1 = 0.0
-            self.state.x2 = 0.0
-            self.state.y1 = 0.0
-            self.state.y2 = 0.0
+            # Separate state for each channel (mono uses only left channel state)
+            self.state.x1_l = 0.0
+            self.state.x2_l = 0.0
+            self.state.y1_l = 0.0
+            self.state.y2_l = 0.0
+            self.state.x1_r = 0.0
+            self.state.x2_r = 0.0
+            self.state.y1_r = 0.0
+            self.state.y2_r = 0.0
             # Coefficient caching
             self.state.last_cutoff = None
             self.state.last_peak = None
@@ -146,25 +151,129 @@ class FilterNode(BaseNode):
                 return self._apply_biquad_simple(signal_wave, self.state.cached_b, self.state.cached_a)
             
             # Truly modulated cutoff - use per-sample processing
+            if is_stereo(signal_wave):
+                # Stereo signal - process each channel separately
+                out = np.zeros_like(signal_wave)
+                
+                # Left channel state
+                x1_l, x2_l = self.state.x1_l, self.state.x2_l
+                y1_l, y2_l = self.state.y1_l, self.state.y2_l
+                
+                # Right channel state
+                x1_r, x2_r = self.state.x1_r, self.state.x2_r
+                y1_r, y2_r = self.state.y1_r, self.state.y2_r
+
+                for i in range(len(signal_wave)):
+                    fc = cutoff[i]
+
+                    if filter_type == "lowpass":
+                        b, a = biquad_lowpass(fc, q, SAMPLE_RATE)
+                    elif filter_type == "highpass":
+                        b, a = biquad_highpass(fc, q, SAMPLE_RATE)
+                    elif filter_type == "bandpass":
+                        b, a = biquad_bandpass(fc, q, SAMPLE_RATE)
+                    else:
+                        raise ValueError(f"Modulated filter type not supported: {filter_type}")
+
+                    # Left channel
+                    x0_l = signal_wave[i, 0]
+                    y0_l = b[0] * x0_l + b[1] * x1_l + b[2] * x2_l - a[1] * y1_l - a[2] * y2_l
+                    out[i, 0] = y0_l
+                    x2_l, x1_l = x1_l, x0_l
+                    y2_l, y1_l = y1_l, y0_l
+                    
+                    # Right channel
+                    x0_r = signal_wave[i, 1]
+                    y0_r = b[0] * x0_r + b[1] * x1_r + b[2] * x2_r - a[1] * y1_r - a[2] * y2_r
+                    out[i, 1] = y0_r
+                    x2_r, x1_r = x1_r, x0_r
+                    y2_r, y1_r = y1_r, y0_r
+
+                # Store state for next chunk
+                self.state.x1_l, self.state.x2_l = x1_l, x2_l
+                self.state.y1_l, self.state.y2_l = y1_l, y2_l
+                self.state.x1_r, self.state.x2_r = x1_r, x2_r
+                self.state.y1_r, self.state.y2_r = y1_r, y2_r
+                
+            else:
+                # Mono signal - process single channel
+                out = np.zeros_like(signal_wave)
+                
+                # Use left channel state for mono
+                x1, x2 = self.state.x1_l, self.state.x2_l
+                y1, y2 = self.state.y1_l, self.state.y2_l
+
+                for i in range(len(signal_wave)):
+                    fc = cutoff[i]
+
+                    if filter_type == "lowpass":
+                        b, a = biquad_lowpass(fc, q, SAMPLE_RATE)
+                    elif filter_type == "highpass":
+                        b, a = biquad_highpass(fc, q, SAMPLE_RATE)
+                    elif filter_type == "bandpass":
+                        b, a = biquad_bandpass(fc, q, SAMPLE_RATE)
+                    else:
+                        raise ValueError(f"Modulated filter type not supported: {filter_type}")
+
+                    # Direct Form I Biquad filter (per-sample, using past values)
+                    x0 = signal_wave[i]
+                    y0 = b[0] * x0 + b[1] * x1 + b[2] * x2 - a[1] * y1 - a[2] * y2
+
+                    out[i] = y0
+                    x2, x1 = x1, x0
+                    y2, y1 = y1, y0
+
+                # Store state for next chunk
+                self.state.x1_l, self.state.x2_l = x1, x2
+                self.state.y1_l, self.state.y2_l = y1, y2
+
+            return out
+    
+    def _apply_biquad_simple(self, signal_wave, b, a):
+        """Apply biquad filter using simple state variables (no scipy zi)"""
+        if is_stereo(signal_wave):
+            # Stereo signal - process each channel separately
             out = np.zeros_like(signal_wave)
             
-            # Use instance state variables for continuity between chunks
-            x1, x2 = self.state.x1, self.state.x2
-            y1, y2 = self.state.y1, self.state.y2
+            # Left channel state
+            x1_l, x2_l = self.state.x1_l, self.state.x2_l
+            y1_l, y2_l = self.state.y1_l, self.state.y2_l
+            
+            # Right channel state
+            x1_r, x2_r = self.state.x1_r, self.state.x2_r
+            y1_r, y2_r = self.state.y1_r, self.state.y2_r
+            
+            for i in range(len(signal_wave)):
+                # Left channel
+                x0_l = signal_wave[i, 0]
+                y0_l = b[0] * x0_l + b[1] * x1_l + b[2] * x2_l - a[1] * y1_l - a[2] * y2_l
+                out[i, 0] = y0_l
+                x2_l, x1_l = x1_l, x0_l
+                y2_l, y1_l = y1_l, y0_l
+                
+                # Right channel
+                x0_r = signal_wave[i, 1]
+                y0_r = b[0] * x0_r + b[1] * x1_r + b[2] * x2_r - a[1] * y1_r - a[2] * y2_r
+                out[i, 1] = y0_r
+                x2_r, x1_r = x1_r, x0_r
+                y2_r, y1_r = y1_r, y0_r
+            
+            # Store state for next chunk
+            self.state.x1_l, self.state.x2_l = x1_l, x2_l
+            self.state.y1_l, self.state.y2_l = y1_l, y2_l
+            self.state.x1_r, self.state.x2_r = x1_r, x2_r
+            self.state.y1_r, self.state.y2_r = y1_r, y2_r
+            
+        else:
+            # Mono signal - process single channel
+            out = np.zeros_like(signal_wave)
+            
+            # Use left channel state for mono
+            x1, x2 = self.state.x1_l, self.state.x2_l
+            y1, y2 = self.state.y1_l, self.state.y2_l
 
             for i in range(len(signal_wave)):
-                fc = cutoff[i]
-
-                if filter_type == "lowpass":
-                    b, a = biquad_lowpass(fc, q, SAMPLE_RATE)
-                elif filter_type == "highpass":
-                    b, a = biquad_highpass(fc, q, SAMPLE_RATE)
-                elif filter_type == "bandpass":
-                    b, a = biquad_bandpass(fc, q, SAMPLE_RATE)
-                else:
-                    raise ValueError(f"Modulated filter type not supported: {filter_type}")
-
-                # Direct Form I Biquad filter (per-sample, using past values)
+                # Direct Form I Biquad filter
                 x0 = signal_wave[i]
                 y0 = b[0] * x0 + b[1] * x1 + b[2] * x2 - a[1] * y1 - a[2] * y2
 
@@ -173,31 +282,8 @@ class FilterNode(BaseNode):
                 y2, y1 = y1, y0
 
             # Store state for next chunk
-            self.state.x1, self.state.x2 = x1, x2
-            self.state.y1, self.state.y2 = y1, y2
-
-            return out
-    
-    def _apply_biquad_simple(self, signal_wave, b, a):
-        """Apply biquad filter using simple state variables (no scipy zi)"""
-        out = np.zeros_like(signal_wave)
-        
-        # Use instance state variables for continuity between chunks
-        x1, x2 = self.state.x1, self.state.x2
-        y1, y2 = self.state.y1, self.state.y2
-
-        for i in range(len(signal_wave)):
-            # Direct Form I Biquad filter
-            x0 = signal_wave[i]
-            y0 = b[0] * x0 + b[1] * x1 + b[2] * x2 - a[1] * y1 - a[2] * y2
-
-            out[i] = y0
-            x2, x1 = x1, x0
-            y2, y1 = y1, y0
-
-        # Store state for next chunk
-        self.state.x1, self.state.x2 = x1, x2
-        self.state.y1, self.state.y2 = y1, y2
+            self.state.x1_l, self.state.x2_l = x1, x2
+            self.state.y1_l, self.state.y2_l = y1, y2
 
         return out
 

@@ -10,26 +10,39 @@ from utils import match_length, empty_mono, empty_stereo, to_mono, is_stereo
 """
 Track Node
 
-Converts a mono signal to stereo with panning and volume control.
-This is the fundamental stereo signal generator in the system.
+Applies panning and volume control to signals.
+Optimally handles mono/stereo conversion - only outputs stereo when necessary.
 
 Parameters:
-- signal: Input mono signal
+- signal: Input signal (mono or stereo)
 - pan: Pan position (-1 = left, 0 = center, 1 = right). Can be static or dynamic (WavableValue).
        Uses equal-power panning law for natural stereo imaging.
 - volume: Volume multiplier (default: 1.0). Can be static or dynamic (WavableValue).
 
-Output: 2D array of shape (num_samples, 2) with [left, right] channels.
+Output behavior:
+- If input is stereo: always outputs stereo (2D array)
+- If input is mono and has panning (pan ≠ 0): outputs stereo (2D array) 
+- If input is mono and no panning (pan = 0): outputs mono (1D array)
+
+This optimization avoids unnecessary stereo conversion when no panning is applied.
 
 Examples:
 
-# Pan a sine wave to the left with reduced volume
+# No panning - stays mono for efficiency
 track:
   signal:
     osc:
       type: sin
       freq: 440
-  pan: -1
+  volume: 0.7
+
+# With panning - converts mono to stereo
+track:
+  signal:
+    osc:
+      type: sin
+      freq: 440
+  pan: -0.5
   volume: 0.7
 
 # Dynamic panning with an LFO
@@ -43,16 +56,6 @@ track:
       type: sin
       freq: 0.5
       range: [-1, 1]
-
-# Dynamic volume envelope
-track:
-  signal:
-    sample:
-      file: kick.wav
-  volume:
-    envelope:
-      attack: 0.01
-      release: 0.3
 """
 
 class TrackNodeModel(BaseNodeModel):
@@ -72,19 +75,19 @@ class TrackNode(BaseNode):
 
     def _do_render(self, num_samples=None, context=None, **params):
         """
-        Render signal with panning and volume to create stereo output.
-        Always outputs stereo (2D array).
+        Render signal with panning and volume.
+        
+        Output format:
+        - If input is stereo: always output stereo
+        - If input is mono and has panning (pan != 0): output stereo  
+        - If input is mono and no panning (pan == 0): output mono
         """
         # Render the child signal (may be mono or stereo)
         signal = self.signal_node.render(num_samples, context, **params)
         
-        # If signal is empty, return empty stereo
+        # If signal is empty, return empty in same format as input would be
         if len(signal) == 0:
-            return empty_stereo()
-        
-        # Convert to mono if stereo (panning works on mono signals)
-        if is_stereo(signal):
-            signal = to_mono(signal)
+            return empty_stereo() if is_stereo(signal) else empty_mono()
         
         # Get pan value (static or dynamic)
         pan_value = self.pan_node.render(len(signal), context, **params)
@@ -94,9 +97,6 @@ class TrackNode(BaseNode):
             pan_value = to_mono(pan_value)
         pan_value = match_length(pan_value, len(signal))
         
-        # Apply panning to create stereo
-        stereo_signal = apply_panning(signal, pan_value)
-        
         # Get volume value (static or dynamic)
         volume_value = self.volume_node.render(len(signal), context, **params)
         
@@ -105,10 +105,34 @@ class TrackNode(BaseNode):
             volume_value = to_mono(volume_value)
         volume_value = match_length(volume_value, len(signal))
         
-        # Apply volume to both channels
-        stereo_signal *= volume_value[:, np.newaxis]
+        # Check if we need panning
+        needs_panning = np.any(np.abs(pan_value) > 1e-6)  # Small threshold for floating point comparison
         
-        return stereo_signal
+        if is_stereo(signal):
+            # Input is stereo - apply volume and panning to stereo signal
+            if needs_panning:
+                # Convert to mono first, then pan back to stereo
+                mono_signal = to_mono(signal)
+                result = apply_panning(mono_signal, pan_value)
+            else:
+                # No panning needed, just apply volume to stereo signal
+                result = signal.copy()
+            
+            # Apply volume to both channels
+            result *= volume_value[:, np.newaxis]
+            
+        else:
+            # Input is mono
+            if needs_panning:
+                # Apply panning to create stereo
+                result = apply_panning(signal, pan_value)
+                # Apply volume to both channels  
+                result *= volume_value[:, np.newaxis]
+            else:
+                # No panning needed - stay mono, just apply volume
+                result = signal * volume_value
+        
+        return result
 
 
 TRACK_DEFINITION = NodeDefinition("track", TrackNode, TrackNodeModel)
