@@ -267,13 +267,12 @@ class BufferNode(BaseNode):
             if num_samples > samples_remaining:
                 num_samples = samples_remaining
         
-        # Snapshot buffer state before any operations (for recursion safety)
-        buffer_snapshot = self.buffer_ref['data'].copy()
-        write_head_snapshot = self.buffer_ref['write_head']
-        
         # Write to buffer if signal is provided
         # IMPORTANT: Write head always advances, even if signal ends
         if self.signal_node is not None:
+            # Snapshot buffer state before any operations (for recursion safety)
+            buffer_snapshot = self.buffer_ref['data'].copy()
+            write_head_snapshot = self.buffer_ref['write_head']
             signal_wave = self.signal_node.render(num_samples, context, **self.get_params_for_children(params))
             
             # Restore buffer state after rendering signal (in case of recursion)
@@ -286,9 +285,6 @@ class BufferNode(BaseNode):
             
             # Write signal to buffer (always writes num_samples, advancing write head)
             self._write_to_buffer(signal_wave, num_samples, context, params)
-            # Update snapshot after write
-            buffer_snapshot = self.buffer_ref['data'].copy()
-            write_head_snapshot = self.buffer_ref['write_head']
         
         # Read from buffer
         if self.is_position_mode:
@@ -361,16 +357,20 @@ class BufferNode(BaseNode):
             else:
                 positions_to_write = range(start_pos_int, end_pos_int + 1)
             
-            # For each buffer position, interpolate the signal value
-            for buf_pos in positions_to_write:
-                # Find where this buffer position falls in the cumulative_positions
-                relative_pos = (buf_pos - write_head) % self.buffer_length_samples
-                # Find the signal sample index that corresponds to this buffer position
-                signal_idx = np.searchsorted(cumulative_positions, relative_pos)
-                if signal_idx >= len(signal_wave):
-                    signal_idx = len(signal_wave) - 1
-                # Simple nearest-neighbor for now (could use interpolation)
-                self.buffer_ref['data'][int(buf_pos)] = signal_wave[signal_idx]
+            # Optimized writing with vectorized operations
+            if isinstance(positions_to_write, range):
+                positions_array = np.arange(positions_to_write.start, positions_to_write.stop)
+            else:
+                positions_array = np.array(positions_to_write)
+            
+            # Vectorized position calculation
+            relative_positions = (positions_array - write_head) % self.buffer_length_samples
+            signal_indices = np.searchsorted(cumulative_positions, relative_positions)
+            signal_indices = np.clip(signal_indices, 0, len(signal_wave) - 1)
+            
+            # Vectorized assignment
+            buffer_positions = positions_array.astype(int) % self.buffer_length_samples
+            self.buffer_ref['data'][buffer_positions] = signal_wave[signal_indices]
             
             # Update write head
             self.buffer_ref['write_head'] = (write_head + cumulative_positions[-1]) % self.buffer_length_samples
@@ -440,31 +440,67 @@ class BufferNode(BaseNode):
             # Linear interpolation
             output = sample1 * (1 - read_pos_frac) + sample2 * read_pos_frac
         else:
-            # Variable speed or offset - per-sample processing
-            for i in range(num_samples):
-                # Calculate how many samples we've "virtually" advanced based on speed
-                if i == 0:
-                    virtual_advance = 0
-                else:
-                    virtual_advance = np.sum(speed[:i])
-                
-                # Read position formula:
-                # Start from write_head - num_samples (beginning of chunk that was just written)
-                # Go back by offset_samples
-                # Advance forward by virtual_advance (for speed control)
-                read_pos = write_head - num_samples - offset_samples[i] + virtual_advance
-                
-                # Wrap around buffer
-                read_pos = read_pos % self.buffer_length_samples
-                
-                # Interpolate
-                read_pos_int = int(read_pos)
-                read_pos_frac = read_pos - read_pos_int
-                
-                # Linear interpolation
-                sample1 = self.buffer_ref['data'][read_pos_int]
-                sample2 = self.buffer_ref['data'][(read_pos_int + 1) % self.buffer_length_samples]
-                output[i] = sample1 * (1 - read_pos_frac) + sample2 * read_pos_frac
+            # Variable speed or offset - use sample node's simpler approach
+            # Use sample node's speed integration method (much simpler and more reliable)
+            abs_speed = np.abs(speed)
+            abs_speed = np.maximum(abs_speed, 1e-6)  # avoid zero speed
+            sign = np.sign(speed)
+            dt = 1.0 / SAMPLE_RATE
+            
+            # Calculate playhead movement like sample node does
+            playhead_delta = abs_speed * sign * dt * SAMPLE_RATE
+            
+            # For offset mode, we start reading from the write head position
+            # and move based on speed, then apply offset as displacement
+            if self.number_of_chunks_rendered == 0:
+                # Initialize playhead to write head position for first chunk
+                self.state.last_playhead_position = float(write_head)
+            
+            playhead_absolute = self.state.last_playhead_position + np.cumsum(playhead_delta)
+            
+            # Apply offset as displacement (negative offset reads from further back)
+            read_positions = playhead_absolute - offset_samples
+            
+            # Wrap around buffer
+            read_positions = read_positions % self.buffer_length_samples
+            
+            # Use simple linear interpolation like sample node (much faster than cubic)
+            output = np.interp(read_positions, np.arange(self.buffer_length_samples), self.buffer_ref['data'])
+            
+            # Update playhead state for next chunk
+            self.state.last_playhead_position = playhead_absolute[-1] if len(playhead_absolute) > 0 else self.state.last_playhead_position
+        
+        return output
+    
+    def _cubic_interpolate(self, positions, data):
+        """Cubic (Hermite) interpolation for better quality at variable speeds"""
+        positions = np.asarray(positions)
+        output = np.zeros_like(positions)
+        
+        # Get integer and fractional parts
+        pos_int = positions.astype(int)
+        pos_frac = positions - pos_int
+        
+        # Get 4 points for cubic interpolation: [p-1, p, p+1, p+2]
+        buffer_len = len(data)
+        pos_prev = (pos_int - 1) % buffer_len
+        pos_curr = pos_int % buffer_len
+        pos_next = (pos_int + 1) % buffer_len
+        pos_next2 = (pos_int + 2) % buffer_len
+        
+        y0 = data[pos_prev]
+        y1 = data[pos_curr] 
+        y2 = data[pos_next]
+        y3 = data[pos_next2]
+        
+        # Hermite interpolation (4-point, 3rd order)
+        t = pos_frac
+        c0 = y1
+        c1 = 0.5 * (y2 - y0)
+        c2 = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3
+        c3 = 0.5 * (y3 - y0) + 1.5 * (y1 - y2)
+        
+        output = c0 + c1 * t + c2 * t * t + c3 * t * t * t
         
         return output
     
@@ -516,18 +552,17 @@ class BufferNode(BaseNode):
             # Multiply speed by the frequency ratio
             speed = speed * (freq / base_freq)
         
-        # Calculate playhead movement
+        # Calculate playhead movement (simplified and optimized)
         abs_speed = np.abs(speed)
         abs_speed = np.maximum(abs_speed, 1e-6)  # avoid zero speed
         sign = np.sign(speed)
-        dt = 1.0 / SAMPLE_RATE
         
         # Calculate window lengths
         window_lengths = end_indices - start_indices
         window_lengths = np.maximum(window_lengths, 1)
         
-        # Integrate speed to get playhead position
-        playhead_delta = abs_speed * sign * dt * SAMPLE_RATE
+        # Simplified speed integration (same as sample node)
+        playhead_delta = abs_speed * sign
         playhead_absolute = self.state.last_playhead_position + np.cumsum(playhead_delta)
         
         if not self.model.loop:
@@ -560,8 +595,19 @@ class BufferNode(BaseNode):
         # Clip to valid buffer range
         buffer_indices = np.clip(buffer_indices, 0, self.buffer_length_samples - 1)
         
-        # Interpolate from buffer
-        wave = np.interp(buffer_indices, np.arange(self.buffer_length_samples), self.buffer_ref['data'])
+        # Use optimized interpolation based on speed
+        if np.allclose(speed, 1.0):
+            # Optimize for constant speed = 1 - use integer indexing if possible
+            if np.all(buffer_indices == buffer_indices.astype(int)):
+                wave = self.buffer_ref['data'][buffer_indices.astype(int)]
+            else:
+                wave = self._cubic_interpolate(buffer_indices, self.buffer_ref['data'])
+        elif np.allclose(speed, speed[0]):
+            # Optimize for any constant speed - use cubic interpolation
+            wave = self._cubic_interpolate(buffer_indices, self.buffer_ref['data'])
+        else:
+            # Variable speed - use cubic interpolation for better quality
+            wave = self._cubic_interpolate(buffer_indices, self.buffer_ref['data'])
         
         # Update state
         self.state.last_playhead_position = playhead_absolute[-1] if len(playhead_absolute) > 0 else self.state.last_playhead_position
