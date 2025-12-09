@@ -1,5 +1,4 @@
 from __future__ import annotations
-import numpy as np
 from pydantic import ConfigDict
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
@@ -18,7 +17,6 @@ class ContextNodeModel(BaseNodeModel):
 
 class ContextNode(BaseNode):
     def __init__(self, model: ContextNodeModel, node_id: str, state, do_initialise_state=True):
-        from nodes.wavable_value import WavableValueNode, WavableValueModel
         super().__init__(model, node_id, state, do_initialise_state)
         self.model = model
         
@@ -57,17 +55,19 @@ class ContextNode(BaseNode):
             num_samples = min(num_samples, remaining_samples)
         
         # Render all context arguments and add to params
+        # Each variable can reference previously defined ones
         extended_params = params.copy()
         
         for name, node in self.context_args.items():
-            # Render context args (may be mono or stereo)
-            wave = node.render(num_samples, context, **self.get_params_for_children(params))
+            # Render context args with accumulated params (may be mono or stereo)
+            wave = node.render(num_samples, context, **self.get_params_for_children(extended_params))
             # If child returned empty, we're done
             if len(wave) == 0:
                 return empty_mono()
             # Convert stereo context args to mono (context variables should be control signals)
             if is_stereo(wave):
                 wave = to_mono(wave)
+            # Add this variable to extended_params so subsequent variables can use it
             extended_params[name] = wave
         
         # Now render the signal with the extended params (pass through whatever it returns)

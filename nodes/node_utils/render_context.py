@@ -25,6 +25,8 @@ class RenderContext:
         self.max_recursion: int = max_recursion  # Max recursion before returning zeros
         self.is_realtime: bool = True
         self.current_chunk: int = 0
+        self.node_ids: set[str] = set()  # Store node IDs for placeholder reinitialization
+        self.chunk_size: int = 0  # Store chunk size for placeholder reinitialization
     
     def store_output(self, node_instance_id: int, node_string_id: str, wave: np.ndarray):
         """Store a node's output both by instance (for caching) and by ID (for references)"""
@@ -64,12 +66,41 @@ class RenderContext:
         return self.recursion_depth.get(node_instance_id, 0)
     
     def clear_chunk(self):
-        """Clear outputs for the next chunk (in realtime mode)"""
+        """Clear outputs for the next chunk (in realtime mode) and reinitialize placeholders"""
+        # Store previous outputs before clearing for feedback/previous-chunk behavior
+        previous_outputs_by_id = self.node_outputs_by_id.copy()
+        
         self.node_outputs.clear()
         self.node_outputs_by_id.clear()
         self.recursion_depth.clear()
         self.current_chunk += 1
+        
+        # Reinitialize placeholders for forward references using stored IDs
+        # Use previous chunk's actual outputs, or zeros for first chunk
+        if self.node_ids:
+            for node_id in self.node_ids:
+                if node_id in previous_outputs_by_id:
+                    # Use previous chunk's actual output for this node
+                    self.node_outputs_by_id[node_id] = previous_outputs_by_id[node_id]
+                else:
+                    # First chunk or node wasn't rendered last time - use zeros
+                    self.node_outputs_by_id[node_id] = np.zeros(self.chunk_size)
     
     def clear_node_instances(self):
         """Clear cached node instances (used during hot reload to break stale references)"""
         self.node_instances.clear()
+    
+    def initialize_placeholders(self, node_ids: set[str], chunk_size: int):
+        """Initialize zero-filled placeholders for all node IDs to enable forward references
+        
+        Args:
+            node_ids: Set of all node IDs in the tree
+            chunk_size: Number of samples in the chunk (for realtime) or total samples (for non-realtime)
+        """
+        self.node_ids = node_ids.copy()  # Store for reinitialization after chunk clear
+        self.chunk_size = chunk_size
+        
+        for node_id in node_ids:
+            # Initialize with mono zeros - nodes will overwrite with actual output
+            # If a node outputs stereo, it will replace this with the correct shape
+            self.node_outputs_by_id[node_id] = np.zeros(chunk_size)

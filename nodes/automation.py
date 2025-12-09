@@ -68,7 +68,7 @@ from typing import List, Optional
 import numpy as np
 from pydantic import ConfigDict
 from config import SAMPLE_RATE
-from utils import time_to_samples, samples_to_time, get_last_or_default, detect_triggers
+from utils import time_to_samples, get_last_or_default, detect_triggers
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
