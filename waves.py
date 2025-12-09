@@ -15,7 +15,7 @@ import atexit
 from config import *
 from sound_library import get_sound_model, load_all_sound_libraries, reload_sound_library, get_sound_filename
 from nodes.node_utils.base_node import BaseNode
-from nodes.node_utils.instantiate_node import instantiate_node
+from nodes.node_utils.instantiate_node import instantiate_node, collect_all_node_ids
 from nodes.node_utils.render_context import RenderContext
 from utils import look_for_duration, play, save, visualise_wave, is_stereo as check_is_stereo, to_mono, to_stereo
 from display_stats import run_visualizer_and_stats, print_average_cpu_usage
@@ -151,9 +151,12 @@ def perform_hot_reload_background(sound_name_to_play: str, changed_filename: str
         
         new_node = instantiate_node(new_model, sound_name_to_play, "root")
         
+        # Collect all IDs and initialize placeholders for forward references
+        all_ids = collect_all_node_ids(new_model, sound_name_to_play, "root")
+        
         # Store the new node for atomic swap on next audio chunk
         with hot_reload_lock:
-            hot_reload_pending_node = (new_node, old_node)  # Store both new and old for cleanup
+            hot_reload_pending_node = (new_node, old_node, all_ids)  # Store both new and old for cleanup
     
     except Exception as e:
         print(f"Hot reload error: {e}")
@@ -257,7 +260,7 @@ def signal_handler(sig, frame):
     save_recording(current_sound_name)
     sys.exit(0)
 
-def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_name: str = None, is_explicit_mix: bool = False):
+def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_name: str = None, is_explicit_mix: bool = False, all_ids: set[str] = None):
     global recording_buffer, recording_active, current_sound_name, current_sound_node, yaml_changed
     global recording_track_buffers, recording_sound_node, recording_is_explicit_tracks
     
@@ -303,6 +306,11 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
     # Create render context that persists across chunks
     render_context = RenderContext()
     render_context.is_realtime = True
+    
+    # Initialize placeholders for forward references
+    if all_ids:
+        chunk_size = BUFFER_SIZE  # Use config value
+        render_context.initialize_placeholders(all_ids, chunk_size)
 
     def audio_callback(outdata, frames, sdtime, status):
         global yaml_changed, hot_reload_pending_node, hot_reload_in_progress, current_sound_node, current_sound_model
@@ -313,8 +321,15 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
         if hot_reload_pending_node is not None:
             with hot_reload_lock:
                 if hot_reload_pending_node is not None:
-                    # Atomically swap in the new node
-                    new_node, _old_node = hot_reload_pending_node
+                    # Handle both old format (2-tuple) and new format (3-tuple)
+                    if len(hot_reload_pending_node) == 3:
+                        new_node, _old_node, all_ids = hot_reload_pending_node
+                        # Initialize placeholders for forward references
+                        render_context.initialize_placeholders(all_ids, frames)
+                    else:
+                        # Legacy format - no placeholders available
+                        new_node, _old_node = hot_reload_pending_node
+                    
                     active_sound_node = new_node
                     current_sound_node = new_node
                     hot_reload_pending_node = None
@@ -471,6 +486,9 @@ def main():
     # Initialize the node (not as hot reload on first load)
     sound_node_to_play = instantiate_node(sound_model_to_play, sound_name_to_play, "root")
     
+    # Collect all IDs for placeholder initialization
+    all_ids = collect_all_node_ids(sound_model_to_play, sound_name_to_play, "root")
+    
     # Store globals for hot reload
     with hot_reload_lock:
         current_sound_node = sound_node_to_play
@@ -479,7 +497,7 @@ def main():
     sound_duration = look_for_duration(sound_model_to_play)
 
     if DO_PLAY_IN_REAL_TIME:
-        play_in_real_time(sound_node_to_play, sound_duration, sound_name_to_play, is_explicit_mix)
+        play_in_real_time(sound_node_to_play, sound_duration, sound_name_to_play, is_explicit_mix, all_ids)
     else:
         # Non-realtime mode requires a duration
         if not sound_duration:
@@ -488,6 +506,9 @@ def main():
         # Create render context for non-realtime mode
         render_context = RenderContext()
         render_context.is_realtime = False
+        
+        # Initialize placeholders for forward references (use large size for non-realtime)
+        render_context.initialize_placeholders(all_ids, 1024000)  # 1M samples should be enough
             
         rendering_start_time = time.time()
         
