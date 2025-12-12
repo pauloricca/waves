@@ -34,7 +34,6 @@ class GlideNode(BaseNode):
             self.state.current_value = None
             self.state.target_value = None
             self.state.samples_remaining = 0
-            self.state.increment = None
 
     def _is_static_value(self, value: WavableValue) -> bool:
         return isinstance(value, (int, float))
@@ -55,20 +54,22 @@ class GlideNode(BaseNode):
 
         actual_num_samples = signal_wave.shape[0] if is_stereo(signal_wave) else len(signal_wave)
 
+        # Get glide time - use last value if dynamic
         if not self.time_is_static:
             time_wave = self.time_node.render(actual_num_samples, context, **child_params)
             if len(time_wave) == 0:
-                time_values = np.zeros(actual_num_samples, dtype=np.float32)
+                glide_time = 0.0
             else:
                 time_values = np.asarray(time_wave, dtype=np.float32)
                 if time_values.ndim > 1:
                     time_values = time_values.reshape(-1)
-                if time_values.size < actual_num_samples:
-                    last_val = time_values[-1] if time_values.size > 0 else 0.0
-                    pad_width = actual_num_samples - time_values.size
-                    time_values = np.pad(time_values, (0, pad_width), mode="constant", constant_values=last_val)
+                # Use the last value as the glide time for this chunk
+                glide_time = float(time_values[-1]) if len(time_values) > 0 else 0.0
         else:
-            time_values = None
+            glide_time = self.static_time
+
+        if glide_time < 0:
+            glide_time = 0.0
 
         signal_array = np.asarray(signal_wave, dtype=np.float32)
         if not is_stereo(signal_array):
@@ -77,7 +78,12 @@ class GlideNode(BaseNode):
         else:
             mono_input = False
 
+        # OPTIMIZATION: Use only the last value of the signal chunk as target
+        # This dramatically improves performance when target changes frequently
+        chunk_target = signal_array[-1].copy()
+
         if self.state.current_value is None:
+            # Initialize with first value
             first_value = signal_array[0].copy()
             self.state.current_value = first_value.copy()
             self.state.target_value = first_value.copy()
@@ -85,96 +91,79 @@ class GlideNode(BaseNode):
             self.state.increment = np.zeros_like(first_value, dtype=np.float32)
 
         current_value = self.state.current_value.astype(np.float32)
-        target_value = self.state.target_value.astype(np.float32)
-        increment = self.state.increment.astype(np.float32)
         samples_remaining = int(self.state.samples_remaining)
-
-        output = np.empty_like(signal_array, dtype=np.float32)
         
-        # Vectorized approach: process chunks where the target doesn't change
-        i = 0
-        while i < actual_num_samples:
-            desired = signal_array[i]
-            glide_time = self.static_time if self.time_is_static else float(time_values[i])
-            if glide_time < 0:
-                glide_time = 0.0
+        output = np.empty_like(signal_array, dtype=np.float32)
 
-            # Check if we need to start a new glide
+        # Check if we need to start a new glide to the chunk target
+        if not np.allclose(chunk_target, self.state.target_value, atol=1e-9):
+            # New target detected
             if glide_time == 0 or glide_time <= (1.0 / SAMPLE_RATE):
-                # Instant change - find how many consecutive samples have the same target and glide time
-                if self.time_is_static:
-                    # Find next change in signal
-                    change_mask = np.any(signal_array[i:] != desired, axis=1) if signal_array.ndim > 1 else signal_array[i:] != desired
-                    change_indices = np.where(change_mask)[0]
-                    chunk_size = change_indices[0] if len(change_indices) > 0 else actual_num_samples - i
-                else:
-                    # For dynamic time, find consecutive samples with zero/instant glide time and same signal
-                    remaining = actual_num_samples - i
-                    zero_time_mask = (time_values[i:] <= (1.0 / SAMPLE_RATE))
-                    signal_same_mask = np.all(signal_array[i:] == desired, axis=1) if signal_array.ndim > 1 else signal_array[i:] == desired
-                    combined_mask = zero_time_mask & signal_same_mask
-                    change_indices = np.where(~combined_mask)[0]
-                    chunk_size = change_indices[0] if len(change_indices) > 0 else remaining
-                
-                output[i:i+chunk_size] = desired
-                current_value = desired.copy()
-                target_value = desired.copy()
+                # Instant change - jump directly to target
+                output[:] = chunk_target
+                current_value = chunk_target.copy()
+                self.state.target_value = chunk_target.copy()
                 samples_remaining = 0
-                increment = np.zeros_like(desired, dtype=np.float32)
-                i += chunk_size
             else:
-                # Check if we're starting a new glide
-                if not np.allclose(desired, target_value, atol=1e-9):
-                    target_value = desired.copy()
-                    diff = target_value - current_value
-                    steps = max(1, int(round(glide_time * SAMPLE_RATE)))
-                    samples_remaining = steps
-                    increment = diff / steps
-
-                # Process glide in vectorized chunks
-                if samples_remaining > 0:
-                    # Find how many samples until signal changes or glide completes
-                    samples_to_process = min(samples_remaining, actual_num_samples - i)
-                    
-                    # Check for signal changes in this chunk
-                    change_mask = np.any(signal_array[i:i+samples_to_process] != desired, axis=1) if signal_array.ndim > 1 else signal_array[i:i+samples_to_process] != desired
-                    change_indices = np.where(change_mask)[0]
-                    if len(change_indices) > 0:
-                        samples_to_process = min(samples_to_process, change_indices[0])
-                    
-                    # Generate ramp for this chunk
-                    ramp = np.arange(samples_to_process, dtype=np.float32)
-                    if signal_array.ndim > 1:
-                        ramp = ramp[:, np.newaxis]
-                    output[i:i+samples_to_process] = current_value + increment * (ramp + 1)
-                    
-                    current_value = output[i+samples_to_process-1].copy()
-                    samples_remaining -= samples_to_process
-                    
-                    if samples_remaining == 0:
-                        current_value = target_value.copy()
-                    
-                    i += samples_to_process
+                # Start new glide to chunk target
+                self.state.target_value = chunk_target.copy()
+                diff = chunk_target - current_value
+                steps = max(1, int(round(glide_time * SAMPLE_RATE)))
+                samples_remaining = steps
+                increment = diff / steps
+                
+                # Generate glide for this chunk
+                samples_to_process = min(samples_remaining, actual_num_samples)
+                ramp = np.arange(samples_to_process, dtype=np.float32)
+                if signal_array.ndim > 1:
+                    ramp = ramp[:, np.newaxis]
+                
+                output[:samples_to_process] = current_value + increment * (ramp + 1)
+                
+                # Fill remaining samples if chunk is larger than glide
+                if samples_to_process < actual_num_samples:
+                    output[samples_to_process:] = chunk_target
+                
+                current_value = output[-1].copy()
+                samples_remaining = max(0, samples_remaining - actual_num_samples)
+                
+                if samples_remaining == 0:
+                    current_value = chunk_target.copy()
+        else:
+            # Continue existing glide or hold current value
+            if samples_remaining > 0:
+                # Continue existing glide
+                target_value = self.state.target_value.astype(np.float32)
+                diff = target_value - current_value
+                if samples_remaining >= actual_num_samples:
+                    # More samples remaining than this chunk
+                    steps_in_chunk = actual_num_samples
                 else:
-                    # Holding at target - find next change
-                    if self.time_is_static:
-                        change_mask = np.any(signal_array[i:] != desired, axis=1) if signal_array.ndim > 1 else signal_array[i:] != desired
-                        change_indices = np.where(change_mask)[0]
-                        chunk_size = change_indices[0] if len(change_indices) > 0 else actual_num_samples - i
-                    else:
-                        # For dynamic time, find consecutive samples with same signal value
-                        signal_same_mask = np.all(signal_array[i:] == desired, axis=1) if signal_array.ndim > 1 else signal_array[i:] == desired
-                        change_indices = np.where(~signal_same_mask)[0]
-                        chunk_size = change_indices[0] if len(change_indices) > 0 else actual_num_samples - i
-                    
-                    output[i:i+chunk_size] = target_value
+                    # Glide will complete within this chunk
+                    steps_in_chunk = samples_remaining
+                
+                increment = diff / max(1, samples_remaining)
+                ramp = np.arange(steps_in_chunk, dtype=np.float32)
+                if signal_array.ndim > 1:
+                    ramp = ramp[:, np.newaxis]
+                
+                output[:steps_in_chunk] = current_value + increment * (ramp + 1)
+                
+                # Fill remaining samples if glide completed
+                if steps_in_chunk < actual_num_samples:
+                    output[steps_in_chunk:] = target_value
+                
+                current_value = output[-1].copy()
+                samples_remaining = max(0, samples_remaining - actual_num_samples)
+                
+                if samples_remaining == 0:
                     current_value = target_value.copy()
-                    i += chunk_size
+            else:
+                # Hold at current value (no active glide)
+                output[:] = current_value
 
         self.state.current_value = current_value.copy()
-        self.state.target_value = target_value.copy()
         self.state.samples_remaining = samples_remaining
-        self.state.increment = increment.copy()
 
         if mono_input:
             return output.reshape(actual_num_samples)
