@@ -1200,6 +1200,33 @@ test-automation-nodes:
               freq: 5
               range: [400, 800]
 
+test-automation-timed-step:
+  osc:
+    type: sin
+    duration: 5
+    freq:
+      automation:
+        mode: step
+        repeat: 2
+        t0: 220
+        t0.5: {}
+        t1.2: 440
+        t4: 880
+        t5: {}
+
+test-automation-timed-ramp:
+  osc:
+    type: sin
+    freq:
+      automation:
+        mode: overlap
+        overlap: 0.07
+        repeat: 1000
+        t0: 220
+        t.7: 440
+        t1.6: 280
+        t4: {}
+
 # Test interval node with major pentatonic scale using list
 test_interval_pentatonic:
   osc:

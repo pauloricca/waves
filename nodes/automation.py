@@ -64,9 +64,10 @@ freq:
 from __future__ import annotations
 from enum import Enum
 import math
-from typing import List, Optional
+import re
+from typing import Any, Dict, List, Optional
 import numpy as np
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field, model_validator
 from config import SAMPLE_RATE
 from utils import time_to_samples, get_last_or_default, detect_triggers
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
@@ -80,9 +81,13 @@ class AutomationMode(str, Enum):
     OVERLAP = "overlap"
 
 
+TIMING_KEY_PATTERN = re.compile(r"^t(?P<time>(?:\d+(?:\.\d+)?|\.\d+))$")
+
+
 class AutomationModel(BaseNodeModel):
     model_config = ConfigDict(extra='forbid')
-    steps: List[Optional[WavableValue]]
+    steps: Optional[List[Optional[WavableValue]]] = None
+    timings: Dict[float, Optional[WavableValue]] = Field(default_factory=dict, exclude=True, repr=False)
     interval: WavableValue = 1.0
     mode: AutomationMode = AutomationMode.STEP
     overlap: float = 0.1  # Crossfade time in seconds for overlap mode
@@ -90,6 +95,51 @@ class AutomationModel(BaseNodeModel):
     swing: WavableValue = 0
     trigger: Optional[WavableValue] = None  # Optional trigger signal to advance steps
     reset: Optional[WavableValue] = None  # Optional reset signal to reset to step 0
+
+    @model_validator(mode="before")
+    @classmethod
+    def collect_timing_keys(cls, data: Any):
+        if not isinstance(data, dict):
+            return data
+
+        normalized = dict(data)
+        timings: Dict[float, Optional[WavableValue]] = dict(normalized.get("timings", {}))
+
+        for key in list(normalized.keys()):
+            if key in cls.model_fields:
+                continue
+
+            match = TIMING_KEY_PATTERN.fullmatch(key)
+            if match is None:
+                continue
+
+            time_value = float(match.group("time"))
+            if time_value < 0:
+                raise ValueError(f"Automation timing '{key}' must be non-negative")
+            if time_value in timings:
+                raise ValueError(f"Duplicate automation timing '{key}'")
+
+            raw_value = normalized.pop(key)
+            timings[time_value] = None if raw_value == {} else raw_value
+
+        normalized["timings"] = timings
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_timeline_source(self):
+        has_steps = self.steps is not None
+        has_timings = bool(self.timings)
+
+        if has_steps and has_timings:
+            raise ValueError("Provide either 'steps' or timed 't...' keys, not both")
+        if not has_steps and not has_timings:
+            raise ValueError("Automation requires either 'steps' or at least two timed 't...' keys")
+        if has_steps and len(self.steps) == 0:
+            raise ValueError("Automation 'steps' cannot be empty")
+        if has_timings and len(self.timings) < 2:
+            raise ValueError("Timed automation requires at least two timed keys so the last one can define the end")
+
+        return self
 
 
 class AutomationNode(BaseNode):
@@ -123,13 +173,22 @@ class AutomationNode(BaseNode):
             self.state.last_trigger_value = 0.0  # For trigger edge detection
             self.state.last_reset_value = 0.0  # For reset edge detection
 
+        self.uses_timed_keys = bool(model.timings)
+        self.timeline_times = sorted(model.timings) if self.uses_timed_keys else None
+        timeline_values = [model.timings[t] for t in self.timeline_times] if self.uses_timed_keys else list(model.steps or [])
+        if not self.uses_timed_keys:
+            timeline_values.append(None)
+
         self.step_nodes = []
-        for step_index, step_value in enumerate(model.steps):
+        for step_index, step_value in enumerate(timeline_values):
             if step_value is not None:
                 step_node = self.instantiate_child_node(step_value, f"step_{step_index}", self.state.current_repeat)
                 self.step_nodes.append(step_node)
             else:
                 self.step_nodes.append(None)
+
+    def _segment_count(self):
+        return max(0, len(self.step_nodes) - 1)
 
     def _find_next_non_none_step(self, start_index):
         """Find the next step index that has a value (not None)."""
@@ -145,10 +204,52 @@ class AutomationNode(BaseNode):
                 return i
         return None
 
-    def _calculate_total_samples(self, interval):
+    def _reset_timeline_state(self):
+        self.state.current_step = 0
+        self.state.next_step_to_trigger = 0
+        self.state.current_repeat = 0
+        self.state.time_in_current_step = 0
+        self.state.sequence_complete = False
+        self.state.prev_step_buffer = None
+        self.state.prev_step_index = None
+        self.state.crossfade_progress = 0
+
+    def _get_timeline_times(self, interval, swing):
+        if self.uses_timed_keys:
+            return self.timeline_times
+
+        timeline_times = [0.0]
+        for step_index in range(self._segment_count()):
+            current_interval = interval
+            if step_index % 2 == 1:
+                current_interval *= 1.0 + (swing * 0.5)
+            else:
+                current_interval *= 1.0 - (swing * 0.5)
+            timeline_times.append(timeline_times[-1] + current_interval)
+        return timeline_times
+
+    def _get_segment_duration(self, step_index, interval, swing):
+        timeline_times = self._get_timeline_times(interval, swing)
+        if step_index < 0 or step_index >= len(timeline_times) - 1:
+            return 0.0
+        return max(0.0, timeline_times[step_index + 1] - timeline_times[step_index])
+
+    def _get_total_duration(self, interval, swing):
+        timeline_times = self._get_timeline_times(interval, swing)
+        if not timeline_times:
+            return 0.0
+        return timeline_times[-1]
+
+    def _get_cycle_position(self, interval, swing):
+        timeline_times = self._get_timeline_times(interval, swing)
+        if not timeline_times:
+            return 0.0
+        step_index = min(self.state.current_step, len(timeline_times) - 1)
+        return timeline_times[step_index] + self.state.time_in_current_step
+
+    def _calculate_total_samples(self, interval, swing):
         """Calculate total number of samples for the entire automation sequence"""
-        total_steps = len(self.step_nodes)
-        total_duration = total_steps * interval * self.repeat
+        total_duration = self._get_total_duration(interval, swing) * self.repeat
         return time_to_samples(total_duration )
 
     def _do_render(self, num_samples=None, context=None, **params):
@@ -160,8 +261,11 @@ class AutomationNode(BaseNode):
         if num_samples_resolved is None:
             # Non-realtime mode - calculate total duration
             interval_wave = self.interval_node.render(1, context, **self.get_params_for_children(params))
+            swing_wave = self.swing_node.render(1, context, **self.get_params_for_children(params))
             interval = float(interval_wave[0]) if len(interval_wave) > 0 else 1.0
-            num_samples_resolved = self._calculate_total_samples(interval)
+            swing = float(swing_wave[0]) if len(swing_wave) > 0 else 0.0
+            swing = float(np.clip(swing, -1.0, 1.0))
+            num_samples_resolved = self._calculate_total_samples(interval, swing)
             if num_samples_resolved == 0:
                 return np.array([])
             self._last_chunk_samples = num_samples_resolved
@@ -201,13 +305,12 @@ class AutomationNode(BaseNode):
                 reset_wave = reset_wave[:num_samples_resolved]
             reset_indices, self.state.last_reset_value = detect_triggers(reset_wave, self.state.last_reset_value)
         
-        if len(self.step_nodes) == 0:
+        segment_count = self._segment_count()
+        if segment_count == 0:
             return np.zeros(num_samples_resolved, dtype=np.float32)
         
         output_wave = np.zeros(num_samples_resolved, dtype=np.float32)
         samples_written = 0
-        samples_per_step = time_to_samples(interval )
-        
         # Track which triggers we've processed this chunk
         processed_triggers = set()
         processed_resets = set()
@@ -220,14 +323,7 @@ class AutomationNode(BaseNode):
             for reset_idx in reset_indices:
                 if reset_idx == samples_written and reset_idx not in processed_resets:
                     # Reset to step 0
-                    self.state.current_step = 0
-                    self.state.next_step_to_trigger = 0
-                    self.state.current_repeat = 0
-                    self.state.time_in_current_step = 0
-                    self.state.sequence_complete = False
-                    self.state.prev_step_buffer = None
-                    self.state.prev_step_index = None
-                    self.state.crossfade_progress = 0
+                    self._reset_timeline_state()
                     processed_resets.add(reset_idx)
             
             # Process step triggers at the current sample position
@@ -242,12 +338,12 @@ class AutomationNode(BaseNode):
                     processed_triggers.add(trigger_idx)
                     
                     # Check if we've now completed the current repeat
-                    if self.state.next_step_to_trigger >= len(self.step_nodes):
+                    if self.state.next_step_to_trigger >= segment_count:
                         self.state.current_repeat += 1
                         if self.state.current_repeat >= self.repeat:
                             # We've completed all repeats - stay at the last step forever
                             self.state.sequence_complete = True
-                            self.state.next_step_to_trigger = len(self.step_nodes) - 1
+                            self.state.next_step_to_trigger = segment_count - 1
                         else:
                             # Start next repeat from the beginning
                             self.state.next_step_to_trigger = 0
@@ -257,12 +353,12 @@ class AutomationNode(BaseNode):
                             self.state.crossfade_progress = 0
             
             # In interval mode: check if we've completed the current repeat
-            if self.state.current_step >= len(self.step_nodes) and not using_trigger_mode:
+            if self.state.current_step >= segment_count and not using_trigger_mode:
                 self.state.current_repeat += 1
                 if self.state.current_repeat >= self.repeat:
                     # We've completed all repeats - stay at the last step forever
                     self.state.sequence_complete = True
-                    self.state.current_step = len(self.step_nodes) - 1
+                    self.state.current_step = segment_count - 1
                     self.state.time_in_current_step = 0
                 else:
                     # Start next repeat from the beginning
@@ -306,19 +402,7 @@ class AutomationNode(BaseNode):
                 else:
                     samples_to_render = num_samples_resolved - samples_written
             else:
-                # Interval mode: calculate current interval with swing
-                # Apply swing to odd steps (step % 2 == 1)
-                current_interval = interval
-                if self.state.current_step % 2 == 1:
-                    # Odd step: apply swing
-                    # swing = -1 means shorter (0.5x), swing = 0 means normal (1x), swing = 1 means longer (1.5x)
-                    swing_factor = 1.0 + (swing * 0.5)
-                    current_interval = interval * swing_factor
-                else:
-                    # Even step: compensate for previous odd step's swing
-                    swing_factor = 1.0 - (swing * 0.5)
-                    current_interval = interval * swing_factor
-                
+                current_interval = self._get_segment_duration(self.state.current_step, interval, swing)
                 # Calculate how many samples we can render from current step
                 time_remaining_in_step = current_interval - self.state.time_in_current_step
                 samples_remaining_in_step = time_to_samples(time_remaining_in_step )
@@ -340,30 +424,9 @@ class AutomationNode(BaseNode):
             if self.mode == AutomationMode.STEP:
                 chunk = self._render_step_mode(samples_to_render, context, params)
             elif self.mode == AutomationMode.RAMP:
-                # For ramp mode, we need current_interval - calculate it if in interval mode
-                if not using_trigger_mode:
-                    current_interval = interval
-                    if self.state.current_step % 2 == 1:
-                        swing_factor = 1.0 + (swing * 0.5)
-                        current_interval = interval * swing_factor
-                    else:
-                        swing_factor = 1.0 - (swing * 0.5)
-                        current_interval = interval * swing_factor
-                else:
-                    current_interval = interval  # Use base interval for trigger mode
-                chunk = self._render_ramp_mode(samples_to_render, current_interval, context, params)
+                chunk = self._render_ramp_mode(samples_to_render, interval, swing, context, params)
             elif self.mode == AutomationMode.OVERLAP:
-                # For overlap mode, we need current_interval - calculate it if in interval mode
-                if not using_trigger_mode:
-                    current_interval = interval
-                    if self.state.current_step % 2 == 1:
-                        swing_factor = 1.0 + (swing * 0.5)
-                        current_interval = interval * swing_factor
-                    else:
-                        swing_factor = 1.0 - (swing * 0.5)
-                        current_interval = interval * swing_factor
-                else:
-                    current_interval = interval  # Use base interval for trigger mode
+                current_interval = self._get_segment_duration(self.state.current_step, interval, swing)
                 chunk = self._render_overlap_mode(samples_to_render, current_interval, context, params)
             else:
                 chunk = np.zeros(samples_to_render, dtype=np.float32)
@@ -376,16 +439,7 @@ class AutomationNode(BaseNode):
             if not using_trigger_mode:
                 self.state.time_in_current_step += len(chunk) / SAMPLE_RATE
                 
-                # Check if we should move to next step (only in interval mode)
-                # Calculate current_interval with swing for the check
-                current_interval = interval
-                if self.state.current_step % 2 == 1:
-                    swing_factor = 1.0 + (swing * 0.5)
-                    current_interval = interval * swing_factor
-                else:
-                    swing_factor = 1.0 - (swing * 0.5)
-                    current_interval = interval * swing_factor
-                
+                current_interval = self._get_segment_duration(self.state.current_step, interval, swing)
                 if self.state.time_in_current_step >= current_interval:
                     self.state.current_step += 1
                     self.state.time_in_current_step = 0
@@ -419,8 +473,12 @@ class AutomationNode(BaseNode):
         
         return result
 
-    def _render_ramp_mode(self, num_samples, interval, context, params):
+    def _render_ramp_mode(self, num_samples, interval, swing, context, params):
         """Ramp mode: linear interpolation between steps with values."""
+        current_segment_duration = self._get_segment_duration(self.state.current_step, interval, swing)
+        if current_segment_duration <= 0:
+            return self._render_step_mode(num_samples, context, params)
+
         # Find current and next non-None steps
         current_value_step = self._find_prev_non_none_step(self.state.current_step + 1)
         if current_value_step is None:
@@ -447,14 +505,18 @@ class AutomationNode(BaseNode):
                 result = np.concatenate([result, padding])
             return result
         
+        timeline_times = self._get_timeline_times(interval, swing)
+
         # Calculate interpolation factor
         # If next_value_step is before current_value_step, we're wrapping to next repeat
         if next_value_step <= current_value_step:
-            # Wrapping to start of sequence
-            steps_between = (len(self.step_nodes) - current_value_step) + next_value_step
+            current_time = timeline_times[current_value_step]
+            next_time = self._get_total_duration(interval, swing) + timeline_times[next_value_step]
         else:
-            steps_between = next_value_step - current_value_step
-        current_position_in_ramp = self.state.current_step - current_value_step + (self.state.time_in_current_step / interval)
+            current_time = timeline_times[current_value_step]
+            next_time = timeline_times[next_value_step]
+        ramp_duration = max(next_time - current_time, 1e-9)
+        current_position_in_ramp = self._get_cycle_position(interval, swing) - current_time
         
         # Render both values
         current_value = self.step_nodes[current_value_step].render(num_samples, context, **self.get_params_for_children(params))
@@ -481,7 +543,7 @@ class AutomationNode(BaseNode):
         
         # Create interpolation weights for each sample in the chunk
         sample_positions = np.arange(num_samples) / SAMPLE_RATE
-        interpolation_factors = (current_position_in_ramp + sample_positions / interval) / steps_between
+        interpolation_factors = (current_position_in_ramp + sample_positions) / ramp_duration
         interpolation_factors = np.clip(interpolation_factors, 0, 1)
         
         # Linear interpolation
@@ -516,7 +578,7 @@ class AutomationNode(BaseNode):
             
             # If we're at step 0 and wrapping from a previous repeat, look at the end
             if prev_step is None and self.state.current_step == 0 and self.state.current_repeat > 0:
-                prev_step = self._find_prev_non_none_step(len(self.step_nodes))
+                prev_step = self._find_prev_non_none_step(self._segment_count())
             
             if prev_step is not None and prev_step != self.state.current_step:
                 self.state.prev_step_index = prev_step

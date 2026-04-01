@@ -223,6 +223,8 @@ class SequencerMonitor(NodeMonitor):
             # Use 'steps' field
             if hasattr(self.node.model, 'steps') and self.node.model.steps:
                 total_steps = len(self.node.model.steps)
+            elif hasattr(self.node, '_segment_count'):
+                total_steps = self.node._segment_count()
         
         if current_step is not None and total_steps is not None:
             # Get monitor range and color scheme from node (dynamically)

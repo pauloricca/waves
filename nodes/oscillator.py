@@ -49,7 +49,7 @@ class OscillatorModel(BaseNodeModel):
         if v is None:
             return OscillatorTypes.SIN.value
         if isinstance(v, str):
-            return v.upper()
+            return v.lower()
         return v
     
     @field_validator('range', mode='before')

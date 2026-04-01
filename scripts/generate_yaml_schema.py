@@ -314,6 +314,21 @@ def generate_schema() -> dict[str, Any]:
         if _model_allows_extra(model_cls):
             params_schema["additionalProperties"] = copy.deepcopy(wavable_value_schema)
 
+        if definition.name == "automation":
+            params_schema.get("properties", {}).pop("timings", None)
+            required_fields = params_schema.get("required")
+            if isinstance(required_fields, list) and "timings" in required_fields:
+                required_fields.remove("timings")
+            params_schema["patternProperties"] = {
+                r"^t(?:\d+(?:\.\d+)?|\.\d+)$": {
+                    "anyOf": [
+                        copy.deepcopy(wavable_value_schema),
+                        {"type": "object", "maxProperties": 0},
+                    ],
+                },
+            }
+            params_schema["additionalProperties"] = False
+
         params_def_name = f"NodeParams_{definition.name}"
         defs[params_def_name] = params_schema
 
