@@ -21,8 +21,8 @@ Optionally applies clipping to keep values within the target range.
 
 Parameters:
 - signal: Input signal
-- from_range: Input range [min, max] (default: [0, 1])
-- range: Output range [min, max] (default: [0, 1])
+- from: Input range [min, max] (default: [0, 1])
+- to: Output range [min, max] (default: [0, 1])
 - clip: Whether to clip output to range (default: True)
 
 Example:
@@ -31,8 +31,8 @@ map:
     osc:
       type: sin
       freq: 1
-  from_range: [-1, 1]    # sine wave naturally in [-1, 1]
-  range: [200, 800]      # map to frequency range
+  from: [-1, 1]    # sine wave naturally in [-1, 1]
+  to: [200, 800]      # map to frequency range
   clip: true
 """
 

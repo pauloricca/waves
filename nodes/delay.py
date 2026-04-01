@@ -9,8 +9,8 @@ from nodes.wavable_value import WavableValue
 from utils import empty_mono, time_to_samples
 
 class DelayMode(str, Enum):
-    DIGITAL = "DIGITAL"
-    TAPE = "TAPE"
+    DIGITAL = "digital"
+    TAPE = "tape"
     
     @classmethod
     def _missing_(cls, value):

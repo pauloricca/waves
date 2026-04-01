@@ -16,16 +16,16 @@ from utils import multiply_waves, empty_mono, time_to_samples, samples_to_time
 
 
 class OscillatorTypes(str, Enum):
-    SIN = "SIN"
-    COS = "COS"
-    TRI = "TRI"
-    SQR = "SQR"
-    SAW = "SAW"
-    RAMP = "RAMP"
-    NOISE = "NOISE"
-    PERLIN = "PERLIN"
-    WANDER = "WANDER"
-    NONE = "NONE"
+    SIN = "sin"
+    COS = "cos"
+    TRI = "tri"
+    SQR = "sqr"
+    SAW = "saw"
+    RAMP = "ramp"
+    NOISE = "noise"
+    PERLIN = "perlin"
+    WANDER = "wander"
+    NONE = "none" # Special type that outputs silence, useful for envelopes and modulation sources without an actual waveform
 
 
 class OscillatorModel(BaseNodeModel):

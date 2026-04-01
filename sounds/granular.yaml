@@ -122,6 +122,7 @@ playback:
                     "1": 
                       automation:
                         steps:
+                          - 
                           - 0.2
                           - 
                           - 0.1

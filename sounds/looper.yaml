@@ -14,8 +14,8 @@ looper:
     signal:
       mix:
         drums:
-          id: drums
           track:
+            id: drums
             volume: 0.2
             signal:
               sequencer:
@@ -53,10 +53,10 @@ looper:
               osc:
                 type: tri
                 freq: 2000
-                amp: 
+                amp:
                   osc:
                     freq: 10
-                  range: [0.01, 0.04]
+                    range: [0.01, 0.04]
             amp: 
               osc:
                 freq: .3
@@ -68,4 +68,4 @@ looper:
                     amp: 
                       osc:
                         freq: 100
-                      range: [0.01, 0.04]
+                        range: [0.01, 0.04]

@@ -169,6 +169,26 @@ Edit `config.py` to customize:
 - **Sounds directory**: `SOUNDS_DIR = "sounds"`
 - **Output directory**: `OUTPUT_DIR = "output"`
 
+## YAML Schema Autocomplete (VS Code)
+
+Generate the schema from current node typings:
+
+```bash
+uv run python scripts/generate_yaml_schema.py
+```
+
+This writes `schemas/waves.schema.json`, which you can map in VS Code using the Red Hat YAML extension:
+
+```json
+{
+  "yaml.schemas": {
+    "./schemas/waves.schema.json": "sounds/*.yaml"
+  }
+}
+```
+
+Re-run the generator whenever node models change.
+
 ## Available Node Types
 
 ### Generators

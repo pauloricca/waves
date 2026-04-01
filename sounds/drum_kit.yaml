@@ -1,5 +1,6 @@
 drum-kit:
   midi_in:
+    is_reusable: true
     duration: 10000
     device: akai
     signal:

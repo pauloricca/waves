@@ -30,13 +30,11 @@ Example YAML:
 """
 from __future__ import annotations
 import numpy as np
-from typing import Union, Dict
 from pydantic import ConfigDict
-from types import SimpleNamespace
 
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
-from utils import match_length, empty_stereo, empty_mono, to_mono, is_stereo, to_stereo, add_waves
+from utils import empty_mono, is_stereo, to_stereo
 
 
 class MixNodeModel(BaseNodeModel):

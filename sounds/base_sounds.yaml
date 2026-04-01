@@ -1,5 +1,6 @@
 kick:
   context:
+    is_reusable: true
     tune: 50
     signal:
       mix:
@@ -37,6 +38,7 @@ kick:
 
 snare:
   mix:
+    is_reusable: true
     # Tonal component (shell resonance)
     tone:
       osc:
@@ -63,6 +65,7 @@ snare:
 
 kick_tom:
   context:
+    is_reusable: true
     tune: 50
     warp: 0 # 0: kick, 1: tom
     signal:
@@ -102,6 +105,7 @@ kick_tom:
 
 tom_snare:
   context:
+    is_reusable: true
     tune: 50
     warp: 0 # 0: kick, 1: tom
     signal:
@@ -145,6 +149,7 @@ tom_snare:
 
 one_knob:
   sequencer:
+    is_reusable: true
     interval: 0.18
     steps:
       - kick_tom
@@ -172,6 +177,7 @@ one_knob:
 
 yeum:
   context:
+    is_reusable: true
     tune: 50
     warp: 0 # 0: kick, 1: tom
     signal:
@@ -208,9 +214,10 @@ success:
     signal:
       osc:
         type: tri
-        duration: 1.8
+        duration: 2
+        amp: 0.5
         attack: 0.05
-        release: 1
+        release: 1.2
         freq:
           automation:
             interval: 0.2
@@ -221,6 +228,7 @@ success:
 
 kick-drum:
   mix:
+    is_reusable: true
     click:
       osc:
         type: sqr
@@ -242,6 +250,7 @@ kick-drum:
 # Test dynamic range with LFO modulating oscillator range
 rumble:
   osc:
+    is_reusable: true
     type: sin
     freq: 50
     duration: 9999
@@ -325,11 +334,11 @@ kick_test:
             #   - 
             #   - hihat v.1
             #   - 
-            steps:
-              - kick
-              - 
-              -
-              - 
+            # steps:
+            #   - kick
+            #   - 
+            #   -
+            #   - 
         rumble:
           expression:
             exp: signal * amp
@@ -347,6 +356,7 @@ kick_test:
 
 oscar:
   retrigger:
+    is_reusable: true
     duration: 10
     time: 0.3
     repeat: 4
@@ -365,6 +375,7 @@ oscar:
 
 chop:
   context:
+    is_reusable: true
     c: rand(0, 14)
     signal:
       map:
@@ -380,6 +391,7 @@ chop:
 
 glitch:
   context:
+    is_reusable: true
     c: rand(0, 164)
     signal:
       map:
@@ -395,6 +407,7 @@ glitch:
 
 hihat:
   context:
+    is_reusable: true
     duration: 1
     v: 1
     signal:
@@ -415,6 +428,7 @@ hihat:
 
 kick_ai:
   mix:
+    is_reusable: true
     duration: 1
 
     rumble:
@@ -480,62 +494,69 @@ kick_ai:
 
 kick2:
   map:
+    is_reusable: true
     from: [-1, 1]
     to: [-1.5, 1.5]
     clip: [-1, 1]
     signal:
       mix:
-        signals:
-          - osc:
-              attack: 0.01
-              amp: 0.2
-              release: 0.5
-              duration: 0.3
-              freq: [1000, [20, 0.04]]
-          - osc:
-              type: noise
-              amp: 0.02
-              attack: 0.0001
-              release: 0.02
-              duration: 0.01
-          - osc:
-              amp: 0.5
-              attack: 0.2
-              release: 0.5
-              duration: 0.8
-              freq: 50
-              phase:
-                osc:
-                  amp: 0.5
-                  attack: 0.1
-                  release: 0.5
-                  duration: 0.8
-                  freq: 50
-          - osc:
-              type: tri
-              amp: 0.02
-              attack: 0.01
-              release: 0.5
-              duration: 0.3
-              freq: 100
-          - osc:
-              type: tri
-              amp: 0.005
-              attack: 0.01
-              release: 0.5
-              duration: 0.3
-              freq: 130
-          - osc:
-              type: sqr
-              amp: 0.01
-              attack: 0.01
-              release: 0.5
-              duration: 0.4
-              freq: 18
+        m1:
+          osc:
+            attack: 0.01
+            amp: 0.2
+            release: 0.5
+            duration: 0.3
+            freq: [1000, [20, 0.04]]
+        m2:
+          osc:
+            type: noise
+            amp: 0.02
+            attack: 0.0001
+            release: 0.02
+            duration: 0.01
+        m3:
+          osc:
+            amp: 0.5
+            attack: 0.2
+            release: 0.5
+            duration: 0.8
+            freq: 50
+            phase:
+              osc:
+                amp: 0.5
+                attack: 0.1
+                release: 0.5
+                duration: 0.8
+                freq: 50
+        m4:
+          osc:
+            type: tri
+            amp: 0.02
+            attack: 0.01
+            release: 0.5
+            duration: 0.3
+            freq: 100
+        m5:
+          osc:
+            type: tri
+            amp: 0.005
+            attack: 0.01
+            release: 0.5
+            duration: 0.3
+            freq: 130
+        m6:
+          osc:
+            type: sqr
+            amp: 0.01
+            attack: 0.01
+            release: 0.5
+            duration: 0.4
+            freq: 18
 
 
 clap:
   mix:
+    is_reusable: true
     # Initial burst
     first:
       filter:

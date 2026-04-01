@@ -82,28 +82,6 @@ test_pitch_simple:
         type: sin
         freq: 440  # Should detect ~440 Hz
 
-# Test pitch detection node - changing frequency
-test_pitch_changing:
-  mix:
-    duration: 3
-    signals:
-      # Original signal with frequency sweep
-      - osc:
-          type: sin
-          freq: [440, [220, 0.5], 880]  # Sweep from 440 to 220 to 880
-      
-      # Pitch detection output (sonified by using as oscillator frequency)
-      - osc:
-          type: saw
-          amp: 0.3
-          freq:
-            pitch:
-              smoothing: 0.95  # Heavy smoothing for stability
-              signal:
-                osc:
-                  type: sin
-                  freq: [440, [220, 0.5], 880]
-
 # Test pitch detection node - with sample
 test_pitch_sample:
   osc:
@@ -229,20 +207,21 @@ test_buffer_speed:
 test_buffer_multi_read:
   mix:
     duration: 2
-    signals:
+    one:
       # Write to buffer "shared"
-      - buffer:
-          name: shared
-          length: 20
-          signal:
-            osc:
-              duration: 0.1
-              type: sin
-              freq: 440
+      buffer:
+        name: shared
+        length: 20
+        signal:
+          osc:
+            duration: 0.1
+            type: sin
+            freq: 440
+    two:
       # Read from buffer with short offset - needs duration to keep reading
-      - buffer:
-          name: shared
-          offset: 1
+      buffer:
+        name: shared
+        offset: 1
 
 # Test pass-through nodes (context/tempo) wrapping tracks
 test_pass_through_mix:
@@ -645,7 +624,6 @@ loop:
                               id: sample
                               exp: amp * signal
                               amp: 0.0001
-                              amp: 5
                               signal:
                                 sample:
                                   file: samples/gregor.wav
@@ -653,17 +631,6 @@ loop:
                                   loop: true
               # - reference:
               #     ref: sample
-
-synth:
-  context:
-    freq: 200
-    signal:
-      mix:
-        signals:
-          - osc:
-              freq: freq
-          - osc:
-              freq: freq
 
 
 # MIDI Example - Play sounds via MIDI input
@@ -677,7 +644,7 @@ midi-test:
         end: true  # Signal completion when release is done
         signal:
           osc:
-            type: SIN
+            type: sin
             amp: 0.5
 
 # MIDI with more complex sound
@@ -729,77 +696,6 @@ midi-synth:
                                 freq: "f * 5"
                                 amp: 0.5
                                 attack: 0.2
-
-# MIDI with more complex sound
-midi-env:
-  retrigger:
-    time: 0.1
-    feedback: 0.5
-    repeat: 4
-    signal:
-      midi_in:
-        channel: 0
-        signal:
-          mix:
-            signals:
-              - envelope:
-                  attack: 0.1
-                  decay: 0.1
-                  sustain: 0.3
-                  release: 1
-                  signal:
-                    # shuffle:
-                    #   seed: 7
-                    #   chunks: 32
-                    #   signal:
-                        sample:
-                          # base_freq: 2000
-                          # duration: 4
-                          base_freq: 200
-                          # start: 0.354
-                          start: 0
-                          # end: 0.5
-                          # speed: [0.1, 0.05]
-                          # speed: 1
-                          loop: true
-                          # overlap: 0.5
-                          file: samples/paulo.wav
-              # - envelope:
-              #     attack: 0.1
-              #     decay: 0.5
-              #     sustain: 0.2
-              #     release: 1
-              #     signal:
-              #       osc:
-              #         amp: 0.15
-              #         partials:
-              #           - osc:
-              #               amp: 
-              #                 osc:
-              #                   freq: 5
-              #                   amp: 0.3
-              #               duration: 1
-              #               release: 0.2
-              #               partials:
-              #                 - osc:
-              #                     freq: 2
-              #                     amp: 0.5
-              #                 - osc:
-              #                     freq: 2.2
-              #                     amp: 0.5
-              #                 - osc:
-              #                     freq: 2.3
-              #                     amp: 0.4
-              #                 - osc:
-              #                     freq: 5
-              #                     amp: 0.1
-              #           - osc:
-              #               freq: 1.5
-              #               amp: 0.5
-              #           - osc:
-              #               freq: 2
-              #               amp: 0.2
-
 
 
 # MIDI with more complex sound
@@ -889,112 +785,114 @@ midi-cc-sample:
 
 fm:
   mix:
-    signals:
-      - osc:
-          type: sin
-          freq:
-            midi_cc:
-              channel: 0
-              cc: 16
-              range: [0, 500]
-              initial: 250
-          amp:
-            midi_cc:
-              channel: 0
-              cc: 0
-              initial: 0.5
-          phase:
-            osc:
-              type: sin
-              freq:
-                midi_cc:
-                  channel: 0
-                  cc: 17
-                  range: [0, 500]
-                  initial: 250
-              amp:
-                midi_cc:
-                  channel: 0
-                  cc: 1
-                  initial: 0.5
-              phase:
-                osc:
-                  type: sin
-                  freq:
-                    midi_cc:
-                      channel: 0
-                      cc: 18
-                      range: [0, 500]
-                      initial: 250
-                  amp:
-                    midi_cc:
-                      channel: 0
-                      cc: 2
-                      initial: 0.5
-      - osc:
-          type: sin
-          freq:
-            midi_cc:
-              channel: 0
-              cc: 19
-              range: [0, 500]
-              initial: 250
-          amp:
-            midi_cc:
-              channel: 0
-              cc: 3
-              initial: 0.5
-          phase:
-            osc:
-              type: sin
-              freq:
-                midi_cc:
-                  channel: 0
-                  cc: 20
-                  range: [0, 500]
-                  initial: 250
-              amp:
-                midi_cc:
-                  channel: 0
-                  cc: 4
-                  initial: 0.5
-              phase:
-                osc:
-                  type: sin
-                  freq:
-                    midi_cc:
-                      channel: 0
-                      cc: 21
-                      range: [0, 500]
-                      initial: 250
-                  amp:
-                    midi_cc:
-                      channel: 0
-                      cc: 5
-                      initial: 0.5
-      - osc:
-          type: sin
-          freq:
-            midi_cc:
-              channel: 0
-              cc: 22
-              range: [0, 500]
-              initial: 250
-          amp:
-            midi_cc:
-              channel: 0
-              cc: 6
-              initial: 0.5
-          phase:
-            sample:
-              file: samples/feedback.wav
-              speed: 
-                midi_cc:
-                  channel: 0
-                  cc: 23
-                  range: [0, 5.0]
-                  initial: 1
-              loop: true
+    one:
+      osc:
+        type: sin
+        freq:
+          midi_cc:
+            channel: 0
+            cc: 16
+            range: [0, 500]
+            initial: 250
+        amp:
+          midi_cc:
+            channel: 0
+            cc: 0
+            initial: 0.5
+        phase:
+          osc:
+            type: sin
+            freq:
+              midi_cc:
+                channel: 0
+                cc: 17
+                range: [0, 500]
+                initial: 250
+            amp:
+              midi_cc:
+                channel: 0
+                cc: 1
+                initial: 0.5
+            phase:
+              osc:
+                type: sin
+                freq:
+                  midi_cc:
+                    channel: 0
+                    cc: 18
+                    range: [0, 500]
+                    initial: 250
+                amp:
+                  midi_cc:
+                    channel: 0
+                    cc: 2
+                    initial: 0.5
+    two:
+      osc:
+        type: sin
+        freq:
+          midi_cc:
+            channel: 0
+            cc: 19
+            range: [0, 500]
+            initial: 250
+        amp:
+          midi_cc:
+            channel: 0
+            cc: 3
+            initial: 0.5
+        phase:
+          osc:
+            type: sin
+            freq:
+              midi_cc:
+                channel: 0
+                cc: 20
+                range: [0, 500]
+                initial: 250
+            amp:
+              midi_cc:
+                channel: 0
+                cc: 4
+                initial: 0.5
+            phase:
+              osc:
+                type: sin
+                freq:
+                  midi_cc:
+                    channel: 0
+                    cc: 21
+                    range: [0, 500]
+                    initial: 250
+                amp:
+                  midi_cc:
+                    channel: 0
+                    cc: 5
+                    initial: 0.5
+    three:
+      osc:
+        type: sin
+        freq:
+          midi_cc:
+            channel: 0
+            cc: 22
+            range: [0, 500]
+            initial: 250
+        amp:
+          midi_cc:
+            channel: 0
+            cc: 6
+            initial: 0.5
+        phase:
+          sample:
+            file: samples/feedback.wav
+            speed: 
+              midi_cc:
+                channel: 0
+                cc: 23
+                range: [0, 5.0]
+                initial: 1
+            loop: true
 
 
 
@@ -1363,59 +1261,6 @@ ring:
             steps: [200, 400, 800, 400]
     modulator:
       input: {}
-
-# Test monitor functionality
-test_monitor:
-  mix:
-    id: output
-    monitor: true  # Show mixer output
-    signals:
-      - osc:
-          id: lfo
-          monitor: true  # Show LFO
-          type: sin
-          freq: 2
-          range: [200, 800]
-      - osc:
-          id: osc1
-          monitor: true  # Show first oscillator
-          type: sin
-          freq: $lfo
-          amp: 0.3
-      - osc:
-          id: osc2
-          monitor: true  # Show second oscillator
-          type: saw
-          freq: $lfo * 1.5
-          amp: 0.2
-
-# Test monitor with sequencer
-test_monitor_seq:
-  mix:
-    id: output
-    monitor: true
-    duration: 10
-    signals:
-      - sequencer:
-          id: drums
-          monitor: true  # Show sequencer with timeline
-          interval: 0.125
-          repeat: 100
-          steps:
-            - osc: { type: sin, freq: 200, duration: 0.05, amp: 0.8 }
-            - null
-            - osc: { type: sin, freq: 400, duration: 0.05, amp: 0.5 }
-            - null
-            - osc: { type: sin, freq: 200, duration: 0.05, amp: 0.8 }
-            - null
-            - osc: { type: sin, freq: 400, duration: 0.05, amp: 0.5 }
-            - osc: { type: sin, freq: 600, duration: 0.05, amp: 0.3 }
-      - osc:
-          id: bass
-          monitor: true
-          type: sin
-          freq: 80
-          amp: 0.3
 
 # Test glide node with stepped frequency changes
 test_glide:

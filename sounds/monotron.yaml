@@ -1,0 +1,57 @@
+# Korg Monotron Duo - Two square wave oscillators with cross-modulation and MS-20 style filter
+monotron:
+  mix:
+    signal:
+      filter:
+        type: lowpass
+        cutoff:
+          midi_cc:
+            cc: 16
+            range: [100, 8000]
+            initial: 1000
+        peak:
+          midi_cc:
+            cc: 17
+            range: [0, 1]
+            initial: 0.5
+        signal:
+          expression:
+            # Cross-modulate the two oscillators: osc2 frequency modulated by osc1
+            exp: osc1 * 0.7 + osc2 * 0.3
+            osc1:
+              osc:
+                type: sqr
+                freq:
+                  midi_cc:
+                    cc: 0
+                    range: [12, 4800]  # D1 to A6 approximate
+                    initial: 220
+                amp: 1
+                pulse_width:
+                  midi_cc:
+                    cc: 18
+                    range: [0.1, 0.9]
+                    initial: 0.2
+            osc2:
+              osc:
+                type: sqr
+                freq:
+                  expression:
+                    # Offset from osc1 for interval control
+                    exp: osc1_freq * interval_ratio
+                    osc1_freq:
+                      midi_cc:
+                        cc: 0
+                        range: [12, 4800]
+                        initial: 220
+                    interval_ratio:
+                      midi_cc:
+                        cc: 19
+                        range: [0.5, 2.0]  # Down an octave to up an octave
+                        initial: 1.0  # Unison
+                amp: 1
+                pulse_width:
+                  midi_cc:
+                    cc: 20
+                    range: [0.1, 0.9]
+                    initial: 0.5
