@@ -1215,17 +1215,40 @@ test-automation-timed-step:
         t5: {}
 
 test-automation-timed-ramp:
-  osc:
-    type: sin
-    freq:
-      automation:
-        mode: overlap
-        overlap: 0.07
-        repeat: 1000
-        t0: 220
-        t.7: 440
-        t1.6: 280
-        t4: {}
+  expression:
+    exp: multiplier * signal
+    multiplier:
+      osc:
+        freq: 0.2
+        range: [2, 1]
+        id: post-multiplier
+        monitor: true
+    signal:
+      fold:
+        threshold:
+          osc:
+            freq: 0.2
+            range: [0.2, 1]
+            id: fold-threshold
+            monitor: true
+        multiplier:
+          osc:
+            freq: 0.2
+            range: [5, 1]
+            id: pre-multiplier
+            monitor: true
+        signal:
+          osc:
+            type: saw
+            freq:
+              automation:
+                mode: overlap
+                overlap: 0.07
+                repeat: 1000
+                t0: 220
+                t.7: 440
+                t1.6: 280
+                t4: {}
 
 # Test interval node with major pentatonic scale using list
 test_interval_pentatonic:

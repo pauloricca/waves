@@ -2172,6 +2172,250 @@
       "additionalProperties": false,
       "description": "filter node"
     },
+    "NodeParams_fold": {
+      "additionalProperties": false,
+      "properties": {
+        "duration": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Duration"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Id"
+        },
+        "is_pass_through": {
+          "title": "Is Pass Through",
+          "type": "boolean"
+        },
+        "is_reusable": {
+          "title": "Is Reusable",
+          "type": "boolean"
+        },
+        "monitor": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "const": "bipolar",
+              "type": "string"
+            },
+            {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          ],
+          "title": "Monitor"
+        },
+        "threshold": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Node"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Threshold",
+          "description": "Symmetric fold threshold applied at +/- threshold"
+        },
+        "bias": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Node"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Bias",
+          "description": "Offset applied before folding"
+        },
+        "multiplier": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Node"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Multiplier",
+          "description": "Gain applied after bias, before folding"
+        },
+        "signal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Node"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Signal",
+          "description": "The incoming signal to fold"
+        }
+      },
+      "required": [
+        "signal"
+      ],
+      "type": "object"
+    },
+    "NodeVariant_fold": {
+      "type": "object",
+      "properties": {
+        "fold": {
+          "$ref": "#/$defs/NodeParams_fold"
+        }
+      },
+      "required": [
+        "fold"
+      ],
+      "additionalProperties": false,
+      "description": "fold node"
+    },
     "NodeParams_shuffle": {
       "additionalProperties": false,
       "properties": {
@@ -10961,6 +11205,9 @@
         "filter": {
           "$ref": "#/$defs/NodeParams_filter"
         },
+        "fold": {
+          "$ref": "#/$defs/NodeParams_fold"
+        },
         "shuffle": {
           "$ref": "#/$defs/NodeParams_shuffle"
         },
@@ -11140,6 +11387,13 @@
           "description": "Insert a filter node",
           "body": {
             "filter": {}
+          }
+        },
+        {
+          "label": "fold",
+          "description": "Insert a fold node",
+          "body": {
+            "fold": {}
           }
         },
         {

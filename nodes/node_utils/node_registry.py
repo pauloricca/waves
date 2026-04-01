@@ -6,6 +6,7 @@ from nodes.retrigger import RETRIGGER_DEFINITION
 from nodes.envelope import ENVELOPE_DEFINITION
 from nodes.expression import EXPRESSION_DEFINITION
 from nodes.filter import FILTER_DEFINITION
+from nodes.fold import FOLD_DEFINITION
 from nodes.follow import FOLLOW_DEFINITION
 from nodes.hold import HOLD_DEFINITION
 from nodes.input import INPUT_DEFINITION
@@ -39,6 +40,7 @@ NODE_REGISTRY = [
     DELAY_DEFINITION,
     RETRIGGER_DEFINITION,
     FILTER_DEFINITION,
+    FOLD_DEFINITION,
     SHUFFLE_DEFINITION,
     MAP_DEFINITION,
     SMOOTH_DEFINITION,
