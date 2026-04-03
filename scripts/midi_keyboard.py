@@ -1,27 +1,30 @@
 #!/usr/bin/env python3
 """Simple computer keyboard to MIDI note bridge.
 
-Run with root privileges so the script can capture keyboard events:
+On macOS this uses `pynput`, which does not require `sudo`, but it does require
+Accessibility / Input Monitoring permission for the app running Python.
 
-    sudo python3 scripts/midi_keyboard.py major
-    sudo python3 scripts/midi_keyboard.py minor -1
+Examples:
+
+    python3 scripts/midi_keyboard.py major
+    python3 scripts/midi_keyboard.py minor -1
 
 Pass an optional octave shift after the scale name to transpose the layout.
 
-Press Shift while holding notes to latch them. Press Shift again to release 
+Press Shift while holding notes to latch them. Press Shift again to release
 latched notes and resume normal playback.
 """
 
 from __future__ import annotations
 
 import argparse
-import os
+import sys
 import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 import mido
-import keyboard
+from pynput import keyboard as pynput_keyboard
 
 MIDI_OUTPUT_DEVICE = None # "IAC Driver Bus 1" # Set to None to use first available output
 
@@ -67,28 +70,63 @@ class MidiKeyboardController:
         self._active_notes: Dict[str, int] = {}
         self._latched_keys: set[str] = set()
         self._latch_active = False
+        self._pressed_keys: set[str] = set()
+        self._pressed_shift_keys: set[str] = set()
 
-    def handle_event(self, event: keyboard.KeyboardEvent) -> None:
-        key_name = event.name
-        if key_name is None:
+    def handle_key_press(self, key: pynput_keyboard.Key | pynput_keyboard.KeyCode) -> None:
+        resolved_key = self._resolve_key_name(key)
+        if resolved_key is None:
             return
 
-        key = key_name.lower()
-        if key in SHIFT_KEYS:
-            if event.event_type == "down":
-                if self._latch_active:
-                    self._deactivate_latch()
-                else:
-                    self._activate_latch()
+        if resolved_key in SHIFT_KEYS:
+            if resolved_key in self._pressed_shift_keys:
+                return
+            self._pressed_shift_keys.add(resolved_key)
+            if self._latch_active:
+                self._deactivate_latch()
+            else:
+                self._activate_latch()
             return
 
-        if key not in self.key_map:
+        if resolved_key not in self.key_map:
             return
 
-        if event.event_type == "down":
-            self._handle_key_down(key)
-        elif event.event_type == "up":
-            self._handle_key_up(key)
+        if resolved_key in self._pressed_keys:
+            return
+
+        self._pressed_keys.add(resolved_key)
+        self._handle_key_down(resolved_key)
+
+    def handle_key_release(self, key: pynput_keyboard.Key | pynput_keyboard.KeyCode) -> None:
+        resolved_key = self._resolve_key_name(key)
+        if resolved_key is None:
+            return
+
+        if resolved_key in SHIFT_KEYS:
+            self._pressed_shift_keys.discard(resolved_key)
+            return
+
+        self._pressed_keys.discard(resolved_key)
+
+        if resolved_key not in self.key_map:
+            return
+
+        self._handle_key_up(resolved_key)
+
+    def _resolve_key_name(
+        self, key: pynput_keyboard.Key | pynput_keyboard.KeyCode
+    ) -> Optional[str]:
+        if isinstance(key, pynput_keyboard.KeyCode):
+            if key.char is None:
+                return None
+            return key.char.lower()
+
+        special_key_map = {
+            pynput_keyboard.Key.shift: "shift",
+            pynput_keyboard.Key.shift_l: "left shift",
+            pynput_keyboard.Key.shift_r: "right shift",
+        }
+        return special_key_map.get(key)
 
     def _handle_key_down(self, key: str) -> None:
         if key in self._active_notes:
@@ -227,11 +265,32 @@ def select_output_port() -> Optional[mido.ports.BaseOutput]:
         return None
 
 
-def warn_if_not_root() -> None:
-    if hasattr(os, "geteuid") and os.geteuid() != 0:
-        print(
-            "Warning: root privileges recommended. Run with 'sudo' if key events are not detected."
-        )
+def print_permission_info() -> None:
+    print(
+        "If key presses are not detected on macOS, enable Accessibility / Input Monitoring\n"
+        "permission for the app running Python (Terminal, iTerm, or VS Code)."
+    )
+
+
+def is_process_trusted_for_input_monitoring() -> bool:
+    try:
+        import HIServices
+
+        return bool(HIServices.AXIsProcessTrusted())
+    except Exception:
+        return True
+
+
+def print_untrusted_process_help() -> None:
+    print("\nInput monitoring is blocked for this process.")
+    print(f"Python executable: {sys.executable}")
+    print(
+        "\nIn macOS Settings > Privacy & Security, enable both:\n"
+        "  - Accessibility\n"
+        "  - Input Monitoring\n"
+        "for the exact app that launched this Python process (Terminal/iTerm/VS Code).\n"
+        "If it still fails, remove and re-add the app entry, then restart the app."
+    )
 
 
 def print_mapping_info(key_map: Dict[str, MidiNoteMapping]) -> None:
@@ -249,7 +308,10 @@ def print_mapping_info(key_map: Dict[str, MidiNoteMapping]) -> None:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    warn_if_not_root()
+    if not is_process_trusted_for_input_monitoring():
+        print_untrusted_process_help()
+        return 1
+
     args = parse_args(argv)
 
     key_map = build_key_map(args.scale, args.octave_shift)
@@ -264,13 +326,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         channel=args.channel,
     )
 
+    print_permission_info()
     print_mapping_info(key_map)
 
-    keyboard.hook(controller.handle_event)
-
     try:
-        while True:
-            time.sleep(0.25)
+        with pynput_keyboard.Listener(
+            on_press=controller.handle_key_press,
+            on_release=controller.handle_key_release,
+        ) as listener:
+            while listener.is_alive():
+                time.sleep(0.25)
     except KeyboardInterrupt:
         pass
     finally:

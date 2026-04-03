@@ -1,5 +1,7 @@
 # GitHub Copilot Instructions
 
+
+
 ## Project Overview
 
 This project is a python and numpy test bed for experimental sound design, to help me create sounds, sequences or compositions from scratch to be used in music production in flexible, low-level hands-on ways. The way sounds are created is through a kind of modular synthesis, where different modules (called nodes here) can be connected together procedurally to create complex sounds. The modules and connections are described in YAML format in the waves.yaml file.
@@ -641,6 +643,22 @@ Then we need to add the new node to the NODE_REGISTRY in nodes/node_utils/node_r
 ## Configuration
 
 In config.py we can set some global parameters for the project, such as the sample rate, the buffer size, the sounds directory (`SOUNDS_DIR`), etc. but also some options on the mode of operating like whether we play the sound in realtime (render in chunks) or pre-render the whole sound and play it back (non-realtime).
+
+## Dependency Management
+
+This project uses `uv` for fast, reliable Python dependency management and package installation. All project dependencies are specified in `pyproject.toml`. To install dependencies, run:
+
+```bash
+uv sync
+```
+
+To add a new dependency:
+
+```bash
+uv add package_name
+```
+
+`uv` provides significantly faster package resolution and installation compared to traditional tools like pip, making it ideal for iterative development workflows.
 
 ## Past and Future Work
 

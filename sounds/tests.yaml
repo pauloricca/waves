@@ -1215,40 +1215,92 @@ test-automation-timed-step:
         t5: {}
 
 test-automation-timed-ramp:
-  expression:
-    exp: multiplier * signal
-    multiplier:
-      osc:
-        freq: 0.2
-        range: [2, 1]
-        id: post-multiplier
-        monitor: true
+  multiply:
+    number: 10
     signal:
-      fold:
-        threshold:
-          osc:
-            freq: 0.2
-            range: [0.2, 1]
-            id: fold-threshold
-            monitor: true
-        multiplier:
-          osc:
-            freq: 0.2
-            range: [5, 1]
-            id: pre-multiplier
-            monitor: true
+      context:
+        pan:
+          hold:
+            signal: rand(-1, 1)
+            trigger: 1
+        detune:
+          hold:
+            signal: rand(-10, 10)
+            trigger: 1
+        lfo_freq: 0.5 / 3.6
         signal:
-          osc:
-            type: saw
-            freq:
-              automation:
-                mode: overlap
-                overlap: 0.07
-                repeat: 1000
-                t0: 220
-                t.7: 440
-                t1.6: 280
-                t4: {}
+          track:
+            pan: pan
+            volume: 
+              osc:
+                freq: lfo_freq
+                range: [1, 3]
+                id: post-multiplier
+                monitor: true
+            signal: 
+              fold:
+                threshold:
+                  osc:
+                    freq: lfo_freq * detune
+                    range: [0.2, 1]
+                    id: fold-threshold
+                    monitor: true
+                    phase: detune * 1.5
+                multiplier:
+                  osc:
+                    freq: lfo_freq * detune
+                    range: [5, 1]
+                    id: pre-multiplier
+                    monitor: true
+                    phase: detune * 1.5
+                signal:
+                  osc:
+                    type: saw
+                    phase: detune
+                    amp: 0.03
+                    freq:
+                      automation:
+                        mode: overlap
+                        overlap: 0.07
+                        repeat: 1000
+                        t0: 220 + detune
+                        t0.6: {}
+                        t0.65: 0
+                        t.7: 440 + detune
+                        t1.6: 280 + detune
+                        t3.6: {}
+                        t3.65: 0
+                        t3.72: {}
+
+test_max:
+  midi_in:
+    duration: 9999
+    channel: 0
+    signal:
+      # context:
+      #   freq: 200
+      #   signal:
+      envelope:
+        # gate: 1 if is_in_sustain else 0
+        attack: 0.02
+        decay: 0.8
+        duration: 1
+        release: 0.2
+        signal:
+          expression:
+            exp: max(w1, w2)
+            w1:
+              osc:
+                amp: 0.5
+                freq: freq
+            w2:
+              osc:
+                amp: 0.5
+                freq:
+                  osc:
+                    freq: 20
+                    range: [freq * 0.18, freq * 0.22]
+
 
 # Test interval node with major pentatonic scale using list
 test_interval_pentatonic:
@@ -1307,6 +1359,7 @@ ring:
       osc:
         freq:
           automation:
+            repeat: 10
             interval: 0.1
             steps: [200, 400, 800, 400]
     modulator:
