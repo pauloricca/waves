@@ -1,0 +1,24 @@
+poc_pad:
+  mix:
+    low:
+      envelope:
+        attack: 0.01
+        decay: 0.2
+        sustain: 0.4
+        release: 0.3
+        signal:
+          osc:
+            type: sin
+            freq: 110
+            amp: 0.4
+    high:
+      envelope:
+        attack: 0.001
+        decay: 0.1
+        sustain: 0.2
+        release: 0.2
+        signal:
+          osc:
+            type: saw
+            freq: 440
+            amp: 0.12

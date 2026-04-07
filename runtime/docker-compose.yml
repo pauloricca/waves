@@ -1,0 +1,49 @@
+services:
+  runtime:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: waves-runtime:local
+    working_dir: /work
+    volumes:
+      - ../:/work
+    command:
+      - /work/runtime/poc.yaml
+      - poc_pad
+      - --seconds
+      - "4"
+      - --sample-rate
+      - "48000"
+      - --block-size
+      - "256"
+      - --write-wav
+      - /work/runtime/out.wav
+
+  extract-runtime:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: waves-runtime:local
+    entrypoint:
+      - /bin/sh
+    working_dir: /work
+    volumes:
+      - ./:/work/runtime
+    command:
+      - -lc
+      - cp /usr/local/bin/runtime /work/runtime/runtime && chmod +x /work/runtime/runtime
+
+  extract-runtime-pi4:
+    platform: linux/arm64
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: waves-runtime:pi4
+    entrypoint:
+      - /bin/sh
+    working_dir: /work
+    volumes:
+      - ./:/work/runtime
+    command:
+      - -lc
+      - cp /usr/local/bin/runtime /work/runtime/runtime-linux-arm64 && chmod +x /work/runtime/runtime-linux-arm64
