@@ -37,7 +37,7 @@ granular:
                         sustain_duration: 0.1
                         signal:
                           sample:
-                            file: samples/paulo.wav
+                            file: samples/monitor.wav
                             start: 
                               hold:
                                 signal: start

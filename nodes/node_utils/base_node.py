@@ -19,7 +19,7 @@ class BaseNodeModel(BaseModel):
     id: Optional[str] = None  # Unique identifier for this node to enable referencing
     is_pass_through: bool = False  # Override to True for nodes that just pass through their signal child
     is_reusable: bool = False  # Marks a YAML-defined sound as intended for reuse as a node
-    monitor: Union[bool, Literal["bipolar"], Dict[str, Any]] = False  # Enable real-time output visualization: True (abs), "bipolar" (centered at 0), or {"type": "bipolar", "range": [min, max]}
+    monitor: Union[bool, Literal["level", "value", "bipolar"], Dict[str, Any]] = False  # Enable real-time output visualization: True/"level" (abs), "value" (blue value meter), "bipolar" (centered at 0), or {"type": "...", "range": [min, max]}
     pass
 
 

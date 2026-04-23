@@ -1,8 +1,22 @@
 import math
+import re
 import numpy as np
 from config import SAMPLE_RATE
 from random import uniform, choice, random
 from utils import to_mono
+
+
+NODE_REF_PATTERN = re.compile(r'\$([a-zA-Z_][a-zA-Z0-9_]*)')
+SHARP_NOTE_PATTERN = re.compile(r'(?<![A-Za-z0-9_])([A-Ga-g])#(-?\d+)(?![A-Za-z0-9_])')
+
+# Enharmonic aliases for sharp notes (identifier-safe names and flats)
+SHARP_TO_FLAT = {
+    'c#': 'db',
+    'd#': 'eb',
+    'f#': 'gb',
+    'g#': 'ab',
+    'a#': 'bb',
+}
 
 def rand(a: float | list | None = None, b: float | None = None) -> float:
     """Return a random value based on input pattern:
@@ -158,6 +172,22 @@ def _generate_note_constants():
         notes[name] = freq
         # Also add uppercase variant for convenience
         notes[name.upper()] = freq
+
+        # Add identifier-safe aliases for sharp notes (e.g. G#4 -> Gs4)
+        if '#' in name:
+            sharp_alias = name.replace('#', 's')
+            notes[sharp_alias] = freq
+            notes[sharp_alias.upper()] = freq
+            notes[sharp_alias[0].upper() + sharp_alias[1:]] = freq
+
+            # Add flat enharmonic aliases (e.g. G#4 -> Ab4)
+            pitch_class = name[:-len(str(octave))]
+            flat_pitch = SHARP_TO_FLAT.get(pitch_class)
+            if flat_pitch is not None:
+                flat_alias = f"{flat_pitch}{octave}"
+                notes[flat_alias] = freq
+                notes[flat_alias.upper()] = freq
+                notes[flat_alias[0].upper() + flat_alias[1:]] = freq
     return notes
 
 GLOBAL_CONSTANTS.update(_generate_note_constants())
@@ -234,10 +264,10 @@ def compile_expression(expr):
         # Numeric constant - no compilation needed
         return (None, float(expr), True)
     elif isinstance(expr, str):
-        # Preprocess: Replace $node_id with node_id (syntax sugar for node references)
-        # Use regex to find $identifier patterns and strip the $
-        import re
-        processed_expr = re.sub(r'\$([a-zA-Z_][a-zA-Z0-9_]*)', r'\1', expr)
+        # Preprocess: replace $node_id references and convert sharp note literals
+        # to identifier-safe aliases (e.g. G#4 -> Gs4).
+        processed_expr = NODE_REF_PATTERN.sub(r'\1', expr)
+        processed_expr = SHARP_NOTE_PATTERN.sub(r'\1s\2', processed_expr)
         
         # String expression - compile it with better error message
         try:

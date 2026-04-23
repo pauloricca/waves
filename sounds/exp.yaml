@@ -196,32 +196,6 @@ synth2:
                                 cc: 18
                                 range: [0, 20000]
 
-# Test the multiply node with a simple chorus effect
-test_multiply:
-  tempo:
-    bpm: 120
-    signal:
-      multiply:
-        number: 5
-        signal:
-          osc:
-            type: sin
-            freq: "440 * (1 + i * 0.01)"  # Slightly detune each copy
-            phase: "i / n"                 # Distribute phases evenly
-            amp: "0.2 / n"                 # Normalize amplitude
-
-# Test harmonic stack using multiply
-test_harmonics:
-  tempo:
-    bpm: 120
-    signal:
-      multiply:
-        number: 8
-        signal:
-          osc:
-            type: sin
-            freq: "220 * (i + 1)"  # Create harmonics (220, 440, 660, ...)
-            amp: "0.3 / (i + 1)"   # Reduce amplitude for higher harmonics
 
 # Advanced test: Multiply with envelopes and varying parameters
 test_multiply_advanced:
@@ -290,7 +264,7 @@ hum:
                     initial: 0
                 signal:
                   sample:
-                    file: samples/hum.wav
+                    file: samples/monitor.wav
                     start: 0.2
                     end: 0.5
                     loop: true
@@ -298,7 +272,7 @@ hum:
                     base_freq:
                       midi_cc:
                         range: [0, 100]
-                        cc: 16
+                        cc: 15
                         initial: 0
                     freq: 
                       midi_cc:
@@ -351,7 +325,7 @@ seq-glitch:
                             initial: 0
                         signal:
                           sample:
-                            file: samples/hum.wav
+                            file: samples/monitor.wav
                             start: 0.2
                             end: 0.5
                             loop: true
@@ -447,9 +421,11 @@ shahi:
               midi_cc:
                 cc: 20
             cutoff:
-              midi_cc:
-                cc: 19
-                range: [0, 20000]
+              osc_in:
+                address: hp_cutoff
+              # midi_cc:
+              #   cc: 19
+              #   range: [0, 20000]
             signal:
               filter:
                 peak:
@@ -457,10 +433,12 @@ shahi:
                     monitor: true
                     cc: 18
                 cutoff:
-                  midi_cc:
-                    monitor: true
-                    cc: 17
-                    range: [0, 20000]
+                  # midi_cc:
+                  #   monitor: true
+                  #   cc: 17
+                  #   range: [0, 20000]
+                  osc_in:
+                    address: lp_cutoff
                 signal:
                   expression:
                     monitor: true
@@ -479,7 +457,7 @@ shahi:
                         attack: 0.01
                         signal:
                           mix:
-                            duration: 1000
+                            duration: 100000
                             perc:
                               sequencer:
                                 monitor: true

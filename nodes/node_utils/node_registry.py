@@ -20,6 +20,7 @@ from nodes.midi_cc import MIDI_CC_DEFINITION
 from nodes.midi_out import MIDI_OUT_DEFINITION
 from nodes.mix import MIX_DEFINITION
 from nodes.multiply import MULTIPLY_DEFINITION
+from nodes.osc_in import OSC_IN_DEFINITION
 from nodes.oscillator import OSCILLATOR_DEFINITION
 from nodes.reference import REFERENCE_DEFINITION
 from nodes.sample import SAMPLE_DEFINITION
@@ -58,6 +59,7 @@ NODE_REGISTRY = [
     MIDI_OUT_DEFINITION,
     MIX_DEFINITION,
     MULTIPLY_DEFINITION,
+    OSC_IN_DEFINITION,
     REFERENCE_DEFINITION,
     HOLD_DEFINITION,
     GLIDE_DEFINITION,

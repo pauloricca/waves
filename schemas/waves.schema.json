@@ -55,7 +55,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -117,7 +121,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -483,7 +491,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -944,7 +956,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -1403,7 +1419,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -1719,7 +1739,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -1878,7 +1902,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -2008,7 +2036,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -2211,7 +2243,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -2455,7 +2491,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -2641,7 +2681,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -3042,7 +3086,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -3154,7 +3202,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -3506,7 +3558,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -3572,7 +3628,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -3739,7 +3799,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -3915,7 +3979,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -3983,7 +4051,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -4371,7 +4443,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -4690,7 +4766,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -4814,7 +4894,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -4919,7 +5003,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -5047,7 +5135,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -5271,7 +5363,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -5641,7 +5737,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -5706,7 +5806,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -5880,6 +5984,184 @@
       "additionalProperties": false,
       "description": "multiply node"
     },
+    "NodeParams_osc_in": {
+      "additionalProperties": false,
+      "properties": {
+        "duration": {
+          "title": "Duration",
+          "type": "number",
+          "description": "Default: inf."
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Id"
+        },
+        "is_pass_through": {
+          "title": "Is Pass Through",
+          "type": "boolean"
+        },
+        "is_reusable": {
+          "title": "Is Reusable",
+          "type": "boolean"
+        },
+        "monitor": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          ],
+          "title": "Monitor"
+        },
+        "address": {
+          "title": "Address",
+          "type": "string"
+        },
+        "arg_index": {
+          "title": "Arg Index",
+          "type": "integer"
+        },
+        "initial": {
+          "title": "Initial",
+          "type": "number"
+        },
+        "range": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Node"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "type": "array"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Node"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "type": "array"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "title": "Range",
+          "type": "array"
+        },
+        "host": {
+          "title": "Host",
+          "type": "string"
+        },
+        "port": {
+          "title": "Port",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address"
+      ],
+      "type": "object"
+    },
+    "NodeVariant_osc_in": {
+      "type": "object",
+      "properties": {
+        "osc_in": {
+          "$ref": "#/$defs/NodeParams_osc_in"
+        }
+      },
+      "required": [
+        "osc_in"
+      ],
+      "additionalProperties": false,
+      "description": "osc_in node"
+    },
     "NodeParams_reference": {
       "additionalProperties": false,
       "properties": {
@@ -5919,7 +6201,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -5992,7 +6278,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -6151,7 +6441,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -6305,7 +6599,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -6530,7 +6828,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -6654,7 +6956,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -6827,7 +7133,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -6958,7 +7268,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -7191,7 +7505,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -7366,7 +7684,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -7540,7 +7862,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -7757,7 +8083,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -7933,7 +8263,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -8266,7 +8600,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -8483,7 +8821,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -8658,7 +9000,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -9101,7 +9447,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -9256,7 +9606,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -9431,7 +9785,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -9606,7 +9964,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -9781,7 +10143,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -10082,7 +10448,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -10505,7 +10875,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -10716,7 +11090,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -10872,7 +11250,11 @@
               "type": "boolean"
             },
             {
-              "const": "bipolar",
+              "enum": [
+                "level",
+                "value",
+                "bipolar"
+              ],
               "type": "string"
             },
             {
@@ -11259,6 +11641,9 @@
         "multiply": {
           "$ref": "#/$defs/NodeParams_multiply"
         },
+        "osc_in": {
+          "$ref": "#/$defs/NodeParams_osc_in"
+        },
         "reference": {
           "$ref": "#/$defs/NodeParams_reference"
         },
@@ -11513,6 +11898,13 @@
           "description": "Insert a multiply node",
           "body": {
             "multiply": {}
+          }
+        },
+        {
+          "label": "osc_in",
+          "description": "Insert a osc_in node",
+          "body": {
+            "osc_in": {}
           }
         },
         {

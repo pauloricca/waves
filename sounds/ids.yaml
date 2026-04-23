@@ -1,8 +1,0 @@
-ids:
-  osc:
-    freq: 200
-    amp:
-      osc:
-        freq: 1
-        range: [0.5, 1]
-        

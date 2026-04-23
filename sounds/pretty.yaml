@@ -17,14 +17,14 @@ pretty:
         scale: minor
     signal:
       mix:
-        # percussion:
-        #   sequencer:
-        #     interval: 0.1
-        #     steps:
-        #       - kick
-        #       - 
-        #       - 
-        #       -
+        percussion:
+          sequencer:
+            interval: 0.21
+            steps:
+              - kick
+              - 
+              - 
+              -
         shimmer:
           retrigger:
             repeat: 3
@@ -131,3 +131,61 @@ pretty:
                             amp: .3
                             freq: freq
                               
+pretty_sequence:
+  osc:
+    amp:
+      automation:
+        interval: .5
+        mode: step
+        repeat: 9999
+        steps:
+          - midi_cc:
+              cc: 11
+          - midi_cc:
+              cc: 21
+          - midi_cc:
+              cc: 31
+          - midi_cc:
+              cc: 41
+          - midi_cc:
+              cc: 51
+          - midi_cc:
+              cc: 61
+          - midi_cc:
+              cc: 71
+          - midi_cc:
+              cc: 81
+    freq:
+      interval:
+        root: 440
+        note:
+          automation:
+            interval: .5
+            mode: step
+            repeat: 9999
+            steps:
+              - midi_cc:
+                  cc: 10
+                  range: [-12, 12]
+              - midi_cc:
+                  cc: 20
+                  range: [-12, 12]
+              - midi_cc:
+                  cc: 30
+                  range: [-12, 12]
+              - midi_cc:
+                  cc: 40
+                  range: [-12, 12]
+              - midi_cc:
+                  cc: 50
+                  range: [-12, 12]
+              - midi_cc:
+                  cc: 60
+                  range: [-12, 12]
+              - midi_cc:
+                  cc: 70
+                  range: [-12, 12]
+              - midi_cc:
+                  cc: 80
+                  range: [-12, 12]
+        scale: minor

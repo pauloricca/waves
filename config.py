@@ -17,6 +17,10 @@ MIDI_DEFAULT_DEVICE_KEY = 'korg'  # Default device key to use when not specified
 DO_PERSIST_MIDI_CC_VALUES = True  # Save MIDI CC values to file for persistence across restarts
 MIDI_CC_SAVE_INTERVAL = 2.0  # Seconds between saving CC values to file
 
+# OSC input settings
+OSC_INPUT_HOST = "127.0.0.1"
+OSC_INPUT_PORT = 9000
+
 # MIDI output settings
 MIDI_OUTPUT_DEVICE = None  # MIDI output device name, or None to use first available (for MIDI clock out)
 MIDI_CLOCK_ENABLED = True  # Enable MIDI clock output when tempo node has source='internal'

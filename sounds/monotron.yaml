@@ -23,13 +23,13 @@ monotron:
                 type: sqr
                 freq:
                   midi_cc:
-                    cc: 0
+                    cc: 18
                     range: [12, 4800]  # D1 to A6 approximate
                     initial: 220
                 amp: 1
                 pulse_width:
                   midi_cc:
-                    cc: 18
+                    cc: 19
                     range: [0.1, 0.9]
                     initial: 0.2
             osc2:
@@ -41,17 +41,17 @@ monotron:
                     exp: osc1_freq * interval_ratio
                     osc1_freq:
                       midi_cc:
-                        cc: 0
+                        cc: 20
                         range: [12, 4800]
                         initial: 220
                     interval_ratio:
                       midi_cc:
-                        cc: 19
+                        cc: 21
                         range: [0.5, 2.0]  # Down an octave to up an octave
                         initial: 1.0  # Unison
                 amp: 1
                 pulse_width:
                   midi_cc:
-                    cc: 20
+                    cc: 22
                     range: [0.1, 0.9]
                     initial: 0.5

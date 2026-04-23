@@ -205,6 +205,7 @@ Re-run the generator whenever node models change.
 ### Modulators
 - **automation**: Interpolated parameter automation
 - **midi_cc**: MIDI CC input
+- **osc_in**: OSC input
 - **expression**: Arbitrary Python expressions with multiple inputs
 
 ### Structure
@@ -234,6 +235,26 @@ midi_synth:
         type: saw
         freq: $freq  # Uses MIDI note frequency
         amp: $gate   # Uses MIDI velocity
+```
+
+## OSC Support
+
+Use `osc_in` to receive the latest numeric OSC argument for an address and render it as a continuous control signal:
+
+```yaml
+osc_filter:
+  filter:
+    type: lowpass
+    cutoff:
+      osc_in:
+        address: /filter/cutoff
+        range: [200, 4000]
+        monitor: value
+    input_signal:
+      osc:
+        type: saw
+        freq: 110
+        duration: 4
 ```
 
 ## Sub-Patching and Reuse
