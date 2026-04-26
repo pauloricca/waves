@@ -12,6 +12,7 @@ from nodes.hold import HOLD_DEFINITION
 from nodes.input import INPUT_DEFINITION
 from nodes.interval import INTERVAL_DEFINITION
 from nodes.glide import GLIDE_DEFINITION
+from nodes.glsl import GLSL_DEFINITION
 from nodes.non_realtime.invert import INVERT_DEFINITION
 from nodes.map import MAP_DEFINITION
 from nodes.midi_in import MIDI_IN_DEFINITION
@@ -24,6 +25,7 @@ from nodes.osc_in import OSC_IN_DEFINITION
 from nodes.oscillator import OSCILLATOR_DEFINITION
 from nodes.reference import REFERENCE_DEFINITION
 from nodes.sample import SAMPLE_DEFINITION
+from nodes.video import VIDEO_DEFINITION
 from nodes.select import SELECT_DEFINITION
 from nodes.sequencer import SEQUENCER_DEFINITION
 from nodes.shuffle import SHUFFLE_DEFINITION
@@ -51,6 +53,8 @@ NODE_REGISTRY = [
     TEMPO_DEFINITION,
     INVERT_DEFINITION,
     SAMPLE_DEFINITION,
+    VIDEO_DEFINITION,
+    GLSL_DEFINITION,
     ENVELOPE_DEFINITION,
     EXPRESSION_DEFINITION,
     CONTEXT_DEFINITION,

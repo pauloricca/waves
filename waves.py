@@ -19,6 +19,7 @@ from nodes.node_utils.instantiate_node import instantiate_node, collect_all_node
 from nodes.node_utils.render_context import RenderContext
 from utils import look_for_duration, play, save, visualise_wave, is_stereo as check_is_stereo, to_mono, to_stereo
 from display_stats import run_visualizer_and_stats, print_average_cpu_usage
+from visual_runtime import collect_visual_snapshot, has_visual_nodes, run_visual_renderer
 
 rendered_sounds: dict[np.ndarray] = {}
 
@@ -302,6 +303,9 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
     should_stop_ref = [False]
     last_render_time_ref = [0]
     recording_active_ref = [recording_active]
+    video_fps_ref = [0.0]
+    visual_snapshot_ref = [{}]
+    visual_snapshot_lock = threading.Lock()
     
     # Create render context that persists across chunks
     render_context = RenderContext()
@@ -364,6 +368,12 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
         audio_data = active_sound_node.render(frames, context=render_context)
         audio_data = np.asarray(audio_data)
 
+        snapshot = collect_visual_snapshot(active_sound_node)
+        if snapshot is not None:
+            snapshot["snapshot_time"] = time.time()
+            with visual_snapshot_lock:
+                visual_snapshot_ref[0] = snapshot
+
         if len(audio_data) == 0:
             should_stop = True
 
@@ -422,23 +432,36 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
     if (DISPLAY_RENDER_STATS or DO_VISUALISE_OUTPUT):
         vis_thread = threading.Thread(
             target=run_visualizer_and_stats,
-            args=(visualised_wave_buffer, should_stop_ref, start_time, last_render_time_ref, recording_active_ref),
+            args=(visualised_wave_buffer, should_stop_ref, start_time, last_render_time_ref, recording_active_ref, video_fps_ref),
             daemon=True
         )
         vis_thread.start()
 
-    num_channels = output_channels_ref[0]
+    has_visual_renderer = ENABLE_VISUAL_RENDERER and has_visual_nodes(sound_node)
 
-    with sd.OutputStream(callback=audio_callback, blocksize=BUFFER_SIZE, samplerate=SAMPLE_RATE, channels=num_channels): #, latency='low'
-        while not should_stop:
-            # Update references for display thread
-            should_stop_ref[0] = should_stop
-            recording_active_ref[0] = recording_active
-            
-            # Only stop based on duration if one is specified
-            if duration_in_seconds and time.time() - start_time > duration_in_seconds:
-                should_stop = True
-            time.sleep(0.1)
+    def run_audio_stream():
+        nonlocal should_stop
+        num_channels = output_channels_ref[0]
+        with sd.OutputStream(callback=audio_callback, blocksize=BUFFER_SIZE, samplerate=SAMPLE_RATE, channels=num_channels):
+            while not should_stop:
+                # Update references for display thread
+                should_stop_ref[0] = should_stop
+                recording_active_ref[0] = recording_active
+
+                # Only stop based on duration if one is specified
+                if duration_in_seconds and time.time() - start_time > duration_in_seconds:
+                    should_stop = True
+                time.sleep(0.1)
+
+    if has_visual_renderer:
+        audio_thread = threading.Thread(target=run_audio_stream, daemon=True)
+        audio_thread.start()
+        run_visual_renderer(visual_snapshot_ref, visual_snapshot_lock, should_stop_ref, sound_name, video_fps_ref)
+        should_stop = True
+        should_stop_ref[0] = True
+        audio_thread.join(timeout=1.0)
+    else:
+        run_audio_stream()
 
 def main():
     global rendered_sounds, current_sound_node, current_sound_model

@@ -1,0 +1,37 @@
+curve_test:
+  mix:
+    audio:
+      track:
+        volume: 0.2
+        signal:
+          fold:
+            threshold:
+              midi_cc:
+                cc: 2
+            signal:
+              osc:
+                type: tri
+                freq:
+                  midi_cc:
+                    cc: 3
+                    range: [0, 500]
+                amp:
+                  midi_cc:
+                    cc: 1
+    video:
+      track:
+        volume: 0
+        signal:
+          video:
+            files:
+              - visuals/clip-b.mp4
+              - visuals/clip-d.mp4
+              - visuals/clip-e.mp4
+              - visuals/clip-g.mp4
+            clip: 3
+            speed:
+              midi_cc:
+                cc: 1
+                range: [-10, 20]
+            loop: true
+            fullscreen: false

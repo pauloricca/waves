@@ -12,4 +12,5 @@ __pycache__/
 *$py.class
 
 samples/
+visuals/
 .midi_state.json

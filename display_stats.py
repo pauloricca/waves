@@ -40,7 +40,7 @@ def print_average_cpu_usage():
 
 
 
-def format_stats_line(cpu_usage_percent: float, elapsed_seconds: float, is_recording: bool, loudness: float = 0.0, loudness_left: float = None, loudness_right: float = None, midi_message: str = None) -> str:
+def format_stats_line(cpu_usage_percent: float, elapsed_seconds: float, is_recording: bool, loudness: float = 0.0, loudness_left: float = None, loudness_right: float = None, midi_message: str = None, video_fps: float | None = None) -> str:
     """
     Format the statistics line with CPU usage, elapsed time, and recording status.
     
@@ -71,8 +71,11 @@ def format_stats_line(cpu_usage_percent: float, elapsed_seconds: float, is_recor
     parts.append(loudness_meter)
     
     # Format CPU usage
-    cpu_text = f"CPU usage: {cpu_usage_percent:.2f}%"
+    cpu_text = f"CPU usage: {cpu_usage_percent:5.1f}%"
     parts.append(cpu_text)
+
+    if video_fps is not None:
+        parts.append(f"video: {video_fps:5.1f}fps")
     
     # Format elapsed time as min:sec
     elapsed_minutes = int(elapsed_seconds // 60)
@@ -103,7 +106,8 @@ def run_visualizer_and_stats(
     should_stop_flag,
     start_time: float,
     last_render_time_ref,
-    recording_active_ref
+    recording_active_ref,
+    video_fps_ref=None,
 ):
     """
     Run visualization and stats display loop.
@@ -164,7 +168,8 @@ def run_visualizer_and_stats(
                     loudness,
                     loudness_left,
                     loudness_right,
-                    midi_message=midi_message
+                    midi_message=midi_message,
+                    video_fps=video_fps_ref[0] if video_fps_ref is not None and video_fps_ref[0] > 0 else None,
                 )
                 
                 # Build all output into a buffer first
