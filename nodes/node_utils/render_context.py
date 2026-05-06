@@ -72,6 +72,7 @@ class RenderContext:
         
         self.node_outputs.clear()
         self.node_outputs_by_id.clear()
+        self.node_instances.clear()
         self.recursion_depth.clear()
         self.current_chunk += 1
         

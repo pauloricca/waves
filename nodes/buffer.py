@@ -193,6 +193,11 @@ class BufferNode(BaseNode):
     def buffer_length_samples(self):
         """Always get the current buffer length from the shared buffer reference"""
         return len(self.buffer_ref['data'])
+
+    def _should_loop_write_head(self):
+        """Preserve legacy circular writes unless loop is explicitly set false."""
+        fields_set = getattr(self.model, "model_fields_set", set())
+        return self.model.loop or "loop" not in fields_set
     
     def _resize_buffer_if_needed(self, new_length_samples, context, params):
         """Resize the buffer if the length has changed"""
@@ -279,8 +284,10 @@ class BufferNode(BaseNode):
             self.buffer_ref['data'] = buffer_snapshot.copy()
             self.buffer_ref['write_head'] = write_head_snapshot
             
-            # Pad signal with zeros if it ended early (so write head still advances)
-            if len(signal_wave) < num_samples:
+            # Looping writers behave like a live circular tape and keep advancing
+            # through silence. Non-looping writers stop when the source ends or
+            # when the write head reaches the end of the buffer.
+            if self._should_loop_write_head() and len(signal_wave) < num_samples:
                 signal_wave = np.pad(signal_wave, (0, num_samples - len(signal_wave)), mode='constant', constant_values=0)
             
             # Write signal to buffer (always writes num_samples, advancing write head)
@@ -317,9 +324,17 @@ class BufferNode(BaseNode):
         if np.isscalar(speed):
             speed = np.full(num_samples, speed)
         
-        # Pad signal if needed
-        if len(signal_wave) < num_samples:
+        # Pad signal if needed. Non-looping writers intentionally do not pad:
+        # silence after a finite source should not erase the captured buffer.
+        loop_write_head = self._should_loop_write_head()
+        if loop_write_head and len(signal_wave) < num_samples:
             signal_wave = np.pad(signal_wave, (0, num_samples - len(signal_wave)), mode='constant', constant_values=0)
+        elif not loop_write_head:
+            num_samples = min(num_samples, len(signal_wave))
+            if num_samples <= 0 or self.buffer_ref['write_head'] >= self.buffer_length_samples:
+                return
+            signal_wave = signal_wave[:num_samples]
+            speed = speed[:num_samples]
         
         # Calculate write positions based on speed
         # Speed > 1: compact signal (write faster, fewer samples stored)
@@ -330,16 +345,27 @@ class BufferNode(BaseNode):
         
         if np.allclose(speed, 1.0):
             # Simple case: speed is 1, direct write
-            for i, sample_value in enumerate(signal_wave):
-                write_pos = int((write_head + i) % self.buffer_length_samples)
-                self.buffer_ref['data'][write_pos] = sample_value
-            self.buffer_ref['write_head'] = (write_head + len(signal_wave)) % self.buffer_length_samples
+            if loop_write_head:
+                for i, sample_value in enumerate(signal_wave):
+                    write_pos = int((write_head + i) % self.buffer_length_samples)
+                    self.buffer_ref['data'][write_pos] = sample_value
+                self.buffer_ref['write_head'] = (write_head + len(signal_wave)) % self.buffer_length_samples
+            else:
+                write_start = int(write_head)
+                samples_to_write = min(len(signal_wave), self.buffer_length_samples - write_start)
+                if samples_to_write <= 0:
+                    return
+                self.buffer_ref['data'][write_start:write_start + samples_to_write] = signal_wave[:samples_to_write]
+                self.buffer_ref['write_head'] = write_start + samples_to_write
         else:
             # Variable speed write
             # Calculate cumulative positions
             position_deltas = speed  # Each output sample advances the write position by speed
             cumulative_positions = np.cumsum(position_deltas)
-            write_positions = (write_head + cumulative_positions) % self.buffer_length_samples
+            if loop_write_head:
+                write_positions = (write_head + cumulative_positions) % self.buffer_length_samples
+            else:
+                write_positions = write_head + cumulative_positions
             
             # For each integer position in the buffer, we need to write a value
             # When speed > 1, multiple input samples map to the same buffer position (downsampling)
@@ -350,12 +376,15 @@ class BufferNode(BaseNode):
             end_pos_int = int(write_head + cumulative_positions[-1])
             
             # Handle wrapping
-            if end_pos_int >= self.buffer_length_samples:
+            if loop_write_head and end_pos_int >= self.buffer_length_samples:
                 # We wrap around - handle in two parts
                 num_positions = int(cumulative_positions[-1])
                 positions_to_write = [(write_head + i) % self.buffer_length_samples for i in range(num_positions)]
             else:
-                positions_to_write = range(start_pos_int, end_pos_int + 1)
+                stop_pos = end_pos_int + 1
+                if not loop_write_head:
+                    stop_pos = min(stop_pos, self.buffer_length_samples)
+                positions_to_write = range(start_pos_int, stop_pos)
             
             # Optimized writing with vectorized operations
             if isinstance(positions_to_write, range):
@@ -364,16 +393,28 @@ class BufferNode(BaseNode):
                 positions_array = np.array(positions_to_write)
             
             # Vectorized position calculation
-            relative_positions = (positions_array - write_head) % self.buffer_length_samples
+            if len(positions_array) == 0:
+                return
+
+            if loop_write_head:
+                relative_positions = (positions_array - write_head) % self.buffer_length_samples
+            else:
+                relative_positions = positions_array - write_head
             signal_indices = np.searchsorted(cumulative_positions, relative_positions)
             signal_indices = np.clip(signal_indices, 0, len(signal_wave) - 1)
             
             # Vectorized assignment
-            buffer_positions = positions_array.astype(int) % self.buffer_length_samples
+            if loop_write_head:
+                buffer_positions = positions_array.astype(int) % self.buffer_length_samples
+            else:
+                buffer_positions = positions_array.astype(int)
             self.buffer_ref['data'][buffer_positions] = signal_wave[signal_indices]
             
             # Update write head
-            self.buffer_ref['write_head'] = (write_head + cumulative_positions[-1]) % self.buffer_length_samples
+            if loop_write_head:
+                self.buffer_ref['write_head'] = (write_head + cumulative_positions[-1]) % self.buffer_length_samples
+            else:
+                self.buffer_ref['write_head'] = min(write_head + cumulative_positions[-1], self.buffer_length_samples)
     
     def _read_offset_mode(self, num_samples, context, params):
         """Read from buffer using offset (relative to write head)
@@ -561,9 +602,20 @@ class BufferNode(BaseNode):
         window_lengths = end_indices - start_indices
         window_lengths = np.maximum(window_lengths, 1)
         
-        # Simplified speed integration (same as sample node)
+        # Render the current playhead sample first, then advance. This matches the
+        # write-head convention used by offset mode, where a writer that just filled
+        # indices 0..N-1 can be read back as 0..N-1 in the same render block.
         playhead_delta = abs_speed * sign
-        playhead_absolute = self.state.last_playhead_position + np.cumsum(playhead_delta)
+        if num_samples == 0:
+            return empty_mono()
+
+        playhead_offsets = np.empty(num_samples, dtype=np.float64)
+        playhead_offsets[0] = 0.0
+        if num_samples > 1:
+            playhead_offsets[1:] = np.cumsum(playhead_delta[:-1])
+
+        playhead_absolute = self.state.last_playhead_position + playhead_offsets
+        next_playhead_position = self.state.last_playhead_position + np.sum(playhead_delta)
         
         if not self.model.loop:
             # Non-looping: check bounds
@@ -572,6 +624,7 @@ class BufferNode(BaseNode):
                 first_outside = np.where(outside_bounds)[0][0]
                 if first_outside == 0:
                     return empty_mono()
+                next_playhead_position = playhead_absolute[first_outside]
                 # Truncate
                 num_samples = first_outside
                 playhead_absolute = playhead_absolute[:num_samples]
@@ -587,11 +640,9 @@ class BufferNode(BaseNode):
                 offset_from_start = playhead_absolute - start_indices
                 wrapped_offset = np.mod(offset_from_start, window_lengths)
                 playhead_absolute = np.where(outside, start_indices + wrapped_offset, playhead_absolute)
+            next_playhead_position = start_indices[-1] + np.mod(next_playhead_position - start_indices[-1], window_lengths[-1])
             buffer_indices = playhead_absolute
-        
-        if num_samples == 0:
-            return empty_mono()
-        
+
         # Clip to valid buffer range
         buffer_indices = np.clip(buffer_indices, 0, self.buffer_length_samples - 1)
         
@@ -610,8 +661,7 @@ class BufferNode(BaseNode):
             wave = self._cubic_interpolate(buffer_indices, self.buffer_ref['data'])
         
         # Update state
-        self.state.last_playhead_position = playhead_absolute[-1] if len(playhead_absolute) > 0 else self.state.last_playhead_position
-        self.state.total_samples_rendered += len(wave)
+        self.state.last_playhead_position = next_playhead_position
         
         return wave
 

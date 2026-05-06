@@ -1,0 +1,14 @@
+brown:
+  filter:
+    cutoff:
+      osc:
+        freq: 0.07
+        range: [400, 900]
+    signal:
+      osc:
+        type: noise
+        amp:
+          osc:
+            type: tri
+            freq: 0.2
+            range: [0.7, 1]

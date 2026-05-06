@@ -4,6 +4,7 @@ Tracks monitored nodes and provides formatted display lines for the visualizer.
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING, Dict
+import weakref
 import numpy as np
 
 if TYPE_CHECKING:
@@ -131,7 +132,7 @@ class NodeMonitor:
     
     def __init__(self, node_id: str, node: BaseNode):
         self.node_id = node_id
-        self.node = node
+        self._node_ref = weakref.ref(node)
         self.peak_level = 0.0
         self.peak_left = 0.0
         self.peak_right = 0.0
@@ -149,14 +150,25 @@ class NodeMonitor:
         # Trim display name if too long (keep right 50 chars, add "..." on left)
         if len(self.display_name) > 50:
             self.display_name = "..." + self.display_name[-50:]
+
+    @property
+    def node(self) -> BaseNode | None:
+        return self._node_ref()
+
+    def is_alive(self) -> bool:
+        return self.node is not None
     
     def update(self, output: np.ndarray):
         """Update monitor with latest output from the node"""
+        node = self.node
+        if node is None:
+            return
+
         if len(output) == 0:
             return
         
         # Get monitor settings from node
-        use_abs = getattr(self.node, '_monitor_use_abs', True)
+        use_abs = getattr(node, '_monitor_use_abs', True)
         self.is_bipolar = not use_abs  # Store bipolar mode for display
         
         # Check if output is stereo (2D array with 2 channels)
@@ -183,9 +195,13 @@ class NodeMonitor:
     
     def format_line(self) -> str:
         """Format display line for this monitor. Override in subclasses for custom display."""
+        node = self.node
+        if node is None:
+            return ""
+
         # Get monitor range and color scheme from node (dynamically, so it picks up changes)
-        min_val, max_val = getattr(self.node, '_monitor_range', (0.0, 1.0))
-        color_scheme = getattr(self.node, '_monitor_color_scheme', 'level')
+        min_val, max_val = getattr(node, '_monitor_range', (0.0, 1.0))
+        color_scheme = getattr(node, '_monitor_color_scheme', 'level')
         is_bipolar = getattr(self, 'is_bipolar', False)
         
         # Total width for meters (slightly wider than main output meter)
@@ -214,17 +230,21 @@ class SequencerMonitor(NodeMonitor):
     
     def format_line(self) -> str:
         """Show sequencer timeline with current step indicator."""
+        node = self.node
+        if node is None:
+            return ""
+
         # Try to access sequencer-specific state
-        current_step = getattr(self.node.state, 'current_step', None)
+        current_step = getattr(node.state, 'current_step', None)
         
         # Get number of steps from model if available
         total_steps = None
-        if hasattr(self.node, 'model'):
+        if hasattr(node, 'model'):
             # Use 'steps' field
-            if hasattr(self.node.model, 'steps') and self.node.model.steps:
-                total_steps = len(self.node.model.steps)
-            elif hasattr(self.node, '_segment_count'):
-                total_steps = self.node._segment_count()
+            if hasattr(node.model, 'steps') and node.model.steps:
+                total_steps = len(node.model.steps)
+            elif hasattr(node, '_segment_count'):
+                total_steps = node._segment_count()
         
         if current_step is not None and total_steps is not None:
             # Get monitor range and color scheme from node (dynamically)
@@ -260,16 +280,20 @@ class SampleMonitor(NodeMonitor):
     
     def format_line(self) -> str:
         """Show sample waveform visualization with playhead position."""
+        node = self.node
+        if node is None:
+            return ""
+
         # Total width matches standard meter width
         total_width = 24
         
         # Get the audio buffer and playhead position
-        if not hasattr(self.node, 'audio') or len(self.node.audio) == 0:
+        if not hasattr(node, 'audio') or len(node.audio) == 0:
             return super().format_line()
         
-        audio = self.node.audio
+        audio = node.audio
         audio_length = len(audio)
-        playhead_pos = getattr(self.node.state, 'last_playhead_position', 0)
+        playhead_pos = getattr(node.state, 'last_playhead_position', 0)
         
         # Calculate playhead position as fraction of buffer (0-1)
         playhead_fraction = (playhead_pos % audio_length) / audio_length if audio_length > 0 else 0
@@ -327,23 +351,27 @@ class BufferMonitor(NodeMonitor):
     
     def format_line(self) -> str:
         """Show buffer waveform visualization with playhead/write-head position."""
+        node = self.node
+        if node is None:
+            return ""
+
         # Total width matches standard meter width
         total_width = 24
         
         # Get the buffer data
-        if not hasattr(self.node, 'buffer_ref'):
+        if not hasattr(node, 'buffer_ref'):
             return super().format_line()
         
-        buffer_data = self.node.buffer_ref['data']
+        buffer_data = node.buffer_ref['data']
         buffer_length = len(buffer_data)
         
         # Determine position based on mode
-        if self.node.is_position_mode:
+        if node.is_position_mode:
             # Position mode: use last_playhead_position
-            position = getattr(self.node.state, 'last_playhead_position', 0)
+            position = getattr(node.state, 'last_playhead_position', 0)
         else:
             # Offset mode: use write_head
-            position = self.node.buffer_ref.get('write_head', 0)
+            position = node.buffer_ref.get('write_head', 0)
         
         # Calculate position as fraction of buffer (0-1)
         position_fraction = (position % buffer_length) / buffer_length if buffer_length > 0 else 0
@@ -425,7 +453,7 @@ class MonitorRegistry:
         """Remove a node from monitoring."""
         if node_id in self.monitors:
             del self.monitors[node_id]
-    
+
     def update(self, node_id: str, output: np.ndarray):
         """Update a monitored node with its latest output."""
         if node_id in self.monitors:
@@ -436,9 +464,17 @@ class MonitorRegistry:
         if not self.monitors:
             return []
         
+        dead_monitor_ids = [
+            node_id
+            for node_id, monitor in self.monitors.items()
+            if not monitor.is_alive()
+        ]
+        for node_id in dead_monitor_ids:
+            del self.monitors[node_id]
+
         # Sort by node_id for consistent ordering
         sorted_monitors = sorted(self.monitors.values(), key=lambda m: m.node_id)
-        return [monitor.format_line() for monitor in sorted_monitors]
+        return [line for line in (monitor.format_line() for monitor in sorted_monitors) if line]
     
     def clear(self):
         """Clear all monitors (useful for hot reload)."""

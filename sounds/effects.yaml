@@ -1,11 +1,13 @@
 # Dynamic compressor with envelope follower
 # Usage as sub-patch: compressor: {signal: {...}, threshold: 0.3, ratio: 0.7, gain: 1.0}
+# Optional sidechain: compressor: {signal: {...}, sidechain: {...}}
 # The 'signal' parameter is automatically mapped to 'input_signal' for sub-patch compatibility
 compressor:
   context:
     is_reusable: true
     input_signal:
       kick_ai: {}
+    sidechain: $input_signal
     threshold: 0.3
     ratio: 0.7
     gain: 1.0
@@ -15,12 +17,13 @@ compressor:
       context:
         env:
           follow:
+            signal: $sidechain
             range: [0, 1]
             attack: attack
             release: release
         signal:
           expression:
-            exp: "signal * (clip(where(env > threshold, 1 - (env - threshold) / (env + 1e-8) * ratio, 1), 0, 1) * gain).reshape(-1, 1)"
+            exp: "signal * clip(where(env > threshold, 1 - (env - threshold) / (env + 1e-8) * ratio, 1), 0, 1) * gain"
             signal: $input_signal
 
 

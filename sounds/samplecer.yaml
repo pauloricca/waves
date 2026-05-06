@@ -1,0 +1,69 @@
+playhead:
+  context:
+    is_reusable: true
+    s: 0
+    signal:
+      envelope:
+        attack: 0.01
+        sustain_duration: 0
+        release: 0.5
+        end: true
+        signal:
+          buffer:
+            name: sample
+            monitor: true
+            start: s
+            end: s + 0.5
+            loop: true
+            speed: 0.2
+
+samplecer:
+  tempo:
+    bpm: 113
+    signal:
+      mix:
+        duration: 99999
+        sample:
+          track:
+            volume: 0
+            signal:
+              buffer:
+                # loop: false
+                name: sample
+                length: 1
+                signal:
+                  fold:
+                    threshold:
+                      osc:
+                        freq: 0.02
+                        range: [0.1, 1]
+                    signal:
+                      # expression:
+                      #   exp: signal * 60
+                      #   signal:
+                      #     input: {}
+                      osc:
+                        # duration: 1
+                        phase: 0.05
+                        freq: # [150, 500]
+                          osc:
+                            freq: 3
+                            range: [150, 500]
+                        amp:
+                          osc:
+                            freq: 1
+                            range: [0.5, 1]
+        play:
+          sequencer:
+            interval: sixteenth
+            monitor: true
+            steps:
+              - [kick, playhead]
+              - 
+              - [playhead s0.5]
+              - [playhead s0.7]
+              - [kick, playhead s0.8, csnare, clap]
+              -
+              - [playhead s0.2, csnare]
+              - 
+

@@ -1,0 +1,139 @@
+ckick:
+  context:
+    s: 
+      midi_cc:
+        cc: 1
+        initial: 0.05
+    signal:
+      mix:
+        duration: 1
+        casio-kick:
+          sample:
+            file: samples/casio/kick.wav
+            speed: s
+        other-kick:
+          track:
+            volume: 0.7
+            signal:
+              kick: {}
+
+csnare:
+  track:
+    volume: 0.5
+    signal:
+      sample:
+        file: samples/casio/snare.wav
+        speed: 0.5
+
+chihat:
+  mix:
+    duration: 1
+    casio-kick:
+      sample:
+        file: samples/casio/hihat.wav
+        speed: 0.05
+    other-kick:
+      track:
+        volume: 0.3
+        signal:
+          kick: {}
+  # sample:
+  #   file: samples/casio/hihat.wav
+  #   speed: 0.05
+
+casio:
+  tempo:
+    bpm: 120
+    signal:
+      sequencer:
+        interval: bar * 2
+        steps: 
+          - r-section-a
+          - r-section-a
+          - r-section-b
+
+r-section-a:
+  sequencer:
+    is_reusable: true
+    monitor: true
+    interval: sixteenth
+    repeat: 1
+    steps: 
+      - ckick
+      - 
+      - chihat
+      - 
+      - csnare
+      - 
+      - chihat
+      - 
+
+      - ckick
+      - 
+      - chihat
+      - 
+      - csnare
+      - 
+      - chihat
+      - 
+
+      - ckick
+      - 
+      - chihat
+      - 
+      - csnare
+      - 
+      - chihat
+      - 
+  
+      - ckick
+      - 
+      - chihat
+      - 
+      - csnare
+      - 
+      - [chihat, csnare]
+      - 
+
+r-section-b:
+  sequencer:
+    is_reusable: true
+    monitor: true
+    interval: sixteenth
+    repeat: 1
+    steps: 
+      - ckick
+      - 
+      - chihat
+      - 
+      - csnare
+      -
+      - csnare
+      - chihat
+
+      - ckick
+      - 
+      - chihat
+      - 
+      - csnare
+      -
+      - [chihat, csnare]
+      - csnare
+
+      - ckick
+      - 
+      - chihat
+      - 
+      - csnare
+      - 
+      - [chihat, csnare]
+      - [chihat, csnare]
+
+      - ckick
+      - csnare
+      - chihat
+      - 
+      - csnare
+      - 
+      - [chihat, csnare]
+      - [chihat, csnare]
