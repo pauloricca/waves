@@ -18,7 +18,7 @@ Waves is a flexible audio synthesis framework where sounds are created by connec
 ## Requirements
 
 - **Python 3.10 or higher** (required by dependencies, especially SciPy 1.15+)
-- macOS, Linux, or Windows (with bash for install script)
+- **uv** for dependency management
 
 ### Python Version Management
 
@@ -36,21 +36,17 @@ pyenv install 3.10.13
 cd waves  # pyenv automatically switches to Python 3.10
 ```
 
-The `.python-version` file in this repo tells pyenv to use Python 3.10 automatically. If you don't use pyenv, just ensure your system Python is 3.10 or higher before running the install script.
+The `.python-version` file in this repo tells pyenv to use Python 3.10 automatically. If you don't use pyenv, just ensure your system Python is 3.10 or higher before running `uv sync`.
 
 ## Installation
 
-### Quick Install (Recommended)
-
 ```bash
-git clone https://github.com/pauloricca/waves.git && cd waves && ./install
+git clone https://github.com/pauloricca/waves.git
+cd waves
+uv sync
 ```
 
-The install script will:
-- Check that Python 3.10+ is available
-- Create a virtual environment
-- Upgrade pip
-- Install all dependencies from requirements.txt
+`uv sync` creates the local virtual environment from `pyproject.toml` and `uv.lock`.
 
 
 ## Quick Start
@@ -60,11 +56,8 @@ The install script will:
 Run a sound defined in any YAML file in the `sounds/` directory:
 
 ```bash
-# Using the convenience script
-./play sound_name
+uv run python waves.py sound_name
 ```
-
-**The `play` script** automatically activates the virtual environment if needed, so you don't have to remember to do it manually each time.
 
 The system will:
 1. Load all YAML files from `sounds/` directory
@@ -86,7 +79,7 @@ simple_tone:
 
 Run it:
 ```bash
-./play simple_tone
+uv run python waves.py simple_tone
 ```
 
 ### Example 2: FM Synthesis with LFO

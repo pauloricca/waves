@@ -231,10 +231,11 @@ class SampleNode(BaseNode):
         window_lengths = end_indices - start_indices
         window_lengths = np.maximum(window_lengths, 1)  # Ensure at least 1 sample
 
-        # Integrate speed to get absolute playhead position in the audio buffer
-        # The playhead moves through the actual audio buffer, not relative to the window
+        # Integrate speed to get absolute playhead position in the audio buffer.
+        # The first rendered sample should use the current playhead, then advance.
         playhead_delta = abs_speed * sign * dt * SAMPLE_RATE
-        playhead_absolute = self.state.last_playhead_position + np.cumsum(playhead_delta)
+        playhead_offsets = np.concatenate(([0.0], np.cumsum(playhead_delta[:-1])))
+        playhead_absolute = self.state.last_playhead_position + playhead_offsets
 
         # Apply offset (in samples) - this is applied as a displacement, not accumulated
         # Save the unmodified playhead for updating last_playhead_position
@@ -281,7 +282,8 @@ class SampleNode(BaseNode):
         # Interpolate from the audio buffer
         wave = np.interp(audio_indices, np.arange(len(self.audio)), self.audio)
 
-        self.state.last_playhead_position = playhead_absolute[-1] if len(playhead_absolute) > 0 else self.state.last_playhead_position
+        if len(wave) > 0:
+            self.state.last_playhead_position += np.sum(playhead_delta[:len(wave)])
         self.state.total_samples_rendered += len(wave)
 
         return wave

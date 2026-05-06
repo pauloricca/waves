@@ -128,7 +128,18 @@ def load_wav_file(filename):
     if data.ndim > 1:
         # If stereo, take only one channel
         data = data[:, 0]
-    data = data.astype(np.float32) / 32767.0  # Normalize to [-1, 1]
+    if np.issubdtype(data.dtype, np.floating):
+        data = data.astype(np.float32, copy=False)
+    elif np.issubdtype(data.dtype, np.unsignedinteger):
+        info = np.iinfo(data.dtype)
+        midpoint = (info.max + 1) / 2.0
+        data = (data.astype(np.float32) - midpoint) / midpoint
+    elif np.issubdtype(data.dtype, np.integer):
+        info = np.iinfo(data.dtype)
+        scale = max(abs(info.min), info.max)
+        data = data.astype(np.float32) / scale
+    else:
+        raise TypeError(f"Unsupported WAV sample dtype: {data.dtype}")
     
     # Store in cache before returning
     _wav_file_cache[file_identity] = data

@@ -6,7 +6,7 @@ from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
-from utils import empty_mono, time_to_samples
+from utils import is_stereo, time_to_samples
 
 class DelayMode(str, Enum):
     DIGITAL = "digital"
@@ -45,8 +45,8 @@ class DelayNode(BaseNode):
             # Dynamic delay (node or list) - use a generous default
             max_delay_time = 30.0  # 30 seconds should be enough for most cases
         
-        max_delay_samples = time_to_samples(max_delay_time )
-        self.buffer_size = max_delay_samples
+        max_delay_samples = time_to_samples(max_delay_time)
+        self.buffer_size = max(1, max_delay_samples)
         
         # Persistent state for buffer and positions (survives hot reload)
         if do_initialise_state:
@@ -58,6 +58,38 @@ class DelayNode(BaseNode):
             self.state.samples_since_input_finished = 0
             # Tape mode only
             self.state.tape_head_distance = None  # For TAPE mode
+
+    def _ensure_buffer_shape(self, signal_wave):
+        """Resize/preserve the delay buffer to match mono or stereo input."""
+        if is_stereo(signal_wave):
+            desired_shape = (self.buffer_size, signal_wave.shape[1])
+        else:
+            desired_shape = (self.buffer_size,)
+
+        if getattr(self.state, "buffer", None) is not None and self.state.buffer.shape == desired_shape:
+            return
+
+        old_buffer = getattr(self.state, "buffer", None)
+        new_buffer = np.zeros(desired_shape, dtype=np.float32)
+
+        if old_buffer is not None:
+            frames_to_copy = min(len(old_buffer), self.buffer_size)
+            if old_buffer.ndim == 1 and len(desired_shape) == 2:
+                new_buffer[:frames_to_copy, :] = old_buffer[:frames_to_copy, None]
+            elif old_buffer.ndim == 2 and len(desired_shape) == 1:
+                new_buffer[:frames_to_copy] = np.mean(old_buffer[:frames_to_copy], axis=1)
+            elif old_buffer.ndim == 2 and len(desired_shape) == 2:
+                channels_to_copy = min(old_buffer.shape[1], desired_shape[1])
+                new_buffer[:frames_to_copy, :channels_to_copy] = old_buffer[:frames_to_copy, :channels_to_copy]
+
+        self.state.buffer = new_buffer
+
+    def _zeros_like_signal(self, num_samples, signal_wave=None):
+        if signal_wave is not None and is_stereo(signal_wave):
+            return np.zeros((num_samples, signal_wave.shape[1]), dtype=np.float32)
+        if getattr(self.state, "buffer", None) is not None and self.state.buffer.ndim == 2:
+            return np.zeros((num_samples, self.state.buffer.shape[1]), dtype=np.float32)
+        return np.zeros(num_samples, dtype=np.float32)
 
     def _do_render(self, num_samples=None, context=None, **params):
         # If num_samples is None, get the full child signal
@@ -90,14 +122,14 @@ class DelayNode(BaseNode):
         self.state.read_position = read_position_snapshot
         self.state.previous_delay_time = previous_delay_time_snapshot
         
-        # Track when input signal finishes
-        input_is_active = len(signal_wave) > 0
-        
         # If signal returned fewer samples than requested, pad it with zeros
         # This allows the delay to continue reading from the buffer for the full chunk
         # Even if the input signal has finished, we want to output the delayed content
         if len(signal_wave) > 0 and len(signal_wave) < num_samples:
-            signal_wave = np.pad(signal_wave, (0, num_samples - len(signal_wave)), mode='constant', constant_values=0)
+            if is_stereo(signal_wave):
+                signal_wave = np.pad(signal_wave, [(0, num_samples - len(signal_wave)), (0, 0)], mode='constant', constant_values=0)
+            else:
+                signal_wave = np.pad(signal_wave, (0, num_samples - len(signal_wave)), mode='constant', constant_values=0)
         elif len(signal_wave) == 0:
             # Input signal is completely finished
             if not self.state.input_finished:
@@ -111,11 +143,16 @@ class DelayNode(BaseNode):
             
             if self.state.samples_since_input_finished >= max_tail_samples:
                 # We've output enough tail, stop now
-                return empty_mono()
+                return self._zeros_like_signal(0)
             
             # Create a silent input signal (all zeros) to allow reading from the buffer
-            signal_wave = np.zeros(num_samples, dtype=np.float32)
+            signal_wave = self._zeros_like_signal(num_samples)
             self.state.samples_since_input_finished += num_samples
+        else:
+            self.state.input_finished = False
+            self.state.samples_since_input_finished = 0
+
+        self._ensure_buffer_shape(signal_wave)
         
         # Get delay times
         delay_times = self.time_node.render(num_samples, context, **self.get_params_for_children(params))
@@ -124,6 +161,7 @@ class DelayNode(BaseNode):
     
     def _apply_delay(self, signal_wave, delay_times, num_samples):
         """Apply delay to the signal wave using a circular buffer"""
+        self._ensure_buffer_shape(signal_wave)
         
         if self.model.mode == DelayMode.DIGITAL:
             return self._apply_digital_delay(signal_wave, delay_times, num_samples)
@@ -132,7 +170,7 @@ class DelayNode(BaseNode):
     
     def _apply_digital_delay(self, signal_wave, delay_times, num_samples):
         """Digital delay mode - delay time changes instantly without pitch shift"""
-        output = np.zeros(num_samples, dtype=np.float32)
+        output = self._zeros_like_signal(num_samples, signal_wave)
         
         # Handle both constant and time-varying delay times
         if len(delay_times) == 1:
@@ -141,7 +179,8 @@ class DelayNode(BaseNode):
             delay_samples = np.clip(delay_samples, 0, self.buffer_size - 1)
             
             # Calculate all positions at once
-            write_positions = (self.state.write_position + np.arange(num_samples)) % self.buffer_size
+            write_start = int(self.state.write_position) % self.buffer_size
+            write_positions = (write_start + np.arange(num_samples)) % self.buffer_size
             read_positions = (write_positions - delay_samples) % self.buffer_size
             
             # CRITICAL: Read BEFORE write (like physical hardware)
@@ -151,14 +190,15 @@ class DelayNode(BaseNode):
             self.state.buffer[write_positions] = signal_wave
             
             # Update write position for next render
-            self.state.write_position = (self.state.write_position + num_samples) % self.buffer_size
+            self.state.write_position = (write_start + num_samples) % self.buffer_size
         else:
             # Time-varying delay - requires interpolation
             delay_samples_array = delay_times * SAMPLE_RATE
             delay_samples_array = np.clip(delay_samples_array, 0, self.buffer_size - 1)
             
             # Calculate write positions
-            write_positions = (self.state.write_position + np.arange(num_samples)) % self.buffer_size
+            write_start = int(self.state.write_position) % self.buffer_size
+            write_positions = (write_start + np.arange(num_samples)) % self.buffer_size
             
             # For fractional delays, use linear interpolation
             delay_samples_int = delay_samples_array.astype(int)
@@ -171,13 +211,15 @@ class DelayNode(BaseNode):
             # CRITICAL: Read BEFORE write
             sample_1 = self.state.buffer[read_positions_1]
             sample_2 = self.state.buffer[read_positions_2]
+            if is_stereo(signal_wave):
+                delay_samples_frac = delay_samples_frac[:, None]
             output = sample_1 * (1 - delay_samples_frac) + sample_2 * delay_samples_frac
             
             # Now write the input
             self.state.buffer[write_positions] = signal_wave
             
             # Update write position for next render
-            self.state.write_position = (self.state.write_position + num_samples) % self.buffer_size
+            self.state.write_position = (write_start + num_samples) % self.buffer_size
         
         return output
     
@@ -237,7 +279,7 @@ class DelayNode(BaseNode):
         
         # Hermite interpolation (4-point, 3rd order)
         # Provides smooth interpolation with no overshoot
-        t = read_positions_frac
+        t = read_positions_frac[:, None] if is_stereo(signal_wave) else read_positions_frac
         c0 = y1
         c1 = 0.5 * (y2 - y0)
         c2 = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3
