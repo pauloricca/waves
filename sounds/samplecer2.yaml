@@ -63,27 +63,43 @@ samplecer2:
                 #             freq: 1
                 #             range: [0.5, 1]
         play:
-          sequencer:
-            interval: sixteenth
-            monitor: true
-            steps:
-              - [kick, playhead]
-              - 
-              - [playhead s0.5]
-              - [playhead s0.7]
-              - [kick, playhead s0.8, csnare, clap]
-              -
-              - [playhead s0.2, csnare]
-              - 
-            # steps:
-            #   - kick, play p.8 pan.5
-            #   -
-            #   - play p.2 pan.8
-            #   - 
-            #   - [play, play s.4 p.3 l.004 v.5 pan-.3]
-            #   - play p.9
-            #   - play p.5
-            #   - play p.7 pan.5
+          context:
+            note:
+              automation:
+                interval: bar
+                steps:
+                  - 0.2
+                  - 
+                  - 
+                  - 0.3
+                  - 0.25
+                  - 0.22
+            voice_pan:
+              osc:
+                type: perlin
+                range: [-.5, .5]
+            signal:
+              sequencer:
+                interval: sixteenth
+                monitor: true
+                steps:
+                  - [kick, play]
+                  - 
+                  - [play p.5 s=note pan=voice_pan]
+                  - [play p0.7]
+                  - [kick, play s.5, csnare, clap]
+                  -
+                  - [play s0.2, csnare]
+                  - 
+                # steps:
+                #   - kick, play p.8 pan.5
+                #   -
+                #   - play p.2 pan.8
+                #   - 
+                #   - [kick, play, play s.4 p.3 l.004 v.5 pan=voice_pan, csnare, clap]
+                #   - play p.9
+                #   - play p.5 s=note
+                #   - play p.7 pan.5
 
       
         

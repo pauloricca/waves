@@ -6,9 +6,13 @@ This feature allows you to instantiate nodes using a compact string notation wit
 
 The syntax is: `node_name param1VALUE param2VALUE ...`
 
+For expression or variable values, use assignment syntax:
+`node_name param=EXPRESSION`
+
 Where:
 - `node_name` is the name of the sound/node defined in waves.yaml
 - Parameters are written as `paramNAMEVALUE` with no space between name and value
+- Parameters can also be written as `param=EXPRESSION` to reference render/context variables
 - Common parameter shortcuts:
   - `f` = `freq` (frequency)
   - `a` = `amp` (amplitude)
@@ -22,6 +26,8 @@ kick f440 a0.5          # Play kick with frequency=440, amplitude=0.5
 my_sound t2 f880        # Play my_sound with t=2, freq=880
 lead f220               # Play lead with frequency=220
 hihat v2                # Play hihat with v=2
+play p0.5 s=note        # Play with p=0.5 and speed driven by the note variable
+lead f=note*2           # Use an expression from the current render context
 ```
 
 ## Usage
@@ -48,24 +54,27 @@ my_sequence:
     sequence:
       - kick f440 a0.5
       - lead f880
+      - play p0.5 s=note
       - [kick f200, lead f400]  # Multiple sounds in one step
       - hihat v2
 ```
 
 ### 3. Sub-Patching (YAML Node References)
 
-You can reference other sounds defined in the YAML file as if they were node types, and apply parameters to them:
+You can reference other sounds defined in the YAML file as if they were node types (as long as they have is_reusable: true, so we don't polute the schema with all the sounds), and apply parameters to them:
 
 ```yaml
 # Define sounds
 hihat:
   context:
+    is_reusable: true
     v: 1
     signal:
       # ... hihat definition
 
 kick:
   mix:
+    is_reusable: true
     signals:
       # ... kick definition
 

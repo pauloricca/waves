@@ -13,31 +13,58 @@ import re
 from typing import Dict, Any, Tuple, Optional
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.instantiate_node import instantiate_node
+from utils import ensure_array
 
 
-def parse_params_from_string(param_string: str) -> Dict[str, float]:
+# Matches "s=note" or "freq=note*2".
+ASSIGNMENT_PARAM_PATTERN = re.compile(r'^([a-zA-Z_][a-zA-Z0-9_]*)=(.+)$')
+
+# Matches "s0.5" or "freq440".
+COMPACT_NUMERIC_PARAM_PATTERN = re.compile(r'^([a-zA-Z_]+)([-+]?[0-9]*\.?[0-9]+)$')
+
+# Matches "-0.5", ".25", "440", or "1e-3".
+NUMERIC_VALUE_PATTERN = re.compile(r'^[-+]?(?:[0-9]*\.[0-9]+|[0-9]+\.?)(?:[eE][-+]?[0-9]+)?$')
+
+
+def _parse_param_value(value_string: str) -> float | str:
+    """Parse assignment values as numbers when possible, otherwise expressions."""
+    if NUMERIC_VALUE_PATTERN.match(value_string):
+        return float(value_string)
+    return value_string
+
+
+def parse_params_from_string(param_string: str) -> Dict[str, Any]:
     """
     Parse parameter key-value pairs from a string.
     
-    Parameters are expected in the format: paramNAMEVALUE (e.g., "f440", "amp0.5", "t2")
+    Parameters are expected in one of these formats:
+    - paramNAMEVALUE (e.g., "f440", "amp0.5", "t2")
+    - param=EXPRESSION (e.g., "f=note", "amp=velocity*0.5")
     
     Args:
         param_string: String containing space-separated parameters
         
     Returns:
-        Dictionary of parameter names to values
+        Dictionary of parameter names to numeric values or expression strings
         
     Examples:
-        >>> parse_params_from_string("f440 a0.5 t2")
-        {'f': 440.0, 'a': 0.5, 't': 2.0}
+        >>> parse_params_from_string("f440 a0.5 t2 s=note")
+        {'f': 440.0, 'a': 0.5, 't': 2.0, 's': 'note'}
     """
     parts = param_string.split()
     params = {}
     
     for param in parts:
+        assignment_match = ASSIGNMENT_PARAM_PATTERN.match(param)
+        if assignment_match:
+            param_name = assignment_match.group(1)
+            param_value = _parse_param_value(assignment_match.group(2))
+            params[param_name] = param_value
+            continue
+
         # Use regex to separate alphabetic prefix from numeric suffix
         # Matches patterns like: f440, amp0.5, t2, freq440.5
-        match = re.match(r'^([a-zA-Z_]+)([-+]?[0-9]*\.?[0-9]+)$', param)
+        match = COMPACT_NUMERIC_PARAM_PATTERN.match(param)
         if match:
             param_name = match.group(1)
             param_value = float(match.group(2))
@@ -46,7 +73,7 @@ def parse_params_from_string(param_string: str) -> Dict[str, float]:
     return params
 
 
-def parse_node_string(node_string: str) -> Tuple[str, Dict[str, float]]:
+def parse_node_string(node_string: str) -> Tuple[str, Dict[str, Any]]:
     """
     Parse a node string into node name and parameters.
     
@@ -69,6 +96,45 @@ def parse_node_string(node_string: str) -> Tuple[str, Dict[str, float]]:
     params = parse_params_from_string(param_string)
     
     return node_name, params
+
+
+def resolve_render_params(
+    render_args: Dict[str, Any],
+    inherited_params: Dict[str, Any],
+    time: float,
+    num_samples: int,
+    context=None,
+) -> Dict[str, Any]:
+    """
+    Resolve expression-valued render args against the current render params.
+
+    This lets sequencer string notation pass live control variables, e.g.
+    "play s=note", while keeping numeric params as cheap scalar values.
+    """
+    if not render_args:
+        return {}
+
+    resolved_params = {}
+    expression_context = None
+
+    for param_name, param_value in render_args.items():
+        if isinstance(param_value, str):
+            if expression_context is None:
+                from expression_globals import get_expression_context
+                expression_context = get_expression_context(inherited_params, time, num_samples, context)
+            expression_context.update(resolved_params)
+            from expression_globals import evaluate_expression
+            resolved_params[param_name] = ensure_array(
+                evaluate_expression(param_value, expression_context, num_samples),
+                num_samples,
+            )
+            expression_context[param_name] = resolved_params[param_name]
+        else:
+            resolved_params[param_name] = param_value
+            if expression_context is not None:
+                expression_context[param_name] = param_value
+
+    return resolved_params
 
 
 def apply_params_to_model(model: BaseNodeModel, params: Dict[str, Any]) -> BaseNodeModel:
@@ -112,7 +178,7 @@ def instantiate_node_from_string(
         attribute_name: str,
         attribute_index: str,
         model: Optional[BaseNodeModel] = None,
-    ) -> Tuple[BaseNode, Dict[str, float]]:
+    ) -> Tuple[BaseNode, Dict[str, Any]]:
     """
     Instantiate a node from a string specification with parameters.
     

@@ -376,9 +376,21 @@ class SequencerNode(BaseNode):
                 sound_node, render_args, samples_rendered_so_far, step_idx = self.unpack_active_sound(active_sound)
                 samples_to_render_from_sound = samples_to_render
 
-                # Merge render_args with params - pass all params through
+                # Merge render_args with params - pass all params through.
+                # Assignment-style string args such as "s=note" are resolved
+                # here so they can follow live context variables.
                 merged_params = params.copy()
-                merged_params.update(render_args)
+                if render_args:
+                    from nodes.node_utils.node_string_parser import resolve_render_params
+                    merged_params.update(
+                        resolve_render_params(
+                            render_args,
+                            params,
+                            self.time_since_start,
+                            samples_to_render_from_sound,
+                            context,
+                        )
+                    )
                 
                 # Render from current position (may return mono or stereo)
                 sound_chunk = sound_node.render(samples_to_render_from_sound, context, **merged_params)
