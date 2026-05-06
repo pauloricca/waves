@@ -1,9 +1,9 @@
 ckick:
   context:
-    s: 
-      midi_cc:
-        cc: 1
-        initial: 0.05
+    s: 0.05
+      # midi_cc:
+      #   cc: 1
+      #   initial: 0.05
     signal:
       mix:
         duration: 1
@@ -24,6 +24,23 @@ csnare:
       sample:
         file: samples/casio/snare.wav
         speed: 0.5
+
+csnare_double:
+  mix:
+    slow:
+      track:
+        volume: 0.5
+        signal:
+          sample:
+            file: samples/casio/snare.wav
+            speed: 0.5
+    fast:
+      track:
+        volume: 0.8
+        signal:
+          sample:
+            file: samples/casio/snare.wav
+            speed: 2
 
 chihat:
   mix:
@@ -63,7 +80,7 @@ r-section-a:
       - 
       - chihat
       - 
-      - csnare
+      - csnare_double
       - 
       - chihat
       - 
@@ -72,7 +89,7 @@ r-section-a:
       - 
       - chihat
       - 
-      - csnare
+      - csnare_double
       - 
       - chihat
       - 
@@ -81,7 +98,7 @@ r-section-a:
       - 
       - chihat
       - 
-      - csnare
+      - csnare_double
       - 
       - chihat
       - 
@@ -90,9 +107,9 @@ r-section-a:
       - 
       - chihat
       - 
-      - csnare
+      - csnare_double
       - 
-      - [chihat, csnare]
+      - [chihat, csnare_double]
       - 
 
 r-section-b:
@@ -106,34 +123,34 @@ r-section-b:
       - 
       - chihat
       - 
-      - csnare
+      - csnare_double
       -
-      - csnare
+      - csnare_double
       - chihat
 
       - ckick
       - 
       - chihat
       - 
-      - csnare
+      - csnare_double
       -
-      - [chihat, csnare]
-      - csnare
+      - [chihat, csnare_double]
+      - csnare_double
 
       - ckick
       - 
       - chihat
       - 
-      - csnare
+      - csnare_double
       - 
-      - [chihat, csnare]
-      - [chihat, csnare]
+      - [chihat, csnare_double]
+      - [chihat, csnare_double]
 
       - ckick
-      - csnare
+      - csnare_double
       - chihat
       - 
-      - csnare
+      - csnare_double
       - 
-      - [chihat, csnare]
-      - [chihat, csnare]
+      - [chihat, csnare_double]
+      - [chihat, csnare_double]

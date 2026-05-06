@@ -128,6 +128,7 @@ def run_visualizer_and_stats(
     
     # Track how many lines we printed last time (for proper clearing)
     last_printed_lines = 0
+    max_monitor_lines_printed = 0
     
     while not should_stop_flag[0]:
         if len(visualised_wave_buffer) > 0:
@@ -196,19 +197,21 @@ def run_visualizer_and_stats(
                     # Count visualization lines
                     viz_lines = viz_output.count('\n') + 1 if viz_output else 0
                     
-                    # Get stats/monitor lines
-                    stats_monitor_lines = []
+                    # Get monitor lines separately so the variable-height block
+                    # can reserve space below the waveform.
+                    monitor_lines = []
                     if DISPLAY_RENDER_STATS:
                         from nodes.node_utils.monitor_registry import get_monitor_registry
                         monitor_lines = get_monitor_registry().get_display_lines()
-                        
-                        if monitor_lines:
-                            stats_monitor_lines.extend(monitor_lines)
-                            stats_monitor_lines.append("─" * 80)
-                        stats_monitor_lines.append(stats_text)
+                        max_monitor_lines_printed = max(max_monitor_lines_printed, len(monitor_lines))
+                    monitor_padding_lines = max_monitor_lines_printed - len(monitor_lines)
                     
                     # Calculate total lines that will be printed
-                    total_lines = viz_lines + len(stats_monitor_lines)
+                    total_lines = viz_lines
+                    if DISPLAY_RENDER_STATS:
+                        total_lines += max_monitor_lines_printed + 1
+                        if max_monitor_lines_printed:
+                            total_lines += 1
 
                     # Randomly reduce number of lines displayed occasionally as a glitch effect
                     if random() < CHANCE_OF_CLEARING_ONE_LESS_ROW:
@@ -222,10 +225,19 @@ def run_visualizer_and_stats(
                     # Add visualization
                     output_buffer.append(viz_output)
                     
-                    # Add stats/monitor lines
-                    if DISPLAY_RENDER_STATS and stats_monitor_lines:
-                        output_buffer.append("\n")  # One newline to separate from viz
-                        output_buffer.append("\n".join(line.ljust(term_width) for line in stats_monitor_lines))
+                    # Add monitor lines after visualization, padding below them
+                    # to keep the stats line at a stable row.
+                    if DISPLAY_RENDER_STATS:
+                        output_buffer.append("\n")
+                        if max_monitor_lines_printed:
+                            if monitor_lines:
+                                output_buffer.append("\n".join(line.ljust(term_width) for line in monitor_lines))
+                                output_buffer.append("\n")
+                            if monitor_padding_lines:
+                                output_buffer.append("\n" * monitor_padding_lines)
+                            output_buffer.append(("─" * 80).ljust(term_width))
+                            output_buffer.append("\n")
+                        output_buffer.append(stats_text.ljust(term_width))
                     
                     current_lines = total_lines
                 

@@ -11,3 +11,6 @@ monotron
 pretty
 hum
 granular
+casio
+samplecer
+samplecer2
