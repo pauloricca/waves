@@ -5,7 +5,7 @@ from config import SAMPLE_RATE
 from nodes.node_utils.base_node import BaseNode, BaseNodeModel
 from nodes.node_utils.node_definition_type import NodeDefinition
 from nodes.wavable_value import WavableValue
-from utils import load_wav_file, empty_mono, time_to_samples
+from utils import load_wav_file, empty_mono, time_to_samples, get_wav_file_identity
 
 # Buffer Node - Flexible read/write buffer with multiple access modes
 #
@@ -83,8 +83,13 @@ def get_or_create_buffer(buffer_name: str, length_samples: int):
     if buffer_name not in _GLOBAL_BUFFERS:
         _GLOBAL_BUFFERS[buffer_name] = {
             'data': np.zeros(length_samples, dtype=np.float32),
-            'write_head': 0
+            'write_head': 0,
+            'source_file_identity': None,
+            'source_file_length': None,
         }
+    else:
+        _GLOBAL_BUFFERS[buffer_name].setdefault('source_file_identity', None)
+        _GLOBAL_BUFFERS[buffer_name].setdefault('source_file_length', None)
     return _GLOBAL_BUFFERS[buffer_name]
 
 
@@ -131,15 +136,24 @@ class BufferNode(BaseNode):
         # Instantiate length node (if provided)
         self.length_node = self.instantiate_child_node(model.length, "length") if model.length is not None else None
         
+        audio_data = None
+        file_identity = get_wav_file_identity(model.file) if model.file is not None else None
+
         # Determine initial buffer length
         if model.length is not None:
             # Length specified - will be evaluated dynamically
             # For initialization, use default length (will be updated on first render)
             requested_buffer_length = time_to_samples(10.0)
         elif model.file is not None:
-            # No length specified but file provided - use file length
-            audio_data = load_wav_file(model.file)
-            requested_buffer_length = len(audio_data)
+            # No length specified but file provided - use the file length. During
+            # hot reload, avoid decoding the file just to rediscover the length
+            # when this shared buffer is already seeded from the same unchanged file.
+            existing_buffer = _GLOBAL_BUFFERS.get(self.buffer_name)
+            if existing_buffer is not None and existing_buffer.get('source_file_identity') == file_identity:
+                requested_buffer_length = len(existing_buffer['data'])
+            else:
+                audio_data = load_wav_file(model.file)
+                requested_buffer_length = len(audio_data)
         else:
             # No length or file - use default
             requested_buffer_length = time_to_samples(10.0)
@@ -156,19 +170,10 @@ class BufferNode(BaseNode):
                 # Buffer doesn't exist yet - create a default one
                 self.buffer_ref = get_or_create_buffer(self.buffer_name, requested_buffer_length)
         
-        # If we have a file, load it all at once into the buffer
-        # and set write_head to start position (ready to "play" from the beginning)
+        # If we have a file, seed it into the buffer once. Hot reload rebuilds the
+        # node tree, but the shared buffer can keep using the same audio data.
         if model.file is not None:
-            audio_data = load_wav_file(model.file)
-            file_length = len(audio_data)
-            
-            # Copy file data into buffer (with wrapping if needed)
-            for i in range(min(file_length, self.buffer_length_samples)):
-                self.buffer_ref['data'][i] = audio_data[i]
-            
-            # Set write_head to 0 (start of buffer)
-            # The first read with offset=0 will advance it by num_samples
-            self.buffer_ref['write_head'] = 0
+            self._seed_file_buffer_if_needed(model.file, file_identity, audio_data)
         
         # Instantiate child nodes
         self.signal_node = self.instantiate_child_node(model.signal, "signal") if model.signal is not None else None
@@ -198,6 +203,29 @@ class BufferNode(BaseNode):
         """Preserve legacy circular writes unless loop is explicitly set false."""
         fields_set = getattr(self.model, "model_fields_set", set())
         return self.model.loop or "loop" not in fields_set
+
+    def _seed_file_buffer_if_needed(self, filename, file_identity, audio_data=None):
+        """Load file audio into the shared buffer unless it is already current."""
+        if self.buffer_ref.get('source_file_identity') == file_identity:
+            return
+
+        if audio_data is None:
+            audio_data = load_wav_file(filename)
+
+        file_length = len(audio_data)
+
+        if self.model.length is None and self.buffer_length_samples != file_length:
+            self.buffer_ref['data'] = np.zeros(file_length, dtype=np.float32)
+
+        samples_to_copy = min(file_length, self.buffer_length_samples)
+        self.buffer_ref['data'].fill(0.0)
+        self.buffer_ref['data'][:samples_to_copy] = audio_data[:samples_to_copy]
+
+        # Set write_head to 0 (start of buffer) only when the source changes.
+        # Repeating this on every hot reload causes an audible discontinuity.
+        self.buffer_ref['write_head'] = 0
+        self.buffer_ref['source_file_identity'] = file_identity
+        self.buffer_ref['source_file_length'] = file_length
     
     def _resize_buffer_if_needed(self, new_length_samples, context, params):
         """Resize the buffer if the length has changed"""

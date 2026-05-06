@@ -97,12 +97,33 @@ def save(wave, filename):
 # Cache for loaded WAV files
 _wav_file_cache = {}
 
+
+def get_wav_file_identity(filename):
+    """Return a stable identity for a WAV file, including change metadata."""
+    filename = os.path.expandvars(os.path.expanduser(filename))
+    if os.path.isabs(filename):
+        filepath = filename
+    else:
+        filepath = os.path.join(os.path.dirname(__file__), filename)
+    filepath = os.path.abspath(filepath)
+    stat = os.stat(filepath)
+    return (filepath, stat.st_mtime_ns, stat.st_size)
+
+
 def load_wav_file(filename):
-    # Check if file is already in cache
-    if filename in _wav_file_cache:
-        return _wav_file_cache[filename]
+    file_identity = get_wav_file_identity(filename)
+    filepath = file_identity[0]
     
-    filepath = os.path.join(os.path.dirname(__file__), filename)
+    # Check if file is already in cache and has not changed on disk.
+    if file_identity in _wav_file_cache:
+        return _wav_file_cache[file_identity]
+
+    # Drop stale versions of the same path so replacing a WAV during a session
+    # does not grow the cache forever.
+    for cached_identity in list(_wav_file_cache):
+        if cached_identity[0] == filepath:
+            del _wav_file_cache[cached_identity]
+    
     sample_rate, data = wavfile.read(filepath)
     if data.ndim > 1:
         # If stereo, take only one channel
@@ -110,7 +131,7 @@ def load_wav_file(filename):
     data = data.astype(np.float32) / 32767.0  # Normalize to [-1, 1]
     
     # Store in cache before returning
-    _wav_file_cache[filename] = data
+    _wav_file_cache[file_identity] = data
     return data
 
 
