@@ -2,6 +2,7 @@ kick:
   context:
     is_reusable: true
     tune: 50
+    vol: 1
     signal:
       mix:
   
@@ -11,14 +12,14 @@ kick:
             freq: tune * 4
             duration: 0.002
             attack: 0.0001
-            amp: [0.3, 0]
+            amp: [0.3 * vol, 0]
   
         thump:
           osc:
             freq: [tune * 16, [tune * 2, 0.1]]
             duration: 0.1
             attack: 0.2
-            amp: [0.8, 0]
+            amp: [0.8 * vol, 0]
             phase:
               osc:
                 freq: tune
@@ -28,7 +29,7 @@ kick:
             freq: [tune * 6, [tune, 0.12]]
             duration: 0.2
             attack: 0.2
-            amp: [1, 0]
+            amp: [1 * vol, 0]
             phase:
               osc:
                 freq: tune * 0.8

@@ -86,17 +86,17 @@ samplecer2:
                   - [kick, play]
                   - 
                   - [play p.5 s=note pan=voice_pan]
-                  - [play p0.7]
-                  - [kick, play s.5, csnare, clap]
-                  -
-                  - [play s0.2, csnare]
-                  - 
+                  - [play p0.7 prob.3]
+                  - [kick, play s.5 prob=cycle%2, play s.45 prob=1-cycle%2, csnare]
+                  - play p.7 prob.2
+                  - [play s0.2]
+                  - play p.7 prob.2
                 # steps:
                 #   - kick, play p.8 pan.5
                 #   -
                 #   - play p.2 pan.8
                 #   - 
-                #   - [kick, play, play s.4 p.3 l.004 v.5 pan=voice_pan, csnare, clap]
+                #   - [kick, play, play s.4 p.3 prob=1-cycle%4 l.004 v.5 pan=voice_pan]
                 #   - play p.9
                 #   - play p.5 s=note
                 #   - play p.7 pan.5

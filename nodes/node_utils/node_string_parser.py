@@ -26,10 +26,15 @@ COMPACT_NUMERIC_PARAM_PATTERN = re.compile(r'^([a-zA-Z_]+)([-+]?[0-9]*\.?[0-9]+)
 NUMERIC_VALUE_PATTERN = re.compile(r'^[-+]?(?:[0-9]*\.[0-9]+|[0-9]+\.?)(?:[eE][-+]?[0-9]+)?$')
 
 
-def _parse_param_value(value_string: str) -> float | str:
-    """Parse assignment values as numbers when possible, otherwise expressions."""
+def _parse_param_value(value_string: str) -> float | bool | str:
+    """Parse assignment values as numbers/booleans when possible, otherwise expressions."""
     if NUMERIC_VALUE_PATTERN.match(value_string):
         return float(value_string)
+    lowered = value_string.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
     return value_string
 
 
@@ -96,6 +101,37 @@ def parse_node_string(node_string: str) -> Tuple[str, Dict[str, Any]]:
     params = parse_params_from_string(param_string)
     
     return node_name, params
+
+
+def split_special_params_from_string(value_string: str, special_param_names: set[str]) -> Tuple[str, Dict[str, Any]]:
+    """
+    Split reserved string-notation params from a free-form value expression.
+
+    This is useful for contexts like automation where the main string is an
+    expression ("C4", "note * 2") rather than a node name, but we still want
+    trailing metadata such as "prob=0.5".
+    """
+    tokens = value_string.split()
+    if not tokens:
+        return value_string, {}
+
+    value_tokens = []
+    special_params = {}
+
+    for token in tokens:
+        assignment_match = ASSIGNMENT_PARAM_PATTERN.match(token)
+        if assignment_match and assignment_match.group(1) in special_param_names:
+            special_params[assignment_match.group(1)] = _parse_param_value(assignment_match.group(2))
+            continue
+
+        compact_match = COMPACT_NUMERIC_PARAM_PATTERN.match(token)
+        if compact_match and compact_match.group(1) in special_param_names:
+            special_params[compact_match.group(1)] = float(compact_match.group(2))
+            continue
+
+        value_tokens.append(token)
+
+    return " ".join(value_tokens), special_params
 
 
 def resolve_render_params(

@@ -42,27 +42,40 @@ samplecer:
                       #   exp: signal * 60
                       #   signal:
                       #     input: {}
-                      osc:
-                        # duration: 1
-                        phase: 0.05
-                        freq: # [150, 500]
+                      expression:
+                        exp: amp * (transform * low + (1 - transform) * high)
+                        transform:
                           osc:
-                            freq: 3
-                            range: [150, 500]
+                            freq: 0.05
+                            range: [0, 1]
                         amp:
                           osc:
                             freq: 1
-                            range: [0.5, 1]
+                            range: [0.5, 0.9]
+                        low:
+                          osc:
+                            freq:
+                              osc:
+                                freq: 3
+                                range: [150, 600]
+                        high:
+                          osc:
+                            phase: 0.5
+                            freq:
+                              osc:
+                                freq: 3
+                                range: [1500, 2000]
+                          
         play:
           sequencer:
             interval: sixteenth
             monitor: true
             steps:
-              - [kick, playhead]
+              - [kick vol.5, playhead]
               - 
               - [playhead s0.5]
               - [playhead s0.7]
-              - [kick, playhead s0.8, csnare, clap]
+              - [kick vol.6, playhead s0.8, csnare, clap]
               -
               - [playhead s0.2, csnare]
               - 

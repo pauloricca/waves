@@ -64,7 +64,22 @@ class SequencerNode(BaseNode):
         from nodes.node_utils.node_string_parser import instantiate_node_from_string
         return instantiate_node_from_string(sound_name_with_params, self.node_id, attribute_name, attribute_index, sound_model)
 
-    def create_sound_nodes_for_step(self, step_index, **params):
+    def _params_with_cycle(self, params: dict, cycle: int | None = None) -> dict:
+        child_params = self.get_params_for_children(params)
+        child_params["cycle"] = self.state.current_repeat if cycle is None else cycle
+        return child_params
+
+    def _should_trigger_sound(self, render_args, context, params, cycle):
+        prob_value = render_args.get("prob") if render_args else None
+        if prob_value is None:
+            return True
+
+        from nodes.node_utils.probability import should_play_probability
+
+        probability_params = self._params_with_cycle(params, cycle)
+        return should_play_probability(prob_value, probability_params, self.time_since_start, 1, context)
+
+    def create_sound_nodes_for_step(self, step_index, context=None, **params):
         # Get the sounds for this step
         sequence = self.steps or self.chain
         if step_index >= len(sequence):
@@ -85,19 +100,21 @@ class SequencerNode(BaseNode):
         
         # Create nodes for each sound in the step
         sound_nodes_data = []
+        cycle = self.state.current_repeat
         for sound_index, sound in enumerate(sounds_in_step):
             if sound:
                 self.state.sound_instance_counter += 1
                 attribute_name = f"step_{step_index}_{sound_index}"
-                attribute_index = self.state.current_repeat
+                attribute_index = cycle
                 if isinstance(sound, str):
                     main_sound_name = sound.split()[0]
                     sound_model = get_sound_model(main_sound_name)
                     sound_node, render_args = self.instantiate_sound_node(sound_model, sound, attribute_name, attribute_index)
-                    sound_nodes_data.append((sound_node, render_args, 0, step_index))
+                    if self._should_trigger_sound(render_args, context, params, cycle):
+                        sound_nodes_data.append((sound_node, render_args, 0, step_index, cycle, None))
                 else:
                     sound_node = self.instantiate_child_node(sound, attribute_name, attribute_index)
-                    sound_nodes_data.append((sound_node, {}, 0, step_index))
+                    sound_nodes_data.append((sound_node, {}, 0, step_index, cycle, None))
         
         return sound_nodes_data
 
@@ -110,12 +127,16 @@ class SequencerNode(BaseNode):
     def unpack_active_sound(self, active_sound):
         # Backwards-compatible with hot-reloaded state from the old tuple format:
         # (sound_node, render_args, sound_duration, samples_rendered, step_index)
+        if len(active_sound) == 6:
+            sound_node, render_args, samples_rendered_so_far, step_idx, cycle, _reserved = active_sound
+            return sound_node, render_args, samples_rendered_so_far, step_idx, cycle
+
         if len(active_sound) == 5:
             sound_node, render_args, _sound_duration, samples_rendered_so_far, step_idx = active_sound
-            return sound_node, render_args, samples_rendered_so_far, step_idx
+            return sound_node, render_args, samples_rendered_so_far, step_idx, self.state.current_repeat
 
         sound_node, render_args, samples_rendered_so_far, step_idx = active_sound
-        return sound_node, render_args, samples_rendered_so_far, step_idx
+        return sound_node, render_args, samples_rendered_so_far, step_idx, self.state.current_repeat
 
     def _calculate_total_samples(self):
         """Calculate total number of samples for the entire sequence"""
@@ -169,8 +190,8 @@ class SequencerNode(BaseNode):
         if num_samples_resolved is None:
             num_samples_resolved = num_samples
         
-        interval_wave = self.interval_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
-        swing_wave = self.swing_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+        interval_wave = self.interval_node.render(num_samples_resolved, context, **self._params_with_cycle(params))
+        swing_wave = self.swing_node.render(num_samples_resolved, context, **self._params_with_cycle(params))
         
         # Convert control signals to mono if needed
         if is_stereo(interval_wave):
@@ -188,7 +209,7 @@ class SequencerNode(BaseNode):
         reset_indices = []
         
         if self.trigger_node is not None:
-            trigger_wave = self.trigger_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+            trigger_wave = self.trigger_node.render(num_samples_resolved, context, **self._params_with_cycle(params))
             if len(trigger_wave) < num_samples_resolved:
                 trigger_wave = np.pad(trigger_wave, (0, num_samples_resolved - len(trigger_wave)))
             elif len(trigger_wave) > num_samples_resolved:
@@ -196,7 +217,7 @@ class SequencerNode(BaseNode):
             trigger_indices, self.state.last_trigger_value = detect_triggers(trigger_wave, self.state.last_trigger_value)
         
         if self.reset_node is not None:
-            reset_wave = self.reset_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+            reset_wave = self.reset_node.render(num_samples_resolved, context, **self._params_with_cycle(params))
             if len(reset_wave) < num_samples_resolved:
                 reset_wave = np.pad(reset_wave, (0, num_samples_resolved - len(reset_wave)))
             elif len(reset_wave) > num_samples_resolved:
@@ -241,7 +262,7 @@ class SequencerNode(BaseNode):
                     # Trigger sounds for this step
                     step_key = (self.state.current_repeat, step_to_trigger)
                     if step_key not in self.state.step_triggered:
-                        new_sounds = self.create_sound_nodes_for_step(step_to_trigger, **params)
+                        new_sounds = self.create_sound_nodes_for_step(step_to_trigger, context=context, **params)
                         self.add_active_sounds(new_sounds)
                         self.state.step_triggered.add(step_key)
                     
@@ -296,7 +317,7 @@ class SequencerNode(BaseNode):
                 if not self.state.sequence_complete:
                     if step_key not in self.state.step_triggered:
                         # Trigger sounds for this step
-                        new_sounds = self.create_sound_nodes_for_step(self.state.current_step, **params)
+                        new_sounds = self.create_sound_nodes_for_step(self.state.current_step, context=context, **params)
                         self.add_active_sounds(new_sounds)
                         self.state.step_triggered.add(step_key)
             
@@ -373,19 +394,20 @@ class SequencerNode(BaseNode):
             
             sounds_to_remove = []
             for i, active_sound in enumerate(self.state.all_active_sounds):
-                sound_node, render_args, samples_rendered_so_far, step_idx = self.unpack_active_sound(active_sound)
+                sound_node, render_args, samples_rendered_so_far, step_idx, cycle = self.unpack_active_sound(active_sound)
                 samples_to_render_from_sound = samples_to_render
 
                 # Merge render_args with params - pass all params through.
                 # Assignment-style string args such as "s=note" are resolved
                 # here so they can follow live context variables.
-                merged_params = params.copy()
+                merged_params = self._params_with_cycle(params, cycle)
                 if render_args:
                     from nodes.node_utils.node_string_parser import resolve_render_params
+                    render_args_for_child = {key: value for key, value in render_args.items() if key != "prob"}
                     merged_params.update(
                         resolve_render_params(
-                            render_args,
-                            params,
+                            render_args_for_child,
+                            merged_params,
                             self.time_since_start,
                             samples_to_render_from_sound,
                             context,
@@ -421,7 +443,7 @@ class SequencerNode(BaseNode):
                     sounds_to_remove.append(i)
                 
                 # Update samples rendered counter
-                self.state.all_active_sounds[i] = (sound_node, render_args, samples_rendered_so_far + len(sound_chunk), step_idx)
+                self.state.all_active_sounds[i] = (sound_node, render_args, samples_rendered_so_far + len(sound_chunk), step_idx, cycle, None)
                 
                 # Mix into step wave (pad if needed)
                 if len(sound_chunk) < len(step_wave):

@@ -169,9 +169,11 @@ class AutomationNode(BaseNode):
             # For overlap mode, track the previous step's output for crossfading
             self.state.prev_step_buffer = None  # Buffer to store previous step's output during crossfade
             self.state.prev_step_index = None
+            self.state.prev_step_cycle = None
             self.state.crossfade_progress = 0  # Samples rendered in current crossfade
             self.state.last_trigger_value = 0.0  # For trigger edge detection
             self.state.last_reset_value = 0.0  # For reset edge detection
+            self.state.step_probability_results = {}
 
         self.uses_timed_keys = bool(model.timings)
         self.timeline_times = sorted(model.timings) if self.uses_timed_keys else None
@@ -179,8 +181,12 @@ class AutomationNode(BaseNode):
         if not self.uses_timed_keys:
             timeline_values.append(None)
 
+        self.step_prob_values = []
+        timeline_values = [self._parse_step_value(value) for value in timeline_values]
+
         self.step_nodes = []
-        for step_index, step_value in enumerate(timeline_values):
+        for step_index, (step_value, prob_value) in enumerate(timeline_values):
+            self.step_prob_values.append(prob_value)
             if step_value is not None:
                 step_node = self.instantiate_child_node(step_value, f"step_{step_index}", self.state.current_repeat)
                 self.step_nodes.append(step_node)
@@ -190,19 +196,84 @@ class AutomationNode(BaseNode):
     def _segment_count(self):
         return max(0, len(self.step_nodes) - 1)
 
-    def _find_next_non_none_step(self, start_index):
+    def _parse_step_value(self, step_value):
+        if not isinstance(step_value, str):
+            return step_value, None
+
+        from nodes.node_utils.node_string_parser import split_special_params_from_string
+
+        value_expression, special_params = split_special_params_from_string(step_value, {"prob"})
+        if value_expression == "":
+            return None, special_params.get("prob")
+        return value_expression, special_params.get("prob")
+
+    def _params_with_cycle(self, params: dict, cycle: int | None = None) -> dict:
+        child_params = self.get_params_for_children(params)
+        child_params["cycle"] = self.state.current_repeat if cycle is None else cycle
+        return child_params
+
+    def _ensure_probability_cache(self):
+        if not hasattr(self.state, "step_probability_results"):
+            self.state.step_probability_results = {}
+        return self.state.step_probability_results
+
+    def _prune_probability_cache(self):
+        cache = self._ensure_probability_cache()
+        min_cycle = self.state.current_repeat - 1
+        for key in list(cache.keys()):
+            cycle, _step_index = key
+            if cycle < min_cycle:
+                cache.pop(key, None)
+
+    def _is_step_enabled(self, step_index, cycle, context, params):
+        if step_index < 0 or step_index >= len(self.step_nodes):
+            return False
+        if self.step_nodes[step_index] is None:
+            return False
+
+        prob_value = self.step_prob_values[step_index]
+        if prob_value is None:
+            return True
+
+        cache = self._ensure_probability_cache()
+        key = (cycle, step_index)
+        if key not in cache:
+            from nodes.node_utils.probability import should_play_probability
+
+            probability_params = self._params_with_cycle(params, cycle)
+            cache[key] = should_play_probability(prob_value, probability_params, self.time_since_start, 1, context)
+            self._prune_probability_cache()
+
+        return cache[key]
+
+    def _find_next_non_none_step(self, start_index, cycle=None, context=None, params=None):
         """Find the next step index that has a value (not None)."""
+        if cycle is None:
+            cycle = self.state.current_repeat
+        if params is None:
+            params = {}
         for i in range(start_index, len(self.step_nodes)):
-            if self.step_nodes[i] is not None:
+            if self._is_step_enabled(i, cycle, context, params):
                 return i
         return None
     
-    def _find_prev_non_none_step(self, start_index):
+    def _find_prev_non_none_step(self, start_index, cycle=None, context=None, params=None):
         """Find the previous step index that has a value (not None)."""
+        if cycle is None:
+            cycle = self.state.current_repeat
+        if params is None:
+            params = {}
         for i in range(start_index - 1, -1, -1):
-            if self.step_nodes[i] is not None:
+            if self._is_step_enabled(i, cycle, context, params):
                 return i
         return None
+
+    def _render_step_node(self, step_index, num_samples, context, params, cycle=None):
+        return self.step_nodes[step_index].render(
+            num_samples,
+            context,
+            **self._params_with_cycle(params, cycle),
+        )
 
     def _reset_timeline_state(self):
         self.state.current_step = 0
@@ -212,7 +283,9 @@ class AutomationNode(BaseNode):
         self.state.sequence_complete = False
         self.state.prev_step_buffer = None
         self.state.prev_step_index = None
+        self.state.prev_step_cycle = None
         self.state.crossfade_progress = 0
+        self.state.step_probability_results = {}
 
     def _get_timeline_times(self, interval, swing):
         if self.uses_timed_keys:
@@ -260,8 +333,8 @@ class AutomationNode(BaseNode):
         
         if num_samples_resolved is None:
             # Non-realtime mode - calculate total duration
-            interval_wave = self.interval_node.render(1, context, **self.get_params_for_children(params))
-            swing_wave = self.swing_node.render(1, context, **self.get_params_for_children(params))
+            interval_wave = self.interval_node.render(1, context, **self._params_with_cycle(params))
+            swing_wave = self.swing_node.render(1, context, **self._params_with_cycle(params))
             interval = float(interval_wave[0]) if len(interval_wave) > 0 else 1.0
             swing = float(swing_wave[0]) if len(swing_wave) > 0 else 0.0
             swing = float(np.clip(swing, -1.0, 1.0))
@@ -271,8 +344,8 @@ class AutomationNode(BaseNode):
             self._last_chunk_samples = num_samples_resolved
         
         # Get interval and swing values
-        interval_wave = self.interval_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
-        swing_wave = self.swing_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+        interval_wave = self.interval_node.render(num_samples_resolved, context, **self._params_with_cycle(params))
+        swing_wave = self.swing_node.render(num_samples_resolved, context, **self._params_with_cycle(params))
         # Handle both mono and stereo arrays
         if isinstance(interval_wave, np.ndarray) and interval_wave.ndim > 1:
             interval = float(interval_wave[0, 0]) if interval_wave.size > 0 else 1.0
@@ -290,7 +363,7 @@ class AutomationNode(BaseNode):
         reset_indices = []
         
         if self.trigger_node is not None:
-            trigger_wave = self.trigger_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+            trigger_wave = self.trigger_node.render(num_samples_resolved, context, **self._params_with_cycle(params))
             if len(trigger_wave) < num_samples_resolved:
                 trigger_wave = np.pad(trigger_wave, (0, num_samples_resolved - len(trigger_wave)))
             elif len(trigger_wave) > num_samples_resolved:
@@ -298,7 +371,7 @@ class AutomationNode(BaseNode):
             trigger_indices, self.state.last_trigger_value = detect_triggers(trigger_wave, self.state.last_trigger_value)
         
         if self.reset_node is not None:
-            reset_wave = self.reset_node.render(num_samples_resolved, context, **self.get_params_for_children(params))
+            reset_wave = self.reset_node.render(num_samples_resolved, context, **self._params_with_cycle(params))
             if len(reset_wave) < num_samples_resolved:
                 reset_wave = np.pad(reset_wave, (0, num_samples_resolved - len(reset_wave)))
             elif len(reset_wave) > num_samples_resolved:
@@ -334,12 +407,14 @@ class AutomationNode(BaseNode):
                     self.state.next_step_to_trigger += 1
                     self.state.time_in_current_step = 0
                     self.state.prev_step_buffer = None
+                    self.state.prev_step_cycle = None
                     self.state.crossfade_progress = 0
                     processed_triggers.add(trigger_idx)
                     
                     # Check if we've now completed the current repeat
                     if self.state.next_step_to_trigger >= segment_count:
                         self.state.current_repeat += 1
+                        self._prune_probability_cache()
                         if self.state.current_repeat >= self.repeat:
                             # We've completed all repeats - stay at the last step forever
                             self.state.sequence_complete = True
@@ -350,11 +425,13 @@ class AutomationNode(BaseNode):
                             self.state.time_in_current_step = 0
                             self.state.prev_step_buffer = None
                             self.state.prev_step_index = None
+                            self.state.prev_step_cycle = None
                             self.state.crossfade_progress = 0
             
             # In interval mode: check if we've completed the current repeat
             if self.state.current_step >= segment_count and not using_trigger_mode:
                 self.state.current_repeat += 1
+                self._prune_probability_cache()
                 if self.state.current_repeat >= self.repeat:
                     # We've completed all repeats - stay at the last step forever
                     self.state.sequence_complete = True
@@ -366,6 +443,7 @@ class AutomationNode(BaseNode):
                     self.state.time_in_current_step = 0
                     self.state.prev_step_buffer = None
                     self.state.prev_step_index = None
+                    self.state.prev_step_cycle = None
                     self.state.crossfade_progress = 0
                     continue
             
@@ -414,6 +492,7 @@ class AutomationNode(BaseNode):
                     self.state.current_step += 1
                     self.state.time_in_current_step = 0
                     self.state.prev_step_buffer = None
+                    self.state.prev_step_cycle = None
                     self.state.crossfade_progress = 0
                     continue
                 else:
@@ -444,6 +523,7 @@ class AutomationNode(BaseNode):
                     self.state.current_step += 1
                     self.state.time_in_current_step = 0
                     self.state.prev_step_buffer = None
+                    self.state.prev_step_cycle = None
                     self.state.crossfade_progress = 0
         
         return output_wave
@@ -451,15 +531,15 @@ class AutomationNode(BaseNode):
     def _render_step_mode(self, num_samples, context, params):
         """Step mode: hold constant value until next step with a value."""
         # Find the current active step (most recent non-None step at or before current position)
-        active_step_index = self._find_prev_non_none_step(self.state.current_step + 1)
+        active_step_index = self._find_prev_non_none_step(self.state.current_step + 1, self.state.current_repeat, context, params)
         if active_step_index is None:
-            active_step_index = self._find_next_non_none_step(self.state.current_step)
+            active_step_index = self._find_next_non_none_step(self.state.current_step, self.state.current_repeat, context, params)
         
         if active_step_index is None or self.step_nodes[active_step_index] is None:
             return np.zeros(num_samples, dtype=np.float32)
         
         # Render from the active step node
-        result = self.step_nodes[active_step_index].render(num_samples, context, **self.get_params_for_children(params))
+        result = self._render_step_node(active_step_index, num_samples, context, params, self.state.current_repeat)
         
         # Handle empty arrays (node finished rendering)
         if len(result) == 0:
@@ -480,15 +560,18 @@ class AutomationNode(BaseNode):
             return self._render_step_mode(num_samples, context, params)
 
         # Find current and next non-None steps
-        current_value_step = self._find_prev_non_none_step(self.state.current_step + 1)
+        current_cycle = self.state.current_repeat
+        next_cycle = self.state.current_repeat
+        current_value_step = self._find_prev_non_none_step(self.state.current_step + 1, current_cycle, context, params)
         if current_value_step is None:
-            current_value_step = self._find_next_non_none_step(self.state.current_step)
+            current_value_step = self._find_next_non_none_step(self.state.current_step, current_cycle, context, params)
         
-        next_value_step = self._find_next_non_none_step(self.state.current_step + 1)
+        next_value_step = self._find_next_non_none_step(self.state.current_step + 1, current_cycle, context, params)
         
         # If no next value in current sequence and we have more repeats, look at the start
         if next_value_step is None and self.state.current_repeat + 1 < self.repeat:
-            next_value_step = self._find_next_non_none_step(0)
+            next_cycle = self.state.current_repeat + 1
+            next_value_step = self._find_next_non_none_step(0, next_cycle, context, params)
         
         # If no values found, return zeros
         if current_value_step is None:
@@ -496,7 +579,7 @@ class AutomationNode(BaseNode):
         
         # If no next value, just hold current value
         if next_value_step is None:
-            result = self.step_nodes[current_value_step].render(num_samples, context, **self.get_params_for_children(params))
+            result = self._render_step_node(current_value_step, num_samples, context, params, current_cycle)
             if len(result) == 0:
                 return np.zeros(num_samples, dtype=np.float32)
             if len(result) < num_samples:
@@ -519,8 +602,8 @@ class AutomationNode(BaseNode):
         current_position_in_ramp = self._get_cycle_position(interval, swing) - current_time
         
         # Render both values
-        current_value = self.step_nodes[current_value_step].render(num_samples, context, **self.get_params_for_children(params))
-        next_value = self.step_nodes[next_value_step].render(num_samples, context, **self.get_params_for_children(params))
+        current_value = self._render_step_node(current_value_step, num_samples, context, params, current_cycle)
+        next_value = self._render_step_node(next_value_step, num_samples, context, params, next_cycle)
         
         # Handle empty arrays
         if len(current_value) == 0 and len(next_value) == 0:
@@ -560,28 +643,31 @@ class AutomationNode(BaseNode):
         overlap_samples = time_to_samples(self.overlap_time )
         
         # Find current active step (most recent non-None step at or before current position)
-        current_value_step = self._find_prev_non_none_step(self.state.current_step + 1)
+        current_value_step = self._find_prev_non_none_step(self.state.current_step + 1, self.state.current_repeat, context, params)
         if current_value_step is None:
-            current_value_step = self._find_next_non_none_step(self.state.current_step)
+            current_value_step = self._find_next_non_none_step(self.state.current_step, self.state.current_repeat, context, params)
         
         if current_value_step is None:
             return np.zeros(num_samples, dtype=np.float32)
         
         # Check if we're at the exact step that has a value (start of a new value step)
         at_value_step = (self.state.current_step < len(self.step_nodes) and 
-                        self.step_nodes[self.state.current_step] is not None)
+                        self._is_step_enabled(self.state.current_step, self.state.current_repeat, context, params))
         
         # If we just arrived at a new step with a value, initiate crossfade
         if at_value_step and self.state.time_in_current_step == 0:
             # Find the previous value step for crossfading
-            prev_step = self._find_prev_non_none_step(self.state.current_step)
+            prev_cycle = self.state.current_repeat
+            prev_step = self._find_prev_non_none_step(self.state.current_step, prev_cycle, context, params)
             
             # If we're at step 0 and wrapping from a previous repeat, look at the end
             if prev_step is None and self.state.current_step == 0 and self.state.current_repeat > 0:
-                prev_step = self._find_prev_non_none_step(self._segment_count())
+                prev_cycle = self.state.current_repeat - 1
+                prev_step = self._find_prev_non_none_step(self._segment_count(), prev_cycle, context, params)
             
             if prev_step is not None and prev_step != self.state.current_step:
                 self.state.prev_step_index = prev_step
+                self.state.prev_step_cycle = prev_cycle
                 self.state.crossfade_progress = 0
         
         # Calculate current position within the step (in samples)
@@ -593,7 +679,7 @@ class AutomationNode(BaseNode):
                        self.state.prev_step_index != current_value_step)
         
         # Render current step
-        current_output = self.step_nodes[current_value_step].render(num_samples, context, **self.get_params_for_children(params))
+        current_output = self._render_step_node(current_value_step, num_samples, context, params, self.state.current_repeat)
         
         # Handle empty array from current step
         if len(current_output) == 0:
@@ -605,7 +691,8 @@ class AutomationNode(BaseNode):
         
         if in_crossfade and self.step_nodes[self.state.prev_step_index] is not None:
             # Render previous step
-            prev_output = self.step_nodes[self.state.prev_step_index].render(num_samples, context, **self.get_params_for_children(params))
+            prev_cycle = getattr(self.state, "prev_step_cycle", self.state.current_repeat)
+            prev_output = self._render_step_node(self.state.prev_step_index, num_samples, context, params, prev_cycle)
             
             # Handle empty array from previous step
             if len(prev_output) == 0:
@@ -637,6 +724,7 @@ class AutomationNode(BaseNode):
             if samples_into_step + num_samples >= overlap_samples:
                 # We've passed the end of the crossfade
                 self.state.prev_step_index = None
+                self.state.prev_step_cycle = None
             
             return result
         else:

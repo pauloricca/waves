@@ -74,6 +74,8 @@ GLOBAL_CONSTANTS = {
     'inf': math.inf,
     'infinite': math.inf,
     'infinity': math.inf,
+    'true': True,
+    'false': False,
     
     'to_mono': to_mono,
     'rand': rand,

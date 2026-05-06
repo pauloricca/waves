@@ -13,6 +13,7 @@ Where:
 - `node_name` is the name of the sound/node defined in waves.yaml
 - Parameters are written as `paramNAMEVALUE` with no space between name and value
 - Parameters can also be written as `param=EXPRESSION` to reference render/context variables
+- In sequencer and automation steps, `prob` is reserved as a probability condition
 - Common parameter shortcuts:
   - `f` = `freq` (frequency)
   - `a` = `amp` (amplitude)
@@ -28,6 +29,8 @@ lead f220               # Play lead with frequency=220
 hihat v2                # Play hihat with v=2
 play p0.5 s=note        # Play with p=0.5 and speed driven by the note variable
 lead f=note*2           # Use an expression from the current render context
+kick prob=0.5           # 50% chance to play this sequencer step
+kick prob=cycle%4==0    # Play only on cycles 0, 4, 8...
 ```
 
 ## Usage
@@ -55,11 +58,30 @@ my_sequence:
       - kick f440 a0.5
       - lead f880
       - play p0.5 s=note
+      - hihat prob=cycle%2==0
       - [kick f200, lead f400]  # Multiple sounds in one step
       - hihat v2
 ```
 
-### 3. Sub-Patching (YAML Node References)
+### 3. In Automation
+
+Automation string steps can also use the reserved `prob` parameter. A skipped
+automation step behaves like an empty step, so the previous active value holds.
+The `cycle` variable starts at `0` and increments each time the automation loops.
+
+```yaml
+freq:
+  automation:
+    interval: 0.25
+    repeat: 9999
+    steps:
+      - C3
+      - E3 prob=cycle%2==0
+      - G3 prob=0.5
+      - B3 prob=false
+```
+
+### 4. Sub-Patching (YAML Node References)
 
 You can reference other sounds defined in the YAML file as if they were node types (as long as they have is_reusable: true, so we don't polute the schema with all the sounds), and apply parameters to them:
 
