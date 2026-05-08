@@ -59,6 +59,12 @@ Run a sound defined in any YAML file in the `sounds/` directory:
 uv run python waves.py sound_name
 ```
 
+Save realtime playback while running:
+
+```bash
+uv run python waves.py --save sound_name
+```
+
 The system will:
 1. Load all YAML files from `sounds/` directory
 2. Play the specified sound

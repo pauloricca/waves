@@ -10,6 +10,7 @@ import threading
 import gc
 import signal
 import atexit
+import argparse
 
 
 from config import *
@@ -39,6 +40,30 @@ hot_reload_in_progress = False  # True while hot reload thread is running
 recording_buffer = None
 recording_active = False
 current_sound_name = None  # Track current sound name for recording
+
+
+def parse_cli_args(argv: list[str] | None = None) -> tuple[str, bool]:
+    """Parse waves.py flags while preserving the existing node string notation."""
+    parser = argparse.ArgumentParser(
+        description="Play a Waves sound.",
+        usage="python waves.py [--save] <sound-name> [param1VALUE] [param2VALUE] ...",
+    )
+    parser.add_argument(
+        "--save",
+        action="store_true",
+        help="Save realtime playback to output/<sound-name>.wav.",
+    )
+
+    known_args, sound_parts = parser.parse_known_args(argv)
+    if not sound_parts:
+        parser.print_usage()
+        print("Examples:")
+        print("  python waves.py kick")
+        print("  python waves.py --save kick f440 a0.5")
+        print("  python waves.py my_sound t2 f880")
+        sys.exit(1)
+
+    return " ".join(sound_parts), known_args.save
 
 
 def get_innermost_node(node: BaseNode) -> BaseNode:
@@ -464,7 +489,7 @@ def play_in_real_time(sound_node: BaseNode, duration_in_seconds: float, sound_na
         run_audio_stream()
 
 def main():
-    global rendered_sounds, current_sound_node, current_sound_model
+    global rendered_sounds, current_sound_node, current_sound_model, DO_RECORD_REAL_TIME
 
     if not load_all_sound_libraries(SOUNDS_DIR):
         return
@@ -474,16 +499,9 @@ def main():
     from nodes.node_utils.midi_utils import MidiInputManager
     MidiInputManager()
 
-    if len(sys.argv) < 2:
-        print("Usage: python waves.py <sound-name> [param1VALUE] [param2VALUE] ...")
-        print("Examples:")
-        print("  python waves.py kick")
-        print("  python waves.py kick f440 a0.5")
-        print("  python waves.py my_sound t2 f880")
-        sys.exit(1)
-
-    # Join all arguments to handle node string with parameters
-    sound_string = ' '.join(sys.argv[1:])
+    sound_string, should_save_realtime = parse_cli_args(sys.argv[1:])
+    if should_save_realtime:
+        DO_RECORD_REAL_TIME = True
     
     # Parse the node string to get name and parameters
     from nodes.node_utils.node_string_parser import parse_node_string, apply_params_to_model
