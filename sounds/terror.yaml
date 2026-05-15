@@ -1,0 +1,35 @@
+terror:
+  expression:
+    distortion:
+      osc:
+        monitor: true
+        freq: 0.02
+        range: [0.3, 0.9]
+    exp:
+      pow(signal, distortion)
+    signal:
+      fold:
+        threshold: 0.3
+        signal:
+          mix:
+            pound:
+              sequencer:
+                interval: 1.05
+                steps: 
+                  - osc:
+                      duration: 1.01
+                      type: saw
+                      freq: [30, 20]
+                      amp: 0.2
+                      attack: 0.01
+                      release: 1
+            noise:
+              sample:
+                file: samples/monitor.wav
+                start: 0.2653
+                end: 0.2725
+                loop: true
+                speed: .1
+                  # osc:
+                  #   freq: 0.1
+                  #   range: [0.1, 1]

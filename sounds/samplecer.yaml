@@ -71,12 +71,12 @@ samplecer:
             interval: sixteenth
             monitor: true
             steps:
-              - [kick vol.5, playhead]
+              - kick vol.5, playhead
               - 
-              - [playhead s0.5]
-              - [playhead s0.7]
-              - [kick vol.6, playhead s0.8, csnare, clap]
+              - playhead s0.5
+              - playhead s0.7
+              - kick vol.6, playhead s0.8, csnare, clap
               -
-              - [playhead s0.2, csnare]
+              - playhead s0.2, csnare
               - 
 

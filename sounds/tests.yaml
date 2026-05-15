@@ -953,7 +953,7 @@ fm:
             initial: 0.5
         phase:
           sample:
-            file: samples/feedback.wav
+            file: samples/monitor.wav
             speed: 
               midi_cc:
                 channel: 0
@@ -962,7 +962,71 @@ fm:
                 initial: 1
             loop: true
 
+fm2_midi:
+  context:
+    duration: 99999
+    mod_b:
+      midi_cc:
+        cc: 10
+        initial: 1
+        range: [0, 5]
+    signal:
+      mix:
+        perc:
+          midi_in:
+            channel: 10
+            signal:
+              select:
+                monitor: true
+                test: freq
+                C0:
+                  kick: {}
+                D0:
+                  hihat: {}
+        bass:
+          midi_in:
+            channel: 1
+            signal:
+              fm2:
+                freq: freq
+                gate: gate
+                vel: vel
+                mod_b: mod_b
 
+
+fm2:
+  context:
+    is_reusable: true
+    freq: C1
+    freq_b: freq * 2.05
+    vel: 1
+    gate: 1
+    mod_b: 1
+    signal:
+      envelope:
+        monitor: true
+        attack: 0.001
+        sustain: 0.5
+        decay: 0.05
+        release: 0.8
+        gate: gate
+        end: true
+        signal:
+          osc:
+            freq: freq
+            amp: vel
+            phase: 
+              envelope:
+                sustain: 0.5
+                decay: 1
+                release: 1.6
+                signal:
+                  osc:
+                    freq: freq_b
+                    phase: 0.5
+                    amp: mod_b
+
+          
 
 
 sample-control:

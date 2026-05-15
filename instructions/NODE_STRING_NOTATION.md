@@ -41,10 +41,14 @@ You can pass parameters when running sounds from the command line:
 
 ```bash
 ./waves.py kick f440 a0.5
+./waves.py --save kick f440 a0.5
 ./waves.py my_sound t2
 ./waves.py lead f880 a0.2
 ./waves.py hihat v2
 ```
+
+Use `--save` to save realtime playback, equivalent to setting
+`DO_RECORD_REAL_TIME = True` for that run.
 
 ### 2. In Sequencer
 

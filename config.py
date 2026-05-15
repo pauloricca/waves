@@ -1,3 +1,7 @@
+# Real-time recording settings
+DO_RECORD_REAL_TIME = False  # Enable to save real-time playback to file
+DO_SAVE_MULTITRACK = True  # Save individual track stems when using tracks node (applies to both realtime and non-realtime)
+
 SOUNDS_DIR = "sounds"  # Directory containing YAML sound definition files
 OUTPUT_DIR = "output"
 OSC_ENVELOPE_TYPE = "exponential"  # Options: "linear", "exponential"
@@ -38,10 +42,6 @@ HOT_RELOAD_DELAY = 0.1  # Seconds to wait before starting reload (gives audio ti
 # Playback settings
 DO_PRE_RENDER_WHOLE_SOUND = False
 DO_PLAY_IN_REAL_TIME = True
-
-# Real-time recording settings
-DO_RECORD_REAL_TIME = False  # Enable to save real-time playback to file
-DO_SAVE_MULTITRACK = True  # Save individual track stems when using tracks node (applies to both realtime and non-realtime)
 
 # Visualisation settings
 DO_VISUALISE_OUTPUT = True

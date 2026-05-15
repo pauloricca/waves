@@ -377,18 +377,13 @@ oscar:
 chop:
   context:
     is_reusable: true
-    c: rand(0, 14)
+    c: rand(0, 30)
     signal:
-      map:
-        from: [-1, 1]
-        to: [-6, 6]
-        signal:
-          sample:
-            speed: 2
-            file: output/chopped9
-            chop: 
-              hold:
-                signal: c
+      sample:
+        file: samples/tzzt
+        chop: 
+          hold:
+            signal: c
 
 glitch:
   context:

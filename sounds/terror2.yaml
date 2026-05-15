@@ -1,0 +1,43 @@
+terror2:
+  context:
+    duration: 9999
+    distortion: { osc_in: { address: distortion, initial: 0.9 } }
+    fold: { osc_in: { address: fold, initial: 0.3 } }
+    pound_interval: { osc_in: { address: pound_interval, initial: 1.05 } }
+    pound_freq_start: { osc_in: { address: pound_freq_start, initial: 30 } }
+    pound_freq_end: { osc_in: { address: pound_freq_end, initial: 20 } }
+    pound_amp: { osc_in: { address: pound_amp, initial: 0.2 } }
+    pound_attack: { osc_in: { address: pound_attack, initial: 0.01 } }
+    pound_release: { osc_in: { address: pound_release, initial: 1, monitor: true } }
+    sample_start: { osc_in: { address: sample_start, initial: 0.2653, monitor: true } }
+    sample_end: { osc_in: { address: sample_end, initial: 0.2725, monitor: true } }
+    sample_speed: { osc_in: { address: sample_speed, initial: .1, monitor: true } }
+    signal:
+      expression:
+        exp:
+          pow(signal, distortion)
+        signal:
+          fold:
+            threshold: fold
+            signal:
+              mix:
+                pound:
+                  sequencer:
+                    interval: pound_interval
+                    steps: 
+                      - osc:
+                          duration: 1.01
+                          type: saw
+                          freq: [pound_freq_start, pound_freq_end]
+                          amp: pound_amp
+                          attack: pound_attack
+                          release: pound_release
+                noise:
+                  sample:
+                    # file: samples/monitor.wav
+                    file: output/terror.wav
+                    start: sample_start
+                    end: sample_end
+                    loop: true
+                    speed: sample_speed
+                    monitor: true

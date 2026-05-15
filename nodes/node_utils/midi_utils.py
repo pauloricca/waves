@@ -40,6 +40,8 @@ class MidiInputManager:
         self._initialized = True
         # Dictionary of device_key -> {input, queue, cc_values, cc_values_dirty, device_name}
         self._devices = {}
+        self._message_lock = threading.Lock()
+        self._max_message_history = 4096
         self._save_thread = None
         self._stop_save_thread = threading.Event()
         # Track last MIDI message for display: (device_key, message_type, channel, data1, data2)
@@ -113,6 +115,9 @@ class MidiInputManager:
             self._devices[device_key] = {
                 'input': midi_input,
                 'queue': queue.Queue(),
+                'message_log': [],
+                'message_log_start': 0,
+                'consumer_positions': {},
                 'cc_values': {},  # (channel, cc_number) -> value
                 'cc_values_dirty': False,
                 'device_name': device_name
@@ -264,8 +269,21 @@ class MidiInputManager:
             # Track last note_on message for display
             self._last_message = (device_key, 'note_on', message.channel, message.note, message.velocity)
         
-        # Also put in queue for backwards compatibility with nodes that want all messages
+        # Also put in queue for backwards compatibility with nodes that want all messages.
+        # The message log below lets multiple live consumers read the same MIDI stream
+        # independently, instead of one node draining events before the others see them.
         device_info['queue'].put(message)
+        with self._message_lock:
+            device_info['message_log'].append(message)
+
+            if len(device_info['message_log']) > self._max_message_history:
+                trim_count = len(device_info['message_log']) - self._max_message_history
+                del device_info['message_log'][:trim_count]
+                device_info['message_log_start'] += trim_count
+
+                for consumer_id, position in list(device_info['consumer_positions'].items()):
+                    if position < device_info['message_log_start']:
+                        device_info['consumer_positions'][consumer_id] = device_info['message_log_start']
     
     def _handle_clock_message(self, device_key):
         """Handle MIDI clock message and calculate BPM.
@@ -347,6 +365,56 @@ class MidiInputManager:
             
         key = (channel, cc_number)
         return device_info['cc_values'].get(key)
+
+    def register_message_consumer(self, consumer_id, device_key=None):
+        """Register an independent message consumer for a MIDI input device.
+
+        Consumers start at the current end of the message log so they only receive
+        events that arrive after they are created.
+        """
+        device_info = self._get_device(device_key)
+        if not device_info:
+            return
+
+        with self._message_lock:
+            device_info['consumer_positions'].setdefault(
+                consumer_id,
+                device_info['message_log_start'] + len(device_info['message_log'])
+            )
+
+    def get_messages_for_consumer(self, consumer_id, channel=None, cc_number=None, device_key=None):
+        """Get pending MIDI messages for one independent consumer.
+
+        Unlike get_messages(), this does not drain the shared compatibility queue.
+        Each consumer advances only its own cursor, so multiple midi_in nodes can
+        listen to different channels on the same device at the same time.
+        """
+        device_info = self._get_device(device_key)
+        if not device_info:
+            return []
+
+        with self._message_lock:
+            log_start = device_info['message_log_start']
+            log_end = log_start + len(device_info['message_log'])
+            position = device_info['consumer_positions'].get(consumer_id, log_end)
+            position = max(position, log_start)
+            log_index = position - log_start
+            pending = list(device_info['message_log'][log_index:])
+            device_info['consumer_positions'][consumer_id] = log_end
+
+        messages = []
+        for msg in pending:
+            if channel is not None:
+                if not hasattr(msg, 'channel') or msg.channel != channel:
+                    continue
+
+            if cc_number is not None:
+                if msg.type != 'control_change' or msg.control != cc_number:
+                    continue
+
+            messages.append(msg)
+
+        return messages
     
     def get_messages(self, channel=None, cc_number=None, device_key=None):
         """Get all pending MIDI messages from the queue, optionally filtered by channel and CC number.
@@ -642,4 +710,3 @@ def get_last_midi_message_display() -> str | None:
         return f"{device_key} ch: {channel}  note: {note_name} ({data1})  v: {data2}"
     
     return None
-

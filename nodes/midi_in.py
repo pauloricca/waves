@@ -51,18 +51,22 @@ class MidiInNode(BaseNode):
         
         # Get the shared MIDI input manager
         self.midi_manager = MidiInputManager()
+        self.midi_consumer_id = f"midi_in:{self.node_id}"
+        self.midi_manager.register_message_consumer(self.midi_consumer_id, device_key=self.device_key)
     
     def _process_midi_messages(self, **params):
         """Process all pending MIDI messages from the queue"""
-        messages = self.midi_manager.get_messages(device_key=self.device_key)
+        messages = self.midi_manager.get_messages_for_consumer(
+            self.midi_consumer_id,
+            channel=self.channel,
+            device_key=self.device_key,
+        )
         
         for message in messages:
-            # Only process messages for our channel
-            if hasattr(message, 'channel') and message.channel == self.channel:
-                if message.type == 'note_on' and message.velocity > 0:
-                    self._handle_note_on(message.note, message.velocity, **params)
-                elif message.type == 'note_off' or (message.type == 'note_on' and message.velocity == 0):
-                    self._handle_note_off(message.note)
+            if message.type == 'note_on' and message.velocity > 0:
+                self._handle_note_on(message.note, message.velocity, **params)
+            elif message.type == 'note_off' or (message.type == 'note_on' and message.velocity == 0):
+                self._handle_note_off(message.note)
     
     def _handle_note_on(self, note_number, velocity, **params):
         """Handle MIDI note on event"""
